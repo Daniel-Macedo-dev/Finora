@@ -1,0 +1,119 @@
+.analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.analysis-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.analysis-recommendation-badge {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+}
+
+.analysis-explanation {
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
+
+.analysis-wait-detail {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.analysis-warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.analysis-warnings li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--warning);
+}
+
+.analysis-section-title {
+  font-size: var(--text-md);
+  margin-bottom: var(--space-3);
+}
+
+.analysis-row-recommended {
+  background: var(--brand-soft);
+}
+
+.analysis-option-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.analysis-merchant {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.analysis-issues {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.analysis-issues li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.issue-blocking {
+  color: var(--negative);
+}
+
+.issue-warning {
+  color: var(--ink-secondary);
+}
+
+.analysis-assumptions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.analysis-assumptions dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.analysis-assumptions dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-disclaimer {
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  max-width: 70ch;
+}
