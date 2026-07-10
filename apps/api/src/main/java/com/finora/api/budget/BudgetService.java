@@ -11,6 +11,7 @@ import com.finora.api.category.CategoryType;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.TransactionRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -23,22 +24,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class BudgetService {
 
-    /**
-     * Consumption ratio (0-1) at which a budget is flagged as WARNING.
-     * Will become configurable through financial settings.
-     */
-    static final BigDecimal DEFAULT_WARNING_THRESHOLD = new BigDecimal("0.80");
-
     private final BudgetRepository budgets;
     private final CategoryRepository categories;
     private final TransactionRepository transactions;
+    private final SettingsService settings;
 
     public BudgetService(BudgetRepository budgets,
                          CategoryRepository categories,
-                         TransactionRepository transactions) {
+                         TransactionRepository transactions,
+                         SettingsService settings) {
         this.budgets = budgets;
         this.categories = categories;
         this.transactions = transactions;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
@@ -131,7 +129,7 @@ public class BudgetService {
         if (ratio.compareTo(BigDecimal.ONE) >= 0) {
             return BudgetStatus.EXCEEDED;
         }
-        if (ratio.compareTo(DEFAULT_WARNING_THRESHOLD) >= 0) {
+        if (ratio.compareTo(settings.current().getBudgetWarningThreshold()) >= 0) {
             return BudgetStatus.WARNING;
         }
         return BudgetStatus.HEALTHY;
