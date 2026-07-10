@@ -25,7 +25,11 @@ final class TransactionSpecifications {
     }
 
     static Specification<Transaction> descriptionContains(String text) {
+        String escaped = text.toLowerCase()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
         return (root, query, cb) ->
-                cb.like(cb.lower(root.get("description")), "%" + text.toLowerCase() + "%");
+                cb.like(cb.lower(root.get("description")), "%" + escaped + "%", '\\');
     }
 }
