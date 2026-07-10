@@ -1,0 +1,38 @@
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  max-width: 720px;
+}
+
+.theme-options {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.settings-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  max-width: 64ch;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.settings-feedback {
+  margin-top: var(--space-3);
+}
+
+.settings-saved {
+  color: var(--positive);
+  font-size: var(--text-sm);
+}
+
+.settings-actions {
+  margin-top: var(--space-4);
+}
