@@ -8,6 +8,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
 import { currentMonth } from '../../lib/month'
 import { formatDate } from '../../lib/format'
+import { useDebouncedValue } from '../../lib/useDebouncedValue'
 import { useCategories } from '../shared/api'
 import { PAYMENT_METHOD_LABELS, type TransactionType } from '../shared/types'
 import TransactionForm from './TransactionForm'
@@ -31,11 +32,14 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [deleting, setDeleting] = useState<Transaction | null>(null)
 
+  // Debounce free-text search so typing doesn't fire one request per key.
+  const debouncedSearch = useDebouncedValue(search)
+
   const filters = {
     month,
     type: type || undefined,
     categoryId: categoryId ? Number(categoryId) : undefined,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     page,
   }
   const transactions = useTransactions(filters)
