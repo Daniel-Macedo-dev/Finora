@@ -1,0 +1,47 @@
+.category-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.category-bar-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-1);
+}
+
+.category-bar-name {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-bar-meta {
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.category-bar-percent {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.category-bar-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.category-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--chart-expense);
+  min-width: 2px;
+}
