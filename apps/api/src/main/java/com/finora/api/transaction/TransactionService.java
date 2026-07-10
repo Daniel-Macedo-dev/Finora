@@ -37,6 +37,12 @@ public class TransactionService {
         this.accounts = accounts;
     }
 
+    /**
+     * Paginated search over transactions. All provided filters are combined
+     * with AND; {@code month} covers the full calendar month and {@code search}
+     * is a case-insensitive substring match on the description. Results are
+     * ordered by date (newest first), then id.
+     */
     @Transactional(readOnly = true)
     public PageResponse<TransactionResponse> search(YearMonth month,
                                                     TransactionType type,

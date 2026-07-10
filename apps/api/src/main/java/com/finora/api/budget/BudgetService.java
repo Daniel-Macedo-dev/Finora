@@ -20,6 +20,12 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Monthly budgets per expense category. Consumption is always derived from the
+ * month's transactions at read time — never stored — so budget figures cannot
+ * drift from the transaction history. A budget is WARNING at the configurable
+ * threshold (settings) and EXCEEDED at 100%; percentUsed may exceed 100.
+ */
 @Service
 @Transactional
 public class BudgetService {

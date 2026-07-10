@@ -32,7 +32,7 @@ test.describe('Cenário 4 — Compra insegura', () => {
 
     const analysis = page.getByRole('region', { name: 'Análise de compra' })
     await expect(analysis.getByText('Aguardar')).toBeVisible()
-    await expect(analysis.getByText('R$ 3.000,00')).toBeVisible()
+    await expect(analysis.getByText('R$ 3.000,00').first()).toBeVisible()
     await expect(analysis.getByText(/3 meses/)).toBeVisible()
     await expect(analysis.getByText('Arriscada')).toBeVisible()
   })
