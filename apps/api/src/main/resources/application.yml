@@ -2,7 +2,7 @@ spring:
   application:
     name: finora-api
   datasource:
-    url: ${FINORA_DB_URL:jdbc:postgresql://localhost:5432/finora}
+    url: ${FINORA_DB_URL:jdbc:postgresql://localhost:5433/finora}
     username: ${FINORA_DB_USER:finora}
     password: ${FINORA_DB_PASSWORD:finora_dev}
   jpa:
