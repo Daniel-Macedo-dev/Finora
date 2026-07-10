@@ -1,0 +1,27 @@
+.month-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.125rem;
+}
+
+.month-picker-label {
+  min-width: 10.5rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+}
+
+.month-picker-today {
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 480px) {
+  .month-picker-label {
+    min-width: 8rem;
+  }
+}

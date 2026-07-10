@@ -1,0 +1,45 @@
+.state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  gap: var(--space-2);
+}
+
+.state-error {
+  border-style: solid;
+  border-color: var(--negative);
+}
+
+.state-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--ink-muted);
+}
+
+.state-error .state-icon {
+  color: var(--negative);
+}
+
+.state-title {
+  font-size: var(--text-md);
+}
+
+.state-description {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  max-width: 46ch;
+}
+
+.state-action {
+  margin-top: var(--space-2);
+}
+
+.loading-cards {
+  display: grid;
+  gap: var(--space-4);
+}

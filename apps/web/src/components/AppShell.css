@@ -1,0 +1,136 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--brand);
+  color: var(--ink-inverse);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 0 0 var(--radius-md) 0;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 750;
+  font-size: var(--text-md);
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: var(--text-md);
+  letter-spacing: -0.01em;
+}
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-width);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  padding: var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  z-index: 40;
+}
+
+.sidebar-brand {
+  padding: var(--space-2) var(--space-3) var(--space-5);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.5625rem var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--ink-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 550;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-link:hover {
+  background: var(--bg-subtle);
+  color: var(--ink-primary);
+}
+
+.nav-link.active {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+
+.app-main {
+  margin-left: var(--sidebar-width);
+  padding: var(--space-5) var(--space-6) var(--space-7);
+  max-width: calc(var(--page-max-width) + var(--space-6) * 2);
+}
+
+.mobile-topbar {
+  display: none;
+}
+
+.mobile-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-2) var(--space-4);
+    z-index: 30;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--transition-base);
+    box-shadow: none;
+    top: 0;
+  }
+
+  .sidebar-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--backdrop);
+    z-index: 35;
+  }
+
+  .app-main {
+    margin-left: 0;
+    padding: var(--space-4) var(--space-4) var(--space-7);
+  }
+}
