@@ -4,6 +4,7 @@ import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
 import Dialog from '../../components/Dialog'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
 import { formatBRL, formatDate, formatPercent, parseMoneyInput } from '../../lib/format'
@@ -231,7 +232,7 @@ export default function GoalsPage() {
         onClose={() => setFormOpen(false)}
       >
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <div className="form-grid">
             <FormField label="Nome da meta">
               <input
                 className="input"
@@ -287,19 +288,11 @@ export default function GoalsPage() {
                 {formError ?? errorMessage(submitError)}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setFormOpen(false)}
-                disabled={busy}
-              >
-                Cancelar
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? 'Salvando…' : editing ? 'Salvar' : 'Criar meta'}
-              </button>
-            </div>
+            <FormActions
+              busy={busy}
+              submitLabel={editing ? 'Salvar' : 'Criar meta'}
+              onCancel={() => setFormOpen(false)}
+            />
           </div>
         </form>
       </Dialog>
@@ -310,7 +303,7 @@ export default function GoalsPage() {
         onClose={() => setContributing(null)}
       >
         <form onSubmit={handleContribute} noValidate>
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <div className="form-grid">
             <FormField
               label="Valor do aporte (R$)"
               hint="Use um valor negativo para registrar uma retirada."
@@ -328,23 +321,11 @@ export default function GoalsPage() {
                 {contributionError ?? errorMessage(contributeMutation.error)}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setContributing(null)}
-                disabled={contributeMutation.isPending}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={contributeMutation.isPending}
-              >
-                {contributeMutation.isPending ? 'Salvando…' : 'Registrar'}
-              </button>
-            </div>
+            <FormActions
+              busy={contributeMutation.isPending}
+              submitLabel="Registrar"
+              onCancel={() => setContributing(null)}
+            />
           </div>
         </form>
       </Dialog>

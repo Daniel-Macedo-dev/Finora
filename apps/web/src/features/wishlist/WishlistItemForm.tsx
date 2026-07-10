@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
 import { parseMoneyInput } from '../../lib/format'
@@ -76,7 +77,7 @@ export default function WishlistItemForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <div className="form-grid">
         <FormField label="Nome do item">
           <input
             className="input"
@@ -85,13 +86,7 @@ export default function WishlistItemForm({
             onChange={(event) => setName(event.target.value)}
           />
         </FormField>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 'var(--space-3)',
-          }}
-        >
+        <div className="form-columns">
           <FormField label="Prioridade">
             <select
               className="select"
@@ -174,14 +169,11 @@ export default function WishlistItemForm({
             {formError ?? errorMessage(submitError)}
           </div>
         )}
-        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Salvando…' : initial ? 'Salvar' : 'Adicionar item'}
-          </button>
-        </div>
+        <FormActions
+          busy={busy}
+          submitLabel={initial ? 'Salvar' : 'Adicionar item'}
+          onCancel={onCancel}
+        />
       </div>
     </form>
   )

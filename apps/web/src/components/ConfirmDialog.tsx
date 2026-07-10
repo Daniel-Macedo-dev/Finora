@@ -24,7 +24,7 @@ export default function ConfirmDialog({
   return (
     <Dialog open={open} title={title} onClose={onCancel}>
       <p style={{ color: 'var(--ink-secondary)', marginBottom: 'var(--space-4)' }}>{message}</p>
-      <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+      <div className="form-footer">
         <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
           Cancelar
         </button>

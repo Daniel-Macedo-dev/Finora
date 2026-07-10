@@ -4,6 +4,7 @@ import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
 import Dialog from '../../components/Dialog'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
 import { formatBRL, formatDate, parseMoneyInput } from '../../lib/format'
@@ -253,7 +254,7 @@ export default function CommitmentsPage() {
         wide
       >
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <div className="form-grid">
             <FormField label="Descrição">
               <input
                 className="input"
@@ -354,19 +355,11 @@ export default function CommitmentsPage() {
                 {formError ?? errorMessage(submitError)}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setFormOpen(false)}
-                disabled={busy}
-              >
-                Cancelar
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? 'Salvando…' : editing ? 'Salvar' : 'Criar compromisso'}
-              </button>
-            </div>
+            <FormActions
+              busy={busy}
+              submitLabel={editing ? 'Salvar' : 'Criar compromisso'}
+              onCancel={() => setFormOpen(false)}
+            />
           </div>
         </form>
       </Dialog>

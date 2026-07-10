@@ -5,6 +5,7 @@ import MonthPicker from '../../components/MonthPicker'
 import Money from '../../components/Money'
 import Dialog from '../../components/Dialog'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
 import { currentMonth } from '../../lib/month'
@@ -213,7 +214,7 @@ export default function BudgetsPage() {
         onClose={() => setFormOpen(false)}
       >
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+          <div className="form-grid">
             {!editing && (
               <FormField label="Categoria" hint="Apenas categorias de despesa.">
                 <select
@@ -248,21 +249,11 @@ export default function BudgetsPage() {
                 {formError ?? errorMessage(submitError)}
               </div>
             )}
-            <div
-              style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}
-            >
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setFormOpen(false)}
-                disabled={busy}
-              >
-                Cancelar
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? 'Salvando…' : editing ? 'Salvar' : 'Criar orçamento'}
-              </button>
-            </div>
+            <FormActions
+              busy={busy}
+              submitLabel={editing ? 'Salvar' : 'Criar orçamento'}
+              onCancel={() => setFormOpen(false)}
+            />
           </div>
         </form>
       </Dialog>
