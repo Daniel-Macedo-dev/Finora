@@ -1,0 +1,44 @@
+# --- OS ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- IDE / editors ---
+.idea/
+*.iml
+.vscode/
+!.vscode/extensions.json
+
+# --- Local tooling / personal config ---
+.claude/
+
+# --- Environment ---
+.env
+.env.local
+.env.*.local
+
+# --- Java / Maven ---
+apps/api/target/
+apps/api/.mvn/wrapper/maven-wrapper.jar
+*.class
+hs_err_pid*
+replay_pid*
+
+# --- Node / frontend ---
+node_modules/
+apps/web/dist/
+apps/web/coverage/
+apps/web/playwright-report/
+apps/web/test-results/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- QA artifacts ---
+qa-screenshots/
+
+# --- Database ---
+*.dump
+*.sql.gz
+pgdata/
