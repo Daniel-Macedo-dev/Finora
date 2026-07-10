@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: finora-api
+  datasource:
+    url: ${FINORA_DB_URL:jdbc:postgresql://localhost:5432/finora}
+    username: ${FINORA_DB_USER:finora}
+    password: ${FINORA_DB_PASSWORD:finora_dev}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+server:
+  port: ${FINORA_API_PORT:8080}
+
+finora:
+  cors:
+    allowed-origins: ${FINORA_CORS_ALLOWED_ORIGINS:http://localhost:5173}
