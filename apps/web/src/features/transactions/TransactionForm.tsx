@@ -1,0 +1,251 @@
+import { useState, type FormEvent } from 'react'
+import FormField from '../../components/FormField'
+import { errorMessage } from '../../components/states'
+import { ApiError } from '../../lib/api'
+import { parseMoneyInput } from '../../lib/format'
+import { todayIso } from '../../lib/month'
+import { useCategories } from '../shared/api'
+import { useAccounts } from '../shared/api'
+import { PAYMENT_METHOD_LABELS, type PaymentMethod, type TransactionType } from '../shared/types'
+import type { Transaction, TransactionRequest } from './types'
+
+interface TransactionFormProps {
+  initial?: Transaction
+  busy: boolean
+  submitError: unknown
+  onSubmit: (request: TransactionRequest) => void
+  onCancel: () => void
+}
+
+interface FieldErrors {
+  amount?: string
+  description?: string
+  date?: string
+  categoryId?: string
+}
+
+export default function TransactionForm({
+  initial,
+  busy,
+  submitError,
+  onSubmit,
+  onCancel,
+}: TransactionFormProps) {
+  const [type, setType] = useState<TransactionType>(initial?.type ?? 'EXPENSE')
+  const [amount, setAmount] = useState(
+    initial ? initial.amount.toFixed(2).replace('.', ',') : '',
+  )
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [date, setDate] = useState(initial?.date ?? todayIso())
+  const [categoryId, setCategoryId] = useState<string>(
+    initial ? String(initial.category.id) : '',
+  )
+  const [accountId, setAccountId] = useState<string>(
+    initial?.account ? String(initial.account.id) : '',
+  )
+  const [paymentMethod, setPaymentMethod] = useState<string>(initial?.paymentMethod ?? '')
+  const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [errors, setErrors] = useState<FieldErrors>({})
+
+  const categories = useCategories(type)
+  const accounts = useAccounts()
+
+  const activeCategories = (categories.data ?? []).filter(
+    (category) => category.active || String(category.id) === categoryId,
+  )
+  const openAccounts = (accounts.data ?? []).filter(
+    (account) => !account.archived || String(account.id) === accountId,
+  )
+
+  function handleTypeChange(next: TransactionType) {
+    setType(next)
+    setCategoryId('')
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    const parsedAmount = parseMoneyInput(amount)
+    const nextErrors: FieldErrors = {}
+    if (parsedAmount === null || parsedAmount <= 0) {
+      nextErrors.amount = 'Informe um valor maior que zero.'
+    }
+    if (!description.trim()) {
+      nextErrors.description = 'Informe a descrição.'
+    }
+    if (!date) {
+      nextErrors.date = 'Informe a data.'
+    }
+    if (!categoryId) {
+      nextErrors.categoryId = 'Selecione a categoria.'
+    }
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) {
+      return
+    }
+    onSubmit({
+      type,
+      amount: parsedAmount!,
+      description: description.trim(),
+      date,
+      categoryId: Number(categoryId),
+      accountId: accountId ? Number(accountId) : null,
+      paymentMethod: (paymentMethod || null) as PaymentMethod | null,
+      notes: notes.trim() || null,
+    })
+  }
+
+  const serverFieldErrors =
+    submitError instanceof ApiError ? submitError.fieldErrors : []
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+        <div className="field">
+          <span
+            style={{
+              fontSize: 'var(--text-sm)',
+              fontWeight: 550,
+              color: 'var(--ink-secondary)',
+            }}
+            id="tx-type-label"
+          >
+            Tipo
+          </span>
+          <div
+            role="radiogroup"
+            aria-labelledby="tx-type-label"
+            style={{ display: 'flex', gap: 'var(--space-2)' }}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={type === 'EXPENSE'}
+              className={`btn ${type === 'EXPENSE' ? 'btn-danger' : 'btn-secondary'}`}
+              onClick={() => handleTypeChange('EXPENSE')}
+            >
+              Despesa
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={type === 'INCOME'}
+              className={`btn ${type === 'INCOME' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => handleTypeChange('INCOME')}
+            >
+              Receita
+            </button>
+          </div>
+        </div>
+
+        <FormField label="Valor (R$)" error={errors.amount}>
+          <input
+            className="input"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+        </FormField>
+
+        <FormField label="Descrição" error={errors.description}>
+          <input
+            className="input"
+            maxLength={200}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </FormField>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 'var(--space-3)',
+          }}
+        >
+          <FormField label="Data" error={errors.date}>
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+            />
+          </FormField>
+
+          <FormField label="Categoria" error={errors.categoryId}>
+            <select
+              className="select"
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
+              <option value="">Selecione…</option>
+              {activeCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField label="Conta (opcional)">
+            <select
+              className="select"
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
+            >
+              <option value="">Sem conta</option>
+              {openAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          <FormField label="Forma de pagamento (opcional)">
+            <select
+              className="select"
+              value={paymentMethod}
+              onChange={(event) => setPaymentMethod(event.target.value)}
+            >
+              <option value="">Não informar</option>
+              {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        <FormField label="Observações (opcional)">
+          <textarea
+            className="textarea"
+            maxLength={2000}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </FormField>
+
+        {submitError != null && (
+          <div role="alert" className="field-error">
+            {serverFieldErrors.length > 0
+              ? serverFieldErrors.map((fieldError) => fieldError.message).join(' ')
+              : errorMessage(submitError)}
+          </div>
+        )}
+
+        <div
+          style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}
+        >
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
+            Cancelar
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            {busy ? 'Salvando…' : initial ? 'Salvar alterações' : 'Adicionar transação'}
+          </button>
+        </div>
+      </div>
+    </form>
+  )
+}
