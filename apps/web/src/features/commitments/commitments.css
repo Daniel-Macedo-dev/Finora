@@ -1,0 +1,120 @@
+.commitments-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.commitment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.commitment-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.commitment-inactive {
+  opacity: 0.65;
+}
+
+.commitment-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.commitment-description {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commitment-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  flex-wrap: wrap;
+}
+
+.commitment-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.commitment-next {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.commitment-actions {
+  display: flex;
+}
+
+.commitments-upcoming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  position: sticky;
+  top: var(--space-4);
+}
+
+.commitments-upcoming .panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.commitment-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.commitment-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+@media (max-width: 900px) {
+  .commitments-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .commitments-upcoming {
+    position: static;
+  }
+
+  .commitment-row {
+    flex-wrap: wrap;
+  }
+
+  .commitment-info {
+    flex-basis: 100%;
+  }
+
+  .commitment-side {
+    align-items: flex-start;
+  }
+
+  .commitment-actions {
+    margin-left: auto;
+  }
+}
