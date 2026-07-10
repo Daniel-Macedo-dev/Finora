@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
 import { parseMoneyInput } from '../../lib/format'
@@ -91,7 +92,7 @@ export default function PurchaseOptionForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <div className="form-grid">
         <FormField label="Loja / vendedor">
           <input
             className="input"
@@ -113,14 +114,13 @@ export default function PurchaseOptionForm({
             Forma de pagamento
           </span>
           <div
-            role="radiogroup"
+            role="group"
             aria-labelledby="option-kind-label"
             style={{ display: 'flex', gap: 'var(--space-2)' }}
           >
             <button
               type="button"
-              role="radio"
-              aria-checked={kind === 'CASH'}
+              aria-pressed={kind === 'CASH'}
               className={`btn ${kind === 'CASH' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setKind('CASH')}
             >
@@ -128,8 +128,7 @@ export default function PurchaseOptionForm({
             </button>
             <button
               type="button"
-              role="radio"
-              aria-checked={kind === 'INSTALLMENT'}
+              aria-pressed={kind === 'INSTALLMENT'}
               className={`btn ${kind === 'INSTALLMENT' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setKind('INSTALLMENT')}
             >
@@ -138,13 +137,7 @@ export default function PurchaseOptionForm({
           </div>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: 'var(--space-3)',
-          }}
-        >
+        <div className="form-columns">
           <FormField
             label={kind === 'CASH' ? 'Preço à vista (R$)' : 'Preço total parcelado (R$)'}
             hint={kind === 'INSTALLMENT' ? 'Soma de todas as parcelas.' : undefined}
@@ -215,14 +208,11 @@ export default function PurchaseOptionForm({
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Salvando…' : initial ? 'Salvar opção' : 'Adicionar opção'}
-          </button>
-        </div>
+        <FormActions
+          busy={busy}
+          submitLabel={initial ? 'Salvar opção' : 'Adicionar opção'}
+          onCancel={onCancel}
+        />
       </div>
     </form>
   )

@@ -111,13 +111,18 @@
 
   .sidebar {
     transform: translateX(-100%);
-    transition: transform var(--transition-base);
+    /* visibility keeps closed-drawer links out of the tab order */
+    visibility: hidden;
+    transition:
+      transform var(--transition-base),
+      visibility var(--transition-base);
     box-shadow: none;
     top: 0;
   }
 
   .sidebar-open {
     transform: translateX(0);
+    visibility: visible;
     box-shadow: var(--shadow-raised);
   }
 

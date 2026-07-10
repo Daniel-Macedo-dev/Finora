@@ -12,7 +12,7 @@ test.describe('Cenário 1 — Registrar atividade financeira', () => {
     // Income
     await page.getByRole('button', { name: 'Nova transação' }).first().click()
     const dialog = page.getByRole('dialog')
-    await dialog.getByRole('radio', { name: 'Receita' }).click()
+    await dialog.getByRole('button', { name: 'Receita' }).click()
     await dialog.getByLabel('Valor (R$)').fill('5000,00')
     await dialog.getByLabel('Descrição').fill('Salário do mês')
     await dialog.getByLabel('Categoria').selectOption({ label: 'Salário' })

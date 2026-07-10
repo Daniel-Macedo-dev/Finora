@@ -30,7 +30,7 @@ test.describe('Cenário 3 — Planejar uma compra', () => {
     // Installment option: 10x500 = 5000
     await page.getByRole('button', { name: 'Nova opção' }).click()
     await dialog.getByLabel('Loja / vendedor').fill('Loja Parcelada')
-    await dialog.getByRole('radio', { name: 'Parcelado' }).click()
+    await dialog.getByRole('button', { name: 'Parcelado' }).click()
     await dialog.getByLabel('Preço total parcelado (R$)').fill('5000,00')
     await dialog.getByLabel('Nº de parcelas').fill('10')
     await dialog.getByLabel('Valor da parcela (R$)').fill('500,00')
@@ -56,7 +56,7 @@ test.describe('Cenário 3 — Planejar uma compra', () => {
     await page.getByRole('link', { name: 'Monitor' }).click()
     await page.getByRole('button', { name: 'Nova opção' }).click()
     await dialog.getByLabel('Loja / vendedor').fill('Loja X')
-    await dialog.getByRole('radio', { name: 'Parcelado' }).click()
+    await dialog.getByRole('button', { name: 'Parcelado' }).click()
     await dialog.getByLabel('Preço total parcelado (R$)').fill('2000,00')
     await dialog.getByLabel('Nº de parcelas').fill('10')
     await dialog.getByLabel('Valor da parcela (R$)').fill('180,00')

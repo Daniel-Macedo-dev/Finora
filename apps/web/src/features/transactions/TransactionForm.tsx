@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
 import { ApiError } from '../../lib/api'
@@ -99,7 +100,7 @@ export default function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <div className="form-grid">
         <div className="field">
           <span
             style={{
@@ -112,14 +113,13 @@ export default function TransactionForm({
             Tipo
           </span>
           <div
-            role="radiogroup"
+            role="group"
             aria-labelledby="tx-type-label"
             style={{ display: 'flex', gap: 'var(--space-2)' }}
           >
             <button
               type="button"
-              role="radio"
-              aria-checked={type === 'EXPENSE'}
+              aria-pressed={type === 'EXPENSE'}
               className={`btn ${type === 'EXPENSE' ? 'btn-danger' : 'btn-secondary'}`}
               onClick={() => handleTypeChange('EXPENSE')}
             >
@@ -127,8 +127,7 @@ export default function TransactionForm({
             </button>
             <button
               type="button"
-              role="radio"
-              aria-checked={type === 'INCOME'}
+              aria-pressed={type === 'INCOME'}
               className={`btn ${type === 'INCOME' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => handleTypeChange('INCOME')}
             >
@@ -156,13 +155,7 @@ export default function TransactionForm({
           />
         </FormField>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 'var(--space-3)',
-          }}
-        >
+        <div className="form-columns">
           <FormField label="Data" error={errors.date}>
             <input
               className="input"
@@ -235,16 +228,11 @@ export default function TransactionForm({
           </div>
         )}
 
-        <div
-          style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}
-        >
-          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Salvando…' : initial ? 'Salvar alterações' : 'Adicionar transação'}
-          </button>
-        </div>
+        <FormActions
+          busy={busy}
+          submitLabel={initial ? 'Salvar alterações' : 'Adicionar transação'}
+          onCancel={onCancel}
+        />
       </div>
     </form>
   )

@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
       <section className="card settings-section" aria-label="Aparência">
         <h2 className="panel-title">Aparência</h2>
-        <div role="radiogroup" aria-label="Tema" className="theme-options">
+        <div role="group" aria-label="Tema" className="theme-options">
           {(
             [
               ['light', 'Claro'],
@@ -119,8 +119,7 @@ export default function SettingsPage() {
             <button
               key={value}
               type="button"
-              role="radio"
-              aria-checked={theme === value}
+              aria-pressed={theme === value}
               className={`btn ${theme === value ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => handleThemeChange(value)}
             >

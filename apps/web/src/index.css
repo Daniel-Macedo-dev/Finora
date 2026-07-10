@@ -54,7 +54,7 @@
 
   --ink-primary: #17211c;
   --ink-secondary: #4d5a53;
-  --ink-muted: #7d8a83;
+  --ink-muted: #64716a;
   --ink-inverse: #ffffff;
 
   --border: #dde3dd;
@@ -102,7 +102,7 @@
 
   --ink-primary: #eef2ef;
   --ink-secondary: #aeb9b2;
-  --ink-muted: #7d8a83;
+  --ink-muted: #929d96;
   --ink-inverse: #17211c;
 
   --border: #2c3530;
@@ -263,6 +263,25 @@ button {
   padding: 0.5rem;
   min-width: 40px;
   justify-content: center;
+}
+
+/* form layout */
+
+.form-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.form-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.form-footer {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 /* form controls */
