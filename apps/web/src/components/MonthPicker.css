@@ -13,7 +13,6 @@
   text-align: center;
   font-weight: 600;
   font-size: var(--text-sm);
-  text-transform: capitalize;
 }
 
 .month-picker-today {

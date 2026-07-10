@@ -223,6 +223,6 @@ public class InsightService {
     }
 
     private static String brl(BigDecimal value) {
-        return "R$ " + MoneyRules.normalize(value).toPlainString().replace('.', ',');
+        return MoneyRules.formatBrl(value);
     }
 }

@@ -55,7 +55,13 @@ export default function TrendChart({ points }: { points: MonthTrendPoint[] }) {
               color: 'var(--ink-primary)',
             }}
           />
-          <Legend formatter={(value) => (value === 'income' ? 'Receitas' : 'Despesas')} />
+          <Legend
+            formatter={(value) => (
+              <span style={{ color: 'var(--ink-secondary)' }}>
+                {value === 'income' ? 'Receitas' : 'Despesas'}
+              </span>
+            )}
+          />
           <Bar
             dataKey="income"
             name="income"

@@ -288,7 +288,7 @@ public class PurchaseAnalysisService {
     }
 
     private static String brl(BigDecimal value) {
-        return "R$ " + MoneyRules.normalize(value).toPlainString().replace('.', ',');
+        return MoneyRules.formatBrl(value);
     }
 
     private static String toPercent(BigDecimal ratio) {

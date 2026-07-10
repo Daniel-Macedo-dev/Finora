@@ -2,6 +2,8 @@ package com.finora.api.common.money;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.NumberFormat;
+import java.util.Locale;
 
 /**
  * Central monetary rules for Finora.
@@ -23,6 +25,12 @@ public final class MoneyRules {
 
     public static BigDecimal normalize(BigDecimal value) {
         return value.setScale(SCALE, ROUNDING);
+    }
+
+    /** Formats a value as BRL for human-readable API messages (pt-BR grouping). */
+    public static String formatBrl(BigDecimal value) {
+        NumberFormat format = NumberFormat.getCurrencyInstance(Locale.of("pt", "BR"));
+        return format.format(normalize(value));
     }
 
     public static boolean isPositive(BigDecimal value) {
