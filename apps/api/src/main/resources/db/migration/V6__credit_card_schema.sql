@@ -17,7 +17,7 @@ CREATE TABLE credit_cards (
     name                       VARCHAR(100)  NOT NULL,
     issuer                     VARCHAR(100),
     brand                      VARCHAR(20)   NOT NULL,
-    last_four_digits           CHAR(4),
+    last_four_digits           VARCHAR(4),
     credit_limit               NUMERIC(14,2) NOT NULL,
     closing_day                INTEGER       NOT NULL,
     due_day                    INTEGER       NOT NULL,
