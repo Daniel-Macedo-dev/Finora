@@ -4,6 +4,7 @@ import { LoadingCards } from './states'
 import {
   LayoutDashboard,
   ArrowLeftRight,
+  CreditCard,
   PiggyBank,
   CalendarClock,
   Target,
@@ -20,6 +21,7 @@ import './AppShell.css'
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
   { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
+  { to: '/credit-cards', label: 'Cartões', icon: CreditCard },
   { to: '/budgets', label: 'Orçamentos', icon: PiggyBank },
   { to: '/commitments', label: 'Recorrentes', icon: CalendarClock },
   { to: '/goals', label: 'Metas', icon: Target },
