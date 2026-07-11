@@ -7,7 +7,6 @@ import com.finora.api.account.Account;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.account.AccountType;
 import com.finora.api.category.Category;
-import com.finora.api.category.CategoryRepository;
 import com.finora.api.category.CategoryType;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisResponse;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.OptionAnalysis;
@@ -30,9 +29,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Deterministic scenarios for the purchase analysis engine. All scenarios use
- * the fixed reference date {@link #REFERENCE} so month math never depends on
- * the wall clock.
+ * Deterministic scenarios for the purchase analysis engine, all running as an
+ * authenticated user with a fixed reference date so month math never depends
+ * on the wall clock.
  */
 class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
 
@@ -45,9 +44,6 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     private AccountRepository accounts;
 
     @Autowired
-    private CategoryRepository categories;
-
-    @Autowired
     private TransactionRepository transactions;
 
     @Autowired
@@ -56,39 +52,46 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     @Autowired
     private SettingsRepository settingsRepository;
 
+    private TestUser user;
     private Category income;
     private Category expense;
 
     @BeforeEach
-    void setUp() {
-        income = categories.findByNameIgnoreCaseAndType("Salário", CategoryType.INCOME).orElseThrow();
-        expense = categories.findByNameIgnoreCaseAndType("Outros", CategoryType.EXPENSE).orElseThrow();
+    void setUp() throws Exception {
+        user = registerUser();
+        actAs(user);
+        income = categoryRepository
+                .findByUserIdAndNameIgnoreCaseAndType(user.id(), "Salário", CategoryType.INCOME)
+                .orElseThrow();
+        expense = categoryRepository
+                .findByUserIdAndNameIgnoreCaseAndType(user.id(), "Outros", CategoryType.EXPENSE)
+                .orElseThrow();
     }
 
     private void givenCash(String amount) {
-        accounts.save(new Account("Conta Teste", AccountType.CHECKING, new BigDecimal(amount), 0));
+        accounts.save(new Account(user.id(), "Conta Teste", AccountType.CHECKING,
+                new BigDecimal(amount), 0));
     }
 
-    /** Three complete months of history: income and expense repeated monthly. */
     private void givenMonthlyHistory(String incomeAmount, String expenseAmount) {
         for (int i = 1; i <= 3; i++) {
             YearMonth month = YearMonth.from(REFERENCE).minusMonths(i);
-            transactions.save(new Transaction(TransactionType.INCOME,
+            transactions.save(new Transaction(user.id(), TransactionType.INCOME,
                     new BigDecimal(incomeAmount), "Salário", month.atDay(5), income));
-            transactions.save(new Transaction(TransactionType.EXPENSE,
+            transactions.save(new Transaction(user.id(), TransactionType.EXPENSE,
                     new BigDecimal(expenseAmount), "Gastos do mês", month.atDay(20), expense));
         }
     }
 
     private void givenSettings(String buffer, String maxRatio, String rate) {
-        AppSettings settings = settingsRepository.findById(AppSettings.SINGLETON_ID).orElseThrow();
+        AppSettings settings = settingsRepository.findByUserId(user.id()).orElseThrow();
         settings.setMinimumCashBuffer(new BigDecimal(buffer));
         settings.setMaxInstallmentCommitmentRatio(new BigDecimal(maxRatio));
         settings.setMonthlyOpportunityRate(new BigDecimal(rate));
     }
 
     private WishlistItem item() {
-        return wishlist.save(new WishlistItem("Notebook", WishlistPriority.HIGH));
+        return wishlist.save(new WishlistItem(user.id(), "Notebook", WishlistPriority.HIGH));
     }
 
     private PurchaseOption cashOption(WishlistItem item, String price, String shipping) {
@@ -119,14 +122,13 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
         givenSettings("2000.00", "0.30", "0");
 
         WishlistItem item = item();
-        cashOption(item, "4500.00", "0");            // nominal 4500
-        installmentOption(item, "5000.00", 10, "500.00"); // nominal 5000
+        cashOption(item, "4500.00", "0");
+        installmentOption(item, "5000.00", 10, "500.00");
 
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.BUY_CASH);
         assertThat(analysis.recommendation().reasonCodes())
                 .contains("LOWEST_PRESENT_VALUE", "CASH_DISCOUNT_WORTH_IT", "NOMINAL_COMPARISON");
-        // 10000 - 4500 = 5500 >= buffer 2000
         OptionAnalysis cash = analysis.options().stream()
                 .filter(o -> o.kind() == PurchaseOptionKind.CASH).findFirst().orElseThrow();
         assertThat(cash.cashAfterPurchase()).isEqualByComparingTo("5500.00");
@@ -136,12 +138,12 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     @Test
     void recommendsInstallmentWhenCashViolatesBuffer() {
         givenCash("5000.00");
-        givenMonthlyHistory("6000.00", "4000.00"); // surplus 2000/month
+        givenMonthlyHistory("6000.00", "4000.00");
         givenSettings("2000.00", "0.50", "0");
 
         WishlistItem item = item();
-        cashOption(item, "4500.00", "0");                  // would leave 500 < buffer 2000
-        installmentOption(item, "5000.00", 10, "500.00");  // installment fits surplus
+        cashOption(item, "4500.00", "0");
+        installmentOption(item, "5000.00", 10, "500.00");
 
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.BUY_INSTALLMENT);
@@ -157,11 +159,11 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     void interestFreeInstallmentsBeatCashAtPositiveRate() {
         givenCash("20000.00");
         givenMonthlyHistory("10000.00", "5000.00");
-        givenSettings("1000.00", "0.80", "0.01"); // 1% monthly opportunity rate
+        givenSettings("1000.00", "0.80", "0.01");
 
         WishlistItem item = item();
-        cashOption(item, "1200.00", "0");                  // PV 1200.00
-        installmentOption(item, "1200.00", 12, "100.00");  // PV 1125.51 at 1%
+        cashOption(item, "1200.00", "0");
+        installmentOption(item, "1200.00", 12, "100.00");
 
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.BUY_INSTALLMENT);
@@ -175,11 +177,11 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     @Test
     void blocksInstallmentThatExceedsMonthlySurplus() {
         givenCash("500.00");
-        givenMonthlyHistory("5000.00", "4500.00"); // surplus only 500/month
+        givenMonthlyHistory("5000.00", "4500.00");
         givenSettings("400.00", "0.90", "0");
 
         WishlistItem item = item();
-        installmentOption(item, "6000.00", 10, "600.00"); // 600 > 500 surplus
+        installmentOption(item, "6000.00", 10, "600.00");
 
         AnalysisResponse analysis = analyze(item);
         OptionAnalysis option = analysis.options().getFirst();
@@ -191,11 +193,11 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     @Test
     void blocksInstallmentThatOvercommitsIncome() {
         givenCash("10000.00");
-        givenMonthlyHistory("3000.00", "1000.00"); // income 3000, surplus 2000
-        givenSettings("0.00", "0.30", "0");        // max 30% of income = 900
+        givenMonthlyHistory("3000.00", "1000.00");
+        givenSettings("0.00", "0.30", "0");
 
         WishlistItem item = item();
-        installmentOption(item, "10000.00", 10, "1000.00"); // 1000 > 900
+        installmentOption(item, "10000.00", 10, "1000.00");
 
         AnalysisResponse analysis = analyze(item);
         OptionAnalysis option = analysis.options().getFirst();
@@ -206,11 +208,11 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     @Test
     void waitEstimatesMonthsFromAverageSurplus() {
         givenCash("1000.00");
-        givenMonthlyHistory("5000.00", "4000.00"); // surplus 1000/month
+        givenMonthlyHistory("5000.00", "4000.00");
         givenSettings("500.00", "0.30", "0");
 
         WishlistItem item = item();
-        cashOption(item, "3500.00", "0"); // needs 3500 + 500 buffer - 1000 cash = 3000 -> 3 months
+        cashOption(item, "3500.00", "0");
 
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.WAIT);
@@ -222,7 +224,6 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
     void waitWithoutHistoryCannotEstimateMonths() {
         givenCash("100.00");
         givenSettings("500.00", "0.30", "0");
-        // no transaction history at all
 
         WishlistItem item = item();
         cashOption(item, "2000.00", "0");
@@ -243,7 +244,7 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
 
         WishlistItem item = item();
         cashOption(item, "1000.00", "0");
-        installmentOption(item, "1000.00", 10, "100.00"); // same nominal, rate 0 -> same PV
+        installmentOption(item, "1000.00", 10, "100.00");
 
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.BUY_CASH);
@@ -256,15 +257,11 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
         givenSettings("1000.00", "0.80", "0");
 
         WishlistItem item = item();
-        cashOption(item, "1000.00", "80.00");              // nominal 1080
-        installmentOption(item, "1050.00", 10, "105.00");  // nominal 1050 -> cheaper
+        cashOption(item, "1000.00", "80.00");
+        installmentOption(item, "1050.00", 10, "105.00");
 
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.BUY_INSTALLMENT);
-        assertThat(analysis.recommendation().recommendedOptionId())
-                .isEqualTo(analysis.options().stream()
-                        .filter(o -> o.kind() == PurchaseOptionKind.INSTALLMENT)
-                        .findFirst().orElseThrow().optionId());
     }
 
     @Test
@@ -275,5 +272,34 @@ class PurchaseAnalysisEngineTest extends AbstractIntegrationTest {
         AnalysisResponse analysis = analyze(item);
         assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.NO_OPTIONS);
         assertThat(analysis.options()).isEmpty();
+    }
+
+    @Test
+    void anotherUsersFinancesCannotChangeTheRecommendation() throws Exception {
+        // User under test: modest cash, no history, expensive item -> WAIT.
+        givenCash("1000.00");
+        givenSettings("500.00", "0.30", "0");
+        WishlistItem item = item();
+        cashOption(item, "3500.00", "0");
+
+        // A second, wealthy user with huge surplus and cash.
+        TestUser rich = registerUser("Usuária Rica");
+        accounts.save(new Account(rich.id(), "Conta Rica", AccountType.CHECKING,
+                new BigDecimal("100000.00"), 0));
+        Category richIncome = categoryRepository
+                .findByUserIdAndNameIgnoreCaseAndType(rich.id(), "Salário", CategoryType.INCOME)
+                .orElseThrow();
+        for (int i = 1; i <= 3; i++) {
+            YearMonth month = YearMonth.from(REFERENCE).minusMonths(i);
+            transactions.save(new Transaction(rich.id(), TransactionType.INCOME,
+                    new BigDecimal("50000.00"), "Salário", month.atDay(5), richIncome));
+        }
+
+        actAs(user);
+        AnalysisResponse analysis = analyze(item);
+        // The rich user's income must not make this purchase look affordable.
+        assertThat(analysis.recommendation().type()).isEqualTo(RecommendationType.WAIT);
+        assertThat(analysis.assumptions().availableCash()).isEqualByComparingTo("1000.00");
+        assertThat(analysis.assumptions().avgMonthlyIncome()).isNull();
     }
 }

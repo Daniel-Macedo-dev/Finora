@@ -7,44 +7,42 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.finora.api.AbstractIntegrationTest;
-import com.finora.api.category.CategoryRepository;
 import com.finora.api.category.CategoryType;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 
 class AccountApiIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    private TestUser user;
 
-    @Autowired
-    private CategoryRepository categories;
+    @BeforeEach
+    void setUp() throws Exception {
+        user = registerUser();
+    }
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private long createAccount(String body) throws Exception {
+        String response = mockMvc.perform(post("/api/accounts")
+                        .cookie(user.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        return objectMapper.readTree(response).get("id").asLong();
+    }
 
     @Test
     void createsAccountAndComputesCurrentBalance() throws Exception {
-        String body = mockMvc.perform(post("/api/accounts")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Conta Corrente", "type": "CHECKING", "openingBalance": 1000.00}
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.currentBalance").value(1000.00))
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-        long accountId = objectMapper.readTree(body).get("id").asLong();
+        long accountId = createAccount("""
+                {"name": "Conta Corrente", "type": "CHECKING", "openingBalance": 1000.00}
+                """);
 
-        Long incomeCategoryId = categories
-                .findByNameIgnoreCaseAndType("Salário", CategoryType.INCOME).orElseThrow().getId();
-        Long expenseCategoryId = categories
-                .findByNameIgnoreCaseAndType("Moradia", CategoryType.EXPENSE).orElseThrow().getId();
+        Long incomeCategoryId = categoryId(user, "Salário", CategoryType.INCOME);
+        Long expenseCategoryId = categoryId(user, "Moradia", CategoryType.EXPENSE);
 
         mockMvc.perform(post("/api/transactions")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"type": "INCOME", "amount": 500.00, "description": "Salário",
@@ -52,6 +50,7 @@ class AccountApiIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(incomeCategoryId, accountId)))
                 .andExpect(status().isCreated());
         mockMvc.perform(post("/api/transactions")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"type": "EXPENSE", "amount": 200.00, "description": "Aluguel",
@@ -59,21 +58,18 @@ class AccountApiIntegrationTest extends AbstractIntegrationTest {
                                 """.formatted(expenseCategoryId, accountId)))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/accounts/{id}", accountId))
+        mockMvc.perform(get("/api/accounts/{id}", accountId).cookie(user.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentBalance").value(1300.00));
     }
 
     @Test
-    void rejectsDuplicateAccountName() throws Exception {
+    void rejectsDuplicateAccountNameForSameUser() throws Exception {
+        createAccount("""
+                {"name": "Carteira", "type": "CASH", "openingBalance": 0}
+                """);
         mockMvc.perform(post("/api/accounts")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Carteira", "type": "CASH", "openingBalance": 0}
-                                """))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(post("/api/accounts")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "carteira", "type": "CASH", "openingBalance": 0}
@@ -83,28 +79,38 @@ class AccountApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void preventsDeletingAccountWithTransactions() throws Exception {
-        String body = mockMvc.perform(post("/api/accounts")
+    void allowsSameAccountNameForDifferentUsers() throws Exception {
+        createAccount("""
+                {"name": "Nubank", "type": "CHECKING", "openingBalance": 0}
+                """);
+
+        TestUser other = registerUser("Outra Pessoa");
+        mockMvc.perform(post("/api/accounts")
+                        .cookie(other.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name": "Poupança", "type": "SAVINGS", "openingBalance": 100}
+                                {"name": "Nubank", "type": "CHECKING", "openingBalance": 0}
                                 """))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-        JsonNode created = objectMapper.readTree(body);
-        long accountId = created.get("id").asLong();
+                .andExpect(status().isCreated());
+    }
 
-        Long categoryId = categories
-                .findByNameIgnoreCaseAndType("Lazer", CategoryType.EXPENSE).orElseThrow().getId();
+    @Test
+    void preventsDeletingAccountWithTransactions() throws Exception {
+        long accountId = createAccount("""
+                {"name": "Poupança", "type": "SAVINGS", "openingBalance": 100}
+                """);
+        Long categoryIdValue = categoryId(user, "Lazer", CategoryType.EXPENSE);
         mockMvc.perform(post("/api/transactions")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"type": "EXPENSE", "amount": 30.00, "description": "Cinema",
                                  "date": "2026-07-02", "categoryId": %d, "accountId": %d}
-                                """.formatted(categoryId, accountId)))
+                                """.formatted(categoryIdValue, accountId)))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(delete("/api/accounts/{id}", accountId))
+        mockMvc.perform(delete("/api/accounts/{id}", accountId)
+                        .cookie(user.session()).with(csrf()))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_HAS_TRANSACTIONS"));
     }

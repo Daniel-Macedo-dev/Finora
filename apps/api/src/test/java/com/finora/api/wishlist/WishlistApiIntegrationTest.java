@@ -7,29 +7,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.finora.api.AbstractIntegrationTest;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.ObjectMapper;
 
 class WishlistApiIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    private TestUser user;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @BeforeEach
+    void setUp() throws Exception {
+        user = registerUser();
+    }
 
     private long createItem() throws Exception {
         String body = mockMvc.perform(post("/api/wishlist")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "Cadeira ergonômica", "priority": "HIGH",
                                  "referencePrice": 1800.00, "status": "PLANNING"}
                                 """))
                 .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readTree(body).get("id").asLong();
     }
 
@@ -38,6 +39,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
         long id = createItem();
 
         mockMvc.perform(post("/api/wishlist/{id}/options", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja A", "kind": "CASH", "basePrice": 1700.00,
@@ -47,6 +49,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.nominalCost").value(1750.00));
 
         mockMvc.perform(post("/api/wishlist/{id}/options", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja B", "kind": "INSTALLMENT", "basePrice": 1800.00,
@@ -54,7 +57,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
                                 """))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/wishlist"))
+        mockMvc.perform(get("/api/wishlist").cookie(user.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].optionCount").value(2))
                 .andExpect(jsonPath("$[0].bestNominalCost").value(1750.00));
@@ -64,6 +67,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
     void rejectsCashOptionCarryingInstallmentData() throws Exception {
         long id = createItem();
         mockMvc.perform(post("/api/wishlist/{id}/options", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja C", "kind": "CASH", "basePrice": 1700.00,
@@ -77,6 +81,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
     void rejectsInstallmentsThatDontReconcileWithTotal() throws Exception {
         long id = createItem();
         mockMvc.perform(post("/api/wishlist/{id}/options", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja D", "kind": "INSTALLMENT", "basePrice": 2000.00,
@@ -90,6 +95,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
     void rejectsInstallmentOptionWithoutInstallmentData() throws Exception {
         long id = createItem();
         mockMvc.perform(post("/api/wishlist/{id}/options", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja E", "kind": "INSTALLMENT", "basePrice": 2000.00}
@@ -101,6 +107,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void updatesSettingsUsedByAnalysis() throws Exception {
         mockMvc.perform(put("/api/settings")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"minimumCashBuffer": 3000.00, "maxInstallmentCommitmentRatio": 0.25,
@@ -110,7 +117,7 @@ class WishlistApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.minimumCashBuffer").value(3000.00))
                 .andExpect(jsonPath("$.monthlyOpportunityRate").value(0.008));
 
-        mockMvc.perform(get("/api/settings"))
+        mockMvc.perform(get("/api/settings").cookie(user.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.maxInstallmentCommitmentRatio").value(0.25));
     }

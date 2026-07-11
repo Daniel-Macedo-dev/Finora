@@ -5,27 +5,37 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.finora.api.AbstractIntegrationTest;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.ObjectMapper;
 
 class GoalApiIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    private TestUser user;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @BeforeEach
+    void setUp() throws Exception {
+        user = registerUser();
+    }
+
+    private long createGoal(String body) throws Exception {
+        String response = mockMvc.perform(post("/api/goals")
+                        .cookie(user.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        return objectMapper.readTree(response).get("id").asLong();
+    }
 
     @Test
     void createsGoalWithProgressFields() throws Exception {
-        // Target 10 months from now: remaining 8000 over 10 months -> 800/month.
         LocalDate targetDate = YearMonth.now().plusMonths(10).atDay(1);
         mockMvc.perform(post("/api/goals")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "Reserva de emergência", "targetAmount": 10000.00,
@@ -40,16 +50,12 @@ class GoalApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void contributionUpdatesProgressAndCompletesGoal() throws Exception {
-        String body = mockMvc.perform(post("/api/goals")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Notebook", "targetAmount": 5000.00, "currentAmount": 4500.00}
-                                """))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-        long id = objectMapper.readTree(body).get("id").asLong();
+        long id = createGoal("""
+                {"name": "Notebook", "targetAmount": 5000.00, "currentAmount": 4500.00}
+                """);
 
         mockMvc.perform(post("/api/goals/{id}/contributions", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"amount": 500.00}
@@ -62,16 +68,12 @@ class GoalApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsWithdrawalBeyondBalance() throws Exception {
-        String body = mockMvc.perform(post("/api/goals")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Viagem", "targetAmount": 3000.00, "currentAmount": 100.00}
-                                """))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-        long id = objectMapper.readTree(body).get("id").asLong();
+        long id = createGoal("""
+                {"name": "Viagem", "targetAmount": 3000.00, "currentAmount": 100.00}
+                """);
 
         mockMvc.perform(post("/api/goals/{id}/contributions", id)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"amount": -200.00}

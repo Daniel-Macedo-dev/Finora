@@ -6,34 +6,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.finora.api.AbstractIntegrationTest;
-import com.finora.api.category.CategoryRepository;
 import com.finora.api.category.CategoryType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 
 class CommitmentApiIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private CategoryRepository categories;
-
+    private TestUser user;
     private Long subscriptionsCategoryId;
 
     @BeforeEach
-    void setUp() {
-        subscriptionsCategoryId = categories
-                .findByNameIgnoreCaseAndType("Assinaturas", CategoryType.EXPENSE)
-                .orElseThrow().getId();
+    void setUp() throws Exception {
+        user = registerUser();
+        subscriptionsCategoryId = categoryId(user, "Assinaturas", CategoryType.EXPENSE);
     }
 
     @Test
     void projectsUpcomingOccurrencesAcrossMonths() throws Exception {
         mockMvc.perform(post("/api/commitments")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"description": "Streaming", "amount": 39.90, "categoryId": %d,
@@ -43,6 +35,7 @@ class CommitmentApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.nextDueDate").isNotEmpty());
 
         mockMvc.perform(get("/api/commitments/upcoming")
+                        .cookie(user.session())
                         .param("from", "2026-07-01")
                         .param("months", "2"))
                 .andExpect(status().isOk())
@@ -55,6 +48,7 @@ class CommitmentApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void requiresDueDayForMonthlyCadence() throws Exception {
         mockMvc.perform(post("/api/commitments")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"description": "Academia", "amount": 120.00, "categoryId": %d,
@@ -67,6 +61,7 @@ class CommitmentApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void rejectsEndDateBeforeStartDate() throws Exception {
         mockMvc.perform(post("/api/commitments")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"description": "Curso", "amount": 200.00, "categoryId": %d,

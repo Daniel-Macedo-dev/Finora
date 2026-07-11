@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class PresentValueTest {
 
-    private final WishlistItem item = new WishlistItem("Notebook", WishlistPriority.MEDIUM);
+    private final WishlistItem item = new WishlistItem(1L, "Notebook", WishlistPriority.MEDIUM);
 
     private PurchaseOption cash(String price, String shipping) {
         return new PurchaseOption(item, "Loja A", PurchaseOptionKind.CASH,

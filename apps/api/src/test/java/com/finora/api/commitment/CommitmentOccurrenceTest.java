@@ -11,10 +11,10 @@ import org.junit.jupiter.api.Test;
 
 class CommitmentOccurrenceTest {
 
-    private final Category category = new Category("Assinaturas", CategoryType.EXPENSE);
+    private final Category category = new Category(1L, "Assinaturas", CategoryType.EXPENSE);
 
     private Commitment monthly(int dueDay, LocalDate start) {
-        return new Commitment("Internet", new BigDecimal("99.90"), category,
+        return new Commitment(1L, "Internet", new BigDecimal("99.90"), category,
                 CommitmentCadence.MONTHLY, dueDay, start);
     }
 
@@ -67,7 +67,7 @@ class CommitmentOccurrenceTest {
 
     @Test
     void yearlyOccursOnlyOnAnniversaryMonth() {
-        Commitment c = new Commitment("Seguro", new BigDecimal("1200.00"), category,
+        Commitment c = new Commitment(1L, "Seguro", new BigDecimal("1200.00"), category,
                 CommitmentCadence.YEARLY, null, LocalDate.of(2025, 3, 20));
         assertThat(c.occurrenceIn(YearMonth.of(2026, 3)))
                 .contains(LocalDate.of(2026, 3, 20));

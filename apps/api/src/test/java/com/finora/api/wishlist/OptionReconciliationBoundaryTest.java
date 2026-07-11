@@ -5,32 +5,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.finora.api.AbstractIntegrationTest;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import tools.jackson.databind.ObjectMapper;
 
 class OptionReconciliationBoundaryTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
+    private TestUser user;
     private long itemId;
 
     @BeforeEach
     void setUp() throws Exception {
+        user = registerUser();
         String body = mockMvc.perform(post("/api/wishlist")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "Item limite", "priority": "MEDIUM"}
                                 """))
                 .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         itemId = objectMapper.readTree(body).get("id").asLong();
     }
 
@@ -38,6 +33,7 @@ class OptionReconciliationBoundaryTest extends AbstractIntegrationTest {
     void acceptsDifferenceExactlyAtTolerance() throws Exception {
         // 10 x 99.90 = 999.00; advertised total 999.10 -> diff 0.10 = 0.01 * 10.
         mockMvc.perform(post("/api/wishlist/{id}/options", itemId)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja Limite", "kind": "INSTALLMENT",
@@ -49,8 +45,8 @@ class OptionReconciliationBoundaryTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsDifferenceJustAboveTolerance() throws Exception {
-        // Diff 0.11 > 0.10 tolerance for 10 installments.
         mockMvc.perform(post("/api/wishlist/{id}/options", itemId)
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"merchant": "Loja Estourada", "kind": "INSTALLMENT",

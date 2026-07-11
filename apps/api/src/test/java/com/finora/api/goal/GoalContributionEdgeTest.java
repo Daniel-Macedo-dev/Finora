@@ -7,21 +7,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.finora.api.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 
 class GoalContributionEdgeTest extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    private TestUser user;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        user = registerUser();
+    }
 
     @Test
     void targetDateInCurrentMonthSuggestsFullRemainingAmount() throws Exception {
         // Months until target rounds to zero -> clamped to one installment.
         LocalDate endOfThisMonth = YearMonth.now().atEndOfMonth();
         mockMvc.perform(post("/api/goals")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "Meta urgente", "targetAmount": 1000.00,
@@ -34,6 +38,7 @@ class GoalContributionEdgeTest extends AbstractIntegrationTest {
     @Test
     void pastTargetDateYieldsNoSuggestion() throws Exception {
         mockMvc.perform(post("/api/goals")
+                        .cookie(user.session()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "Meta atrasada", "targetAmount": 1000.00,
