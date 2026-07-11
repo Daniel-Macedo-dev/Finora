@@ -4,8 +4,8 @@ import { AlertCircle } from 'lucide-react'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
 import { ApiError } from '../../lib/api'
+import AuthShell from './AuthShell'
 import { useCurrentUser, useRegister } from './api'
-import './auth.css'
 
 interface FieldErrors {
   displayName?: string
@@ -57,21 +57,10 @@ export default function RegisterPage() {
     : null
 
   return (
-    <main className="auth-page">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <span className="brand-mark" aria-hidden="true">
-            F
-          </span>
-          <span className="brand-name">Finora</span>
-        </div>
-        <div>
-          <h1 className="auth-title">Criar conta</h1>
-          <p className="auth-subtitle">
-            Comece a organizar suas finanças e planejar compras com segurança.
-          </p>
-        </div>
-
+    <AuthShell
+      title="Criar conta"
+      subtitle="Comece a organizar suas finanças e planejar compras com segurança."
+    >
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <FormField label="Nome" error={errors.displayName}>
             <input
@@ -130,7 +119,6 @@ export default function RegisterPage() {
         <p className="auth-switch">
           Já tem conta? <Link to="/login">Entrar</Link>
         </p>
-      </div>
-    </main>
+    </AuthShell>
   )
 }

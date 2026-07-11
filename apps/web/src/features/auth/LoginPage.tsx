@@ -3,8 +3,8 @@ import { Link, Navigate, useLocation } from 'react-router-dom'
 import { AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { errorMessage } from '../../components/states'
 import { ApiError } from '../../lib/api'
+import AuthShell from './AuthShell'
 import { useCurrentUser, useLogin } from './api'
-import './auth.css'
 
 interface LocationState {
   from?: string
@@ -49,19 +49,7 @@ export default function LoginPage() {
         : null
 
   return (
-    <main className="auth-page">
-      <div className="auth-card">
-        <div className="auth-brand">
-          <span className="brand-mark" aria-hidden="true">
-            F
-          </span>
-          <span className="brand-name">Finora</span>
-        </div>
-        <div>
-          <h1 className="auth-title">Entrar</h1>
-          <p className="auth-subtitle">Acesse suas finanças pessoais.</p>
-        </div>
-
+    <AuthShell title="Entrar" subtitle="Acesse suas finanças pessoais.">
         {state.sessionExpired && (
           <p className="auth-info" role="status">
             Sua sessão expirou. Entre novamente para continuar.
@@ -118,7 +106,6 @@ export default function LoginPage() {
         <p className="auth-switch">
           Ainda não tem conta? <Link to="/register">Criar conta</Link>
         </p>
-      </div>
-    </main>
+    </AuthShell>
   )
 }
