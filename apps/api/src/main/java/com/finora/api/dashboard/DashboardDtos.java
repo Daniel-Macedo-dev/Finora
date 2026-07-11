@@ -1,9 +1,11 @@
 package com.finora.api.dashboard;
 
 import com.finora.api.commitment.CommitmentDtos.UpcomingCommitment;
+import com.finora.api.creditcard.invoice.InvoiceStatus;
 import com.finora.api.goal.GoalDtos.GoalResponse;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 
@@ -35,6 +37,41 @@ public final class DashboardDtos {
             BigDecimal expense) {
     }
 
+    public record CardInvoiceBrief(
+            Long cardId,
+            String cardName,
+            Long invoiceId,
+            YearMonth referenceMonth,
+            LocalDate dueDate,
+            InvoiceStatus status,
+            BigDecimal outstandingAmount) {
+    }
+
+    public record RecentCardPurchase(
+            Long id,
+            Long cardId,
+            String cardName,
+            String description,
+            LocalDate purchaseDate,
+            BigDecimal totalAmount,
+            int installmentCount) {
+    }
+
+    /**
+     * Card debt lives here, deliberately apart from {@code totalBalance}: cash
+     * and card obligations are different things and are never netted together.
+     */
+    public record CardsOverview(
+            int cardCount,
+            BigDecimal totalOutstanding,
+            BigDecimal totalAvailableLimit,
+            /** Card expense recognized in the month (installments + adjustments). */
+            BigDecimal monthCardExpense,
+            int overdueCount,
+            CardInvoiceBrief nextDueInvoice,
+            List<RecentCardPurchase> recentPurchases) {
+    }
+
     public record DashboardResponse(
             YearMonth month,
             BigDecimal totalBalance,
@@ -54,6 +91,8 @@ public final class DashboardDtos {
             List<UpcomingCommitment> upcomingCommitments,
             BigDecimal upcomingCommitmentsTotal,
             List<GoalResponse> goals,
-            List<TransactionResponse> recentTransactions) {
+            List<TransactionResponse> recentTransactions,
+            /** Null when the user has no credit cards. */
+            CardsOverview cards) {
     }
 }
