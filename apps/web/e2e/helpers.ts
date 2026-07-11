@@ -84,6 +84,28 @@ function csrfTokenFrom(setCookie: string | undefined): string {
   return decodeURIComponent(match[1])
 }
 
+/* ---------- browser-session API calls ---------- */
+
+/**
+ * POSTs through the page's own browser context (session + CSRF cookies),
+ * for fast test-data setup that the UI flow under test doesn't cover.
+ */
+export async function pagePost(page: Page, path: string, data: unknown) {
+  const cookies = await page.context().cookies()
+  const token = cookies.find((cookie) => cookie.name === 'XSRF-TOKEN')?.value
+  if (!token) {
+    throw new Error('sessão do navegador sem cookie XSRF-TOKEN')
+  }
+  return page.request.post(`${API}${path}`, {
+    headers: { 'X-XSRF-TOKEN': decodeURIComponent(token) },
+    data,
+  })
+}
+
+export async function pageGet(page: Page, path: string) {
+  return page.request.get(`${API}${path}`)
+}
+
 export async function categoryId(
   request: APIRequestContext,
   name: string,
