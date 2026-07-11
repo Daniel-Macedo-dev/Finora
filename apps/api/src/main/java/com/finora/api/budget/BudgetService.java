@@ -11,6 +11,8 @@ import com.finora.api.category.CategoryType;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.adjustment.InvoiceAdjustmentRepository;
+import com.finora.api.creditcard.installment.CardInstallmentRepository;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.TransactionRepository;
@@ -35,17 +37,23 @@ public class BudgetService {
     private final BudgetRepository budgets;
     private final CategoryRepository categories;
     private final TransactionRepository transactions;
+    private final CardInstallmentRepository installments;
+    private final InvoiceAdjustmentRepository adjustments;
     private final SettingsService settings;
     private final CurrentUserProvider currentUser;
 
     public BudgetService(BudgetRepository budgets,
                          CategoryRepository categories,
                          TransactionRepository transactions,
+                         CardInstallmentRepository installments,
+                         InvoiceAdjustmentRepository adjustments,
                          SettingsService settings,
                          CurrentUserProvider currentUser) {
         this.budgets = budgets;
         this.categories = categories;
         this.transactions = transactions;
+        this.installments = installments;
+        this.adjustments = adjustments;
         this.settings = settings;
         this.currentUser = currentUser;
     }
@@ -119,9 +127,17 @@ public class BudgetService {
 
     private BudgetResponse toResponse(Budget budget) {
         YearMonth month = budget.getMonth();
+        // Consumption = regular expenses in the month + active card
+        // installments whose invoice falls in the month + net card debit
+        // adjustments (fees/interest minus categorized credits). Invoice
+        // payments never appear here — the installments already did.
         BigDecimal consumed = transactions.sumExpensesByCategoryAndPeriod(
-                budget.getUserId(), budget.getCategory().getId(),
-                month.atDay(1), month.atEndOfMonth());
+                        budget.getUserId(), budget.getCategory().getId(),
+                        month.atDay(1), month.atEndOfMonth())
+                .add(installments.sumActiveByCategoryAndMonth(
+                        budget.getUserId(), budget.getCategory().getId(), month.atDay(1)))
+                .add(adjustments.sumActiveNetByCategoryAndMonth(
+                        budget.getUserId(), budget.getCategory().getId(), month.atDay(1)));
         BigDecimal limit = budget.getLimitAmount();
         BigDecimal percentUsed = percent(consumed, limit);
         return new BudgetResponse(

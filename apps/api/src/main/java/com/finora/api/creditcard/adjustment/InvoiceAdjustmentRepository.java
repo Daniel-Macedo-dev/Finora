@@ -60,6 +60,19 @@ public interface InvoiceAdjustmentRepository extends JpaRepository<InvoiceAdjust
             """)
     BigDecimal sumActiveNetByCard(@Param("cardId") Long cardId, @Param("userId") Long userId);
 
+    /** Net active adjustment of the user across all invoices. */
+    @Query("""
+            select coalesce(sum(case when a.kind in (
+                        com.finora.api.creditcard.adjustment.AdjustmentKind.FEE,
+                        com.finora.api.creditcard.adjustment.AdjustmentKind.INTEREST,
+                        com.finora.api.creditcard.adjustment.AdjustmentKind.OTHER_DEBIT)
+                    then a.amount else -a.amount end), 0)
+            from InvoiceAdjustment a
+            where a.userId = :userId
+              and a.status = com.finora.api.creditcard.adjustment.AdjustmentStatus.ACTIVE
+            """)
+    BigDecimal sumActiveNetByUser(@Param("userId") Long userId);
+
     /** Net active adjustment recognized in a month (invoice reference month). */
     @Query("""
             select coalesce(sum(case when a.kind in (
@@ -74,6 +87,24 @@ public interface InvoiceAdjustmentRepository extends JpaRepository<InvoiceAdjust
             """)
     BigDecimal sumActiveNetByMonth(@Param("userId") Long userId,
                                    @Param("referenceMonth") LocalDate referenceMonth);
+
+    /** Categorized net active adjustments of a month: [categoryId, name, net]. */
+    @Query("""
+            select a.category.id, a.category.name,
+                   sum(case when a.kind in (
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.FEE,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.INTEREST,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.OTHER_DEBIT)
+                       then a.amount else -a.amount end)
+            from InvoiceAdjustment a
+            where a.userId = :userId
+              and a.status = com.finora.api.creditcard.adjustment.AdjustmentStatus.ACTIVE
+              and a.category is not null
+              and a.invoice.referenceMonth = :referenceMonth
+            group by a.category.id, a.category.name
+            """)
+    List<Object[]> sumActiveNetGroupedByCategory(@Param("userId") Long userId,
+                                                 @Param("referenceMonth") LocalDate referenceMonth);
 
     /** Net active adjustment of one category in one invoice month (budgets). */
     @Query("""

@@ -46,6 +46,15 @@ public interface CardInstallmentRepository extends JpaRepository<CardInstallment
             """)
     BigDecimal sumActiveByCard(@Param("cardId") Long cardId, @Param("userId") Long userId);
 
+    /** Every active installment obligation of the user, across all cards and months. */
+    @Query("""
+            select coalesce(sum(i.amount), 0)
+            from CardInstallment i
+            where i.userId = :userId
+              and i.status = com.finora.api.creditcard.installment.InstallmentStatus.ACTIVE
+            """)
+    BigDecimal sumActiveByUser(@Param("userId") Long userId);
+
     /** Card expense recognized in a month: active installments of that invoice month. */
     @Query("""
             select coalesce(sum(i.amount), 0)

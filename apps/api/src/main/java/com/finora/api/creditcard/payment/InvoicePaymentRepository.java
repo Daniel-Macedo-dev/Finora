@@ -44,6 +44,15 @@ public interface InvoicePaymentRepository extends JpaRepository<InvoicePayment, 
             """)
     BigDecimal sumCompletedByCard(@Param("cardId") Long cardId, @Param("userId") Long userId);
 
+    /** Everything the user already paid across all card invoices. */
+    @Query("""
+            select coalesce(sum(p.amount), 0)
+            from InvoicePayment p
+            where p.userId = :userId
+              and p.status = com.finora.api.creditcard.payment.PaymentStatus.COMPLETED
+            """)
+    BigDecimal sumCompletedByUser(@Param("userId") Long userId);
+
     /** Cash settled out of one account by invoice payments (reduces its balance). */
     @Query("""
             select coalesce(sum(p.amount), 0)
