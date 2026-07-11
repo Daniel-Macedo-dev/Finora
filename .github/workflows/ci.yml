@@ -91,8 +91,9 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Wait for API
         run: |
+          # /api/auth/csrf is public (returns 204); protected routes now answer 401.
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/api/categories > /dev/null; then
+            if curl -sf -o /dev/null http://localhost:8080/api/auth/csrf; then
               echo "API is up" && exit 0
             fi
             sleep 2
