@@ -2,9 +2,14 @@ package com.finora.api.purchaseanalysis;
 
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.CardLimitService;
+import com.finora.api.creditcard.CardLimitService.CardLimit;
+import com.finora.api.creditcard.CreditCard;
+import com.finora.api.creditcard.InvoiceCycleCalculator;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisAssumptions;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisResponse;
+import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.CardAnalysis;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.OptionAnalysis;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.OptionIssue;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.Recommendation;
@@ -52,15 +57,18 @@ public class PurchaseAnalysisService {
     private final WishlistItemRepository items;
     private final SettingsService settings;
     private final FinancialContextService contextService;
+    private final CardLimitService cardLimits;
     private final CurrentUserProvider currentUser;
 
     public PurchaseAnalysisService(WishlistItemRepository items,
                                    SettingsService settings,
                                    FinancialContextService contextService,
+                                   CardLimitService cardLimits,
                                    CurrentUserProvider currentUser) {
         this.items = items;
         this.settings = settings;
         this.contextService = contextService;
+        this.cardLimits = cardLimits;
         this.currentUser = currentUser;
     }
 
@@ -77,7 +85,7 @@ public class PurchaseAnalysisService {
         FinancialContext context = contextService.build(userId, referenceDate);
 
         List<OptionAnalysis> analyses = item.getOptions().stream()
-                .map(option -> analyzeOption(option, config, context))
+                .map(option -> analyzeOption(option, config, context, referenceDate))
                 .toList();
 
         return new AnalysisResponse(
@@ -92,24 +100,29 @@ public class PurchaseAnalysisService {
                         context.avgMonthlyExpense(),
                         context.avgMonthlySurplus(),
                         context.monthlyCommitments(),
+                        context.cardOutstandingTotal(),
+                        context.nextMonthCardInstallments(),
                         context.historyMonthsUsed()),
                 analyses,
                 recommend(analyses, config, context));
     }
 
-    private OptionAnalysis analyzeOption(PurchaseOption option, AppSettings config, FinancialContext context) {
+    private OptionAnalysis analyzeOption(PurchaseOption option, AppSettings config,
+                                         FinancialContext context, LocalDate referenceDate) {
         BigDecimal nominal = MoneyRules.normalize(option.nominalCost());
         BigDecimal presentValue = presentValue(option, config.getMonthlyOpportunityRate());
         List<OptionIssue> issues = new ArrayList<>();
 
         BigDecimal upfront;
         BigDecimal monthlyBurden = null;
+        CardAnalysis card = null;
         if (option.getKind() == PurchaseOptionKind.CASH) {
             upfront = nominal;
         } else {
             upfront = MoneyRules.normalize(option.getShipping().add(option.getFees()));
             monthlyBurden = option.getInstallmentAmount();
             checkInstallmentPressure(option, config, context, issues);
+            card = analyzeCard(option, nominal, referenceDate, issues);
         }
 
         BigDecimal cashAfter = MoneyRules.normalize(context.availableCash().subtract(upfront));
@@ -132,8 +145,52 @@ public class PurchaseAnalysisService {
                 monthlyBurden,
                 option.getInstallmentCount(),
                 cashAfter,
+                card,
                 safe,
                 issues);
+    }
+
+    /**
+     * Projects an INSTALLMENT option onto its linked card: the whole nominal
+     * value consumes limit at purchase time, so insufficient available limit
+     * blocks the option. Card limit is capacity, never income or cash — it
+     * cannot make an option safe, only unavailable.
+     */
+    private CardAnalysis analyzeCard(PurchaseOption option, BigDecimal nominal,
+                                     LocalDate referenceDate, List<OptionIssue> issues) {
+        CreditCard card = option.getCreditCard();
+        if (card == null) {
+            return null;
+        }
+        if (card.isArchived()) {
+            issues.add(new OptionIssue(
+                    "CARD_ARCHIVED",
+                    "O cartão %s está arquivado e não pode receber novas compras.".formatted(card.getName()),
+                    true));
+        }
+        CardLimit limit = cardLimits.limitOf(card);
+        boolean sufficient = nominal.compareTo(limit.availableLimit()) <= 0;
+        if (!sufficient) {
+            issues.add(new OptionIssue(
+                    "CARD_LIMIT_INSUFFICIENT",
+                    "A compra de %s excede o limite disponível de %s no cartão %s."
+                            .formatted(brl(nominal), brl(limit.availableLimit()), card.getName()),
+                    true));
+        }
+        BigDecimal usedAfter = limit.usedLimit().add(nominal);
+        BigDecimal utilizationAfter = limit.creditLimit().signum() > 0
+                ? usedAfter.multiply(BigDecimal.valueOf(100))
+                        .divide(limit.creditLimit(), 1, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO.setScale(1);
+        return new CardAnalysis(
+                card.getId(),
+                card.getName(),
+                limit.availableLimit(),
+                MoneyRules.normalize(limit.availableLimit().subtract(nominal)),
+                utilizationAfter,
+                InvoiceCycleCalculator.cycleForPurchase(
+                        card.getClosingDay(), card.getDueDay(), referenceDate).referenceMonth(),
+                sufficient);
     }
 
     private void checkInstallmentPressure(PurchaseOption option, AppSettings config,
@@ -158,14 +215,18 @@ public class PurchaseAnalysisService {
         }
 
         if (context.avgMonthlyIncome() != null && context.avgMonthlyIncome().signum() > 0) {
-            BigDecimal committed = installment.add(context.monthlyCommitments());
+            // Existing card installments already claim part of the income; the
+            // new installment competes with them, not just with commitments.
+            BigDecimal committed = installment
+                    .add(context.monthlyCommitments())
+                    .add(context.nextMonthCardInstallments());
             BigDecimal ratio = committed.divide(context.avgMonthlyIncome(),
                     MoneyRules.RATE_SCALE, RoundingMode.HALF_UP);
             if (ratio.compareTo(config.getMaxInstallmentCommitmentRatio()) > 0) {
                 issues.add(new OptionIssue(
                         "INSTALLMENT_PRESSURE_HIGH",
-                        ("Parcela + compromissos recorrentes (%s) comprometeriam %s%% da renda média, acima do "
-                                + "limite configurado de %s%%.")
+                        ("Parcela + compromissos recorrentes + parcelas de cartão já assumidas (%s) "
+                                + "comprometeriam %s%% da renda média, acima do limite configurado de %s%%.")
                                 .formatted(brl(committed),
                                         toPercent(ratio),
                                         toPercent(config.getMaxInstallmentCommitmentRatio())),

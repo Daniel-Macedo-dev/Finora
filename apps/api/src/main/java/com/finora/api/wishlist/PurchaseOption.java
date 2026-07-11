@@ -1,6 +1,7 @@
 package com.finora.api.wishlist;
 
 import com.finora.api.common.persistence.AuditableEntity;
+import com.finora.api.creditcard.CreditCard;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -48,6 +49,11 @@ public class PurchaseOption extends AuditableEntity {
 
     @Column(name = "installment_amount", precision = 14, scale = 2)
     private BigDecimal installmentAmount;
+
+    /** Optional card an INSTALLMENT option would be charged on (same owner as the item). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credit_card_id")
+    private CreditCard creditCard;
 
     @Column(columnDefinition = "text")
     private String notes;
@@ -140,5 +146,13 @@ public class PurchaseOption extends AuditableEntity {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public CreditCard getCreditCard() {
+        return creditCard;
+    }
+
+    public void setCreditCard(CreditCard creditCard) {
+        this.creditCard = creditCard;
     }
 }

@@ -73,6 +73,9 @@ public final class WishlistDtos {
             @Digits(integer = 12, fraction = 2, message = "Use no máximo 2 casas decimais.")
             BigDecimal installmentAmount,
 
+            /** Card an INSTALLMENT option would be charged on; must belong to the owner. */
+            Long creditCardId,
+
             @Size(max = 2000, message = "As observações podem ter no máximo 2000 caracteres.")
             String notes) {
     }
@@ -90,6 +93,8 @@ public final class WishlistDtos {
             BigDecimal nominalCost,
             Integer installmentCount,
             BigDecimal installmentAmount,
+            Long creditCardId,
+            String creditCardName,
             String notes) {
 
         public static PurchaseOptionResponse from(PurchaseOption option) {
@@ -103,6 +108,8 @@ public final class WishlistDtos {
                     option.nominalCost(),
                     option.getInstallmentCount(),
                     option.getInstallmentAmount(),
+                    option.getCreditCard() != null ? option.getCreditCard().getId() : null,
+                    option.getCreditCard() != null ? option.getCreditCard().getName() : null,
                     option.getNotes());
         }
     }

@@ -4,6 +4,9 @@ import com.finora.api.account.AccountBalanceService;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.commitment.CommitmentService;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.adjustment.InvoiceAdjustmentRepository;
+import com.finora.api.creditcard.installment.CardInstallmentRepository;
+import com.finora.api.creditcard.payment.InvoicePaymentRepository;
 import com.finora.api.transaction.TransactionRepository;
 import com.finora.api.transaction.TransactionType;
 import java.math.BigDecimal;
@@ -29,15 +32,24 @@ public class FinancialContextService {
     private final AccountBalanceService balances;
     private final TransactionRepository transactions;
     private final CommitmentService commitments;
+    private final CardInstallmentRepository installments;
+    private final InvoiceAdjustmentRepository adjustments;
+    private final InvoicePaymentRepository payments;
 
     public FinancialContextService(AccountRepository accounts,
                                    AccountBalanceService balances,
                                    TransactionRepository transactions,
-                                   CommitmentService commitments) {
+                                   CommitmentService commitments,
+                                   CardInstallmentRepository installments,
+                                   InvoiceAdjustmentRepository adjustments,
+                                   InvoicePaymentRepository payments) {
         this.accounts = accounts;
         this.balances = balances;
         this.transactions = transactions;
         this.commitments = commitments;
+        this.installments = installments;
+        this.adjustments = adjustments;
+        this.payments = payments;
     }
 
     /**
@@ -82,12 +94,23 @@ public class FinancialContextService {
 
         BigDecimal monthlyCommitments = commitments.monthlyTotal(userId, reference.plusMonths(1));
 
+        // Card obligations weigh on affordability: everything still unpaid
+        // (present and future invoices) and the installment burden already
+        // scheduled for next month's invoices.
+        BigDecimal cardOutstanding = installments.sumActiveByUser(userId)
+                .add(adjustments.sumActiveNetByUser(userId))
+                .subtract(payments.sumCompletedByUser(userId));
+        BigDecimal nextMonthInstallments = installments.sumActiveByMonth(
+                userId, reference.plusMonths(1).atDay(1));
+
         return new FinancialContext(
                 MoneyRules.normalize(availableCash),
                 avgIncome,
                 avgExpense,
                 avgSurplus,
                 MoneyRules.normalize(monthlyCommitments),
+                MoneyRules.normalize(cardOutstanding),
+                MoneyRules.normalize(nextMonthInstallments),
                 monthsWithData);
     }
 }

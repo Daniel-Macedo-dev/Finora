@@ -23,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class WishlistController {
 
     private final WishlistService service;
+    private final WishlistPurchaseService purchases;
 
-    public WishlistController(WishlistService service) {
+    public WishlistController(WishlistService service, WishlistPurchaseService purchases) {
         this.service = service;
+        this.purchases = purchases;
     }
 
     @GetMapping
@@ -74,5 +76,13 @@ public class WishlistController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteOption(@PathVariable Long id, @PathVariable Long optionId) {
         service.deleteOption(id, optionId);
+    }
+
+    @PostMapping("/{id}/purchase")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WishlistPurchaseService.ExecutePurchaseResponse purchase(
+            @PathVariable Long id,
+            @Valid @RequestBody WishlistPurchaseService.ExecutePurchaseRequest request) {
+        return purchases.execute(id, request, java.time.LocalDate.now());
     }
 }

@@ -2,6 +2,7 @@ package com.finora.api.purchaseanalysis;
 
 import com.finora.api.wishlist.PurchaseOptionKind;
 import java.math.BigDecimal;
+import java.time.YearMonth;
 import java.util.List;
 
 public final class PurchaseAnalysisDtos {
@@ -20,6 +21,19 @@ public final class PurchaseAnalysisDtos {
     public record OptionIssue(String code, String message, boolean blocking) {
     }
 
+    /** Card projection for an INSTALLMENT option linked to one of the user's cards. */
+    public record CardAnalysis(
+            Long cardId,
+            String cardName,
+            BigDecimal availableLimit,
+            BigDecimal availableLimitAfter,
+            /** Card utilization after the purchase, percentage with 1 decimal. */
+            BigDecimal utilizationAfterPercent,
+            /** Invoice month the first installment would land on. */
+            YearMonth firstInvoiceMonth,
+            boolean limitSufficient) {
+    }
+
     public record OptionAnalysis(
             Long optionId,
             String merchant,
@@ -34,6 +48,8 @@ public final class PurchaseAnalysisDtos {
             Integer installmentCount,
             /** Available cash after paying the upfront cost. */
             BigDecimal cashAfterPurchase,
+            /** Null when the option is not linked to a credit card. */
+            CardAnalysis card,
             boolean safe,
             List<OptionIssue> issues) {
     }
@@ -48,6 +64,10 @@ public final class PurchaseAnalysisDtos {
             BigDecimal avgMonthlyExpense,
             BigDecimal avgMonthlySurplus,
             BigDecimal monthlyCommitments,
+            /** Unpaid card obligations across all invoices, present and future. */
+            BigDecimal cardOutstandingTotal,
+            /** Card installments already scheduled for next month's invoices. */
+            BigDecimal nextMonthCardInstallments,
             int historyMonthsUsed) {
     }
 

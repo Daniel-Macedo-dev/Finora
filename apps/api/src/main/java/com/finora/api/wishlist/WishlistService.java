@@ -5,6 +5,8 @@ import com.finora.api.category.CategoryRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.CreditCard;
+import com.finora.api.creditcard.CreditCardRepository;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.wishlist.WishlistDtos.PurchaseOptionRequest;
 import com.finora.api.wishlist.WishlistDtos.PurchaseOptionResponse;
@@ -32,15 +34,18 @@ public class WishlistService {
     private final WishlistItemRepository items;
     private final PurchaseOptionRepository options;
     private final CategoryRepository categories;
+    private final CreditCardRepository creditCards;
     private final CurrentUserProvider currentUser;
 
     public WishlistService(WishlistItemRepository items,
                            PurchaseOptionRepository options,
                            CategoryRepository categories,
+                           CreditCardRepository creditCards,
                            CurrentUserProvider currentUser) {
         this.items = items;
         this.options = options;
         this.categories = categories;
+        this.creditCards = creditCards;
         this.currentUser = currentUser;
     }
 
@@ -146,9 +151,27 @@ public class WishlistService {
         if (request.kind() == PurchaseOptionKind.INSTALLMENT) {
             option.setInstallmentCount(request.installmentCount());
             option.setInstallmentAmount(MoneyRules.normalize(request.installmentAmount()));
+            if (request.creditCardId() != null) {
+                // Owner-scoped: another user's card id behaves as absent.
+                CreditCard card = creditCards
+                        .findByIdAndUserId(request.creditCardId(), currentUser.currentUserId())
+                        .orElseThrow(() -> new NotFoundException("Cartão", request.creditCardId()));
+                if (card.isArchived()) {
+                    throw new BusinessRuleException("CARD_ARCHIVED",
+                            "Um cartão arquivado não pode ser vinculado a uma opção de compra.");
+                }
+                option.setCreditCard(card);
+            } else {
+                option.setCreditCard(null);
+            }
         } else {
+            if (request.creditCardId() != null) {
+                throw new BusinessRuleException("OPTION_CASH_WITH_CARD",
+                        "Uma opção à vista não usa cartão de crédito.");
+            }
             option.setInstallmentCount(null);
             option.setInstallmentAmount(null);
+            option.setCreditCard(null);
         }
     }
 
