@@ -4,10 +4,16 @@ Plataforma pessoal de gestão financeira e planejamento de compras. O Finora aju
 entender para onde o dinheiro está indo e a decidir **o que, quando e como comprar** —
 com análises determinísticas baseadas nos seus próprios dados.
 
+Aplicação **multiusuário**: registro, login e sessão server-side, com cada dado
+financeiro pertencente a um usuário autenticado e isolamento completo entre contas.
+
 Interface em português do Brasil; código, banco e API em inglês.
 
 ## O que o Finora faz
 
+- **Identidade e conta** — registro, login, logout, sessão server-side persistida,
+  perfil e troca de senha. Cada usuário tem suas próprias categorias padrão,
+  configurações e dados, totalmente isolados de outros usuários.
 - **Transações** — registro de receitas e despesas com categoria, conta, forma de
   pagamento, busca, filtros por mês/tipo/categoria e paginação.
 - **Contas** — contas correntes, poupança e dinheiro físico com saldo derivado do
@@ -36,8 +42,8 @@ Interface em português do Brasil; código, banco e API em inglês.
 
 | Camada | Tecnologia |
 | --- | --- |
-| Backend | Java 21 · Spring Boot 4.1 (Web MVC, Validation, Data JPA) · Flyway |
-| Banco | PostgreSQL 16 (Docker Compose) |
+| Backend | Java 21 · Spring Boot 4.1 (Web MVC, Validation, Data JPA, Security, Session JDBC) · Flyway |
+| Banco | PostgreSQL 16 (Docker Compose) · sessões persistidas via Spring Session JDBC |
 | Frontend | React 19 · TypeScript · Vite · TanStack Query · React Router · Recharts |
 | Testes | JUnit 5 + MockMvc + Testcontainers · Vitest + Testing Library · Playwright |
 | CI | GitHub Actions (backend, frontend e E2E) |
@@ -101,6 +107,8 @@ Endpoints principais (JSON, erros em RFC 9457 Problem Details):
 
 | Recurso | Rotas |
 | --- | --- |
+| Autenticação | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/csrf` |
+| Perfil | `PUT /api/profile`, `POST /api/profile/password` |
 | Contas | `GET/POST /api/accounts`, `GET/PUT/DELETE /api/accounts/{id}` |
 | Categorias | `GET/POST /api/categories`, `GET/PUT/DELETE /api/categories/{id}` |
 | Transações | `GET /api/transactions?month=YYYY-MM&type=&categoryId=&search=&page=`, `POST`, `PUT/DELETE /{id}` |
@@ -113,20 +121,34 @@ Endpoints principais (JSON, erros em RFC 9457 Problem Details):
 | Insights | `GET /api/insights?month=YYYY-MM` |
 | Configurações | `GET/PUT /api/settings` |
 
-Detalhes de contratos e invariantes em [`docs/domain-model.md`](docs/domain-model.md);
-o método da análise de compra em [`docs/purchase-analysis.md`](docs/purchase-analysis.md).
+Todas as rotas de dados exigem autenticação (sessão via cookie + CSRF). Detalhes de
+contratos e invariantes em [`docs/domain-model.md`](docs/domain-model.md); o método
+da análise de compra em [`docs/purchase-analysis.md`](docs/purchase-analysis.md); o
+modelo de segurança e posse em [`docs/security.md`](docs/security.md).
+
+## Autenticação e posse dos dados
+
+- Sessão server-side (Spring Security + Spring Session JDBC) por cookie HttpOnly;
+  senhas com BCrypt; CSRF double-submit para o SPA. Nenhum token em `localStorage`.
+- Cada dado financeiro pertence a um usuário; leituras diretas, agregações
+  (dashboard, orçamentos, contexto financeiro, análise de compra, insights) e
+  referências de chave estrangeira são todas escopadas ao dono autenticado.
+- Recurso de outro usuário resolve para **404**; credenciais inválidas retornam um
+  erro genérico (sem enumeração de usuários).
+- Dados de uma instalação v1 anterior são preservados sob um dono legado pendente e
+  migrados por um fluxo de claim controlado por variável de ambiente. Ver
+  [`docs/security.md`](docs/security.md).
 
 ## Status e limitações
 
-Primeira release funcional, uso local e single-user:
+Segunda release: multiusuário com autenticação por sessão. Ainda de uso local:
 
-- **Sem autenticação** — todos os dados pertencem a um único usuário local. A
-  arquitetura (DTOs, services, sem estado global no cliente) permite adicionar
-  identidade sem retrabalho estrutural.
+- **Sem verificação de e-mail, recuperação de senha, MFA ou OAuth.**
 - **Sem integração bancária ou coleta de preços** — transações e ofertas são
   registradas manualmente.
 - **Cartão de crédito não é modelado como fatura** — compras no crédito são
   transações comuns marcadas com a forma de pagamento.
+- **Sem rate limiting distribuído de login** (adequado a um app pessoal same-origin).
 - As recomendações são **projeções baseadas nos seus dados e em premissas
   configuráveis** — não são aconselhamento financeiro profissional.
 

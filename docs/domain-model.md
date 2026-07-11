@@ -2,14 +2,26 @@
 
 ## Entidades e relacionamentos
 
+Tudo pertence a um `User`. Cada entidade financeira carrega `user_id` obrigatório
+(exceto `PurchaseOption`, que herda a posse pelo item pai).
+
 ```
-Category 1──n Transaction n──1 Account (opcional)
-Category 1──n Budget (unique: mês + categoria)
-Category 1──n Commitment
-Category 0..1──n WishlistItem 1──n PurchaseOption
-Goal (independente)
-AppSettings (linha singleton id=1)
+User 1──n Account
+User 1──n Category ──┐
+User 1──n Transaction n──1 Category, 0..1 Account
+User 1──n Budget      n──1 Category   (unique: user + mês + categoria)
+User 1──n Commitment  n──1 Category
+User 1──n Goal
+User 1──n WishlistItem 1──n PurchaseOption, 0..1 Category
+User 1──1 AppSettings
 ```
+
+Uniqueness é por usuário e, onde a aplicação compara sem distinção de caixa, o
+banco usa índices case-insensitive: nome de conta por usuário; (nome, tipo) de
+categoria por usuário; (mês, categoria) de orçamento por usuário; uma linha de
+settings por usuário; e-mail global case-insensitive. Chaves compostas
+`UNIQUE (id, user_id)` + FKs compostas impedem referências cross-owner no próprio
+banco. Ver [security.md](security.md).
 
 ## Conceitos e invariantes
 
@@ -66,7 +78,14 @@ livres — o usuário manda). Prioridade: `LOW/MEDIUM/HIGH/ESSENTIAL`. Cada opç
 
 `nominalCost = preço + frete + taxas`. Excluir o item remove as opções (cascade).
 
-### Configurações (`app_settings`, linha única)
+### Usuário (`users`)
+`displayName`, `email` (normalizado, único case-insensitive), `passwordHash`
+(BCrypt) e `status` (`ACTIVE`, `DISABLED`, `PENDING_LEGACY_CLAIM`). O status
+pendente é o dono placeholder dos dados v1 e não autentica até o claim. Categorias
+padrão e settings são criadas por usuário no registro (fonte única:
+`DefaultCategoryCatalog`).
+
+### Configurações (`app_settings`, uma linha por usuário)
 | Campo | Default | Papel |
 | --- | --- | --- |
 | `minimum_cash_buffer` | 0 | caixa que nunca deve ser violado por compra à vista |
@@ -74,5 +93,6 @@ livres — o usuário manda). Prioridade: `LOW/MEDIUM/HIGH/ESSENTIAL`. Cada opç
 | `monthly_opportunity_rate` | 0 | taxa mensal para valor presente (0 = comparação nominal) |
 | `budget_warning_threshold` | 0,80 | consumo que dispara o estado WARNING |
 
-Defaults conservadores, visíveis na tela de configurações e usados de forma
-explícita na resposta da análise (`assumptions`).
+Defaults conservadores, criados no registro, visíveis na tela de configurações e
+usados de forma explícita na resposta da análise (`assumptions`). A análise e os
+alertas de orçamento usam sempre as settings do usuário autenticado.

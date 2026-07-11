@@ -6,15 +6,35 @@ Monorepo com dois aplicativos independentes e um PostgreSQL em Docker:
 
 ```
 apps/api  (Spring Boot 4.1, Java 21)  ←──  apps/web  (React 19 + Vite)
-        │ JDBC                                  │ HTTP JSON (/api, proxy no dev)
+        │ JDBC                                  │ HTTP JSON (/api, cookie de sessão + CSRF)
         ▼
 PostgreSQL 16 (docker-compose, porta 5433)
+  ├── dados financeiros (por usuário)
+  └── SPRING_SESSION (Spring Session JDBC)
 ```
 
 - O frontend nunca calcula regra financeira: exibe o que a API retorna.
 - A API nunca expõe entidades JPA: todo contrato público é DTO (records).
 - Erros seguem RFC 9457 (Problem Details) com `code` de regra de negócio e
   `errors[]` de validação de campos.
+
+## Identidade e segurança
+
+O domínio `identity` (`User`, `UserStatus`, `RegistrationService`, `AuthController`,
+`ProfileService`, `LegacyClaimService`, `CurrentUserProvider`,
+`FinoraUserDetailsService`) integra Spring Security a partir de uma única costura:
+`CurrentUserProvider.currentUserId()` resolve o usuário do `SecurityContext` e
+falha fechado quando não há autenticação. Todo domínio financeiro depende dela para
+o escopo de posse — nunca de parâmetros ou corpo da requisição.
+
+- **Sessão**: server-side, persistida por Spring Session JDBC (`SPRING_SESSION`,
+  esquema gerido pela migração V5), cookie HttpOnly `FINORA_SESSION`.
+- **Senhas**: BCrypt via `PasswordEncoder`.
+- **CSRF**: double-submit (`XSRF-TOKEN` cookie ↔ `X-XSRF-TOKEN` header), habilitado
+  para métodos que alteram estado; bootstrap em `GET /api/auth/csrf`.
+- **Autorização**: `SecurityConfig` deixa público apenas register/login/claim/csrf;
+  todo o resto de `/api/**` exige autenticação e responde 401 Problem Details.
+- Detalhes completos em [security.md](security.md).
 
 ## Backend
 
@@ -23,7 +43,8 @@ Pacotes por domínio (não por camada técnica):
 ```
 com.finora.api
 ├── common/        # error model, ProblemDetail handler, MoneyRules, PageResponse,
-│                  # CORS, AuditableEntity
+│                  # CORS, SecurityConfig, AuditableEntity
+├── identity/      # usuários, autenticação, sessão, perfil, claim legado
 ├── account/       # contas com saldo derivado
 ├── category/      # categorias de receita/despesa (padrões seeded via Flyway)
 ├── transaction/   # transações + busca com Specifications + agregações

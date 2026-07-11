@@ -3,11 +3,14 @@
 O que **não** está na primeira release, em ordem aproximada de valor. Nada aqui é
 promessa de implementação — é direção.
 
+> Autenticação e multiusuário foram **concluídos** — identidade, sessões
+> server-side, posse por usuário e isolamento completo. Ver
+> [security.md](security.md).
+
 ## Próximos passos prováveis
 
-- **Autenticação e multiusuário** — identidade, isolamento por usuário e sessões.
-  A base atual (DTOs, services, sem estado global) foi desenhada para receber
-  isso sem reescrita.
+- **Cartão de crédito e ciclo de fatura** — modelo próprio de fatura/parcelamento em
+  vez de transações avulsas com forma de pagamento `CREDIT`.
 - **Materialização de recorrentes** — ação idempotente que converte vencimentos
   em transações reais (com prevenção de duplicatas e testes de virada de mês).
 - **Fatura de cartão de crédito** — modelo próprio de fatura/parcelamento em vez

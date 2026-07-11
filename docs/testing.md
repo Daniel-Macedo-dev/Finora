@@ -17,7 +17,41 @@
 
 - `AbstractIntegrationTest` sobe o contexto completo com um PostgreSQL efêmero
   (Testcontainers, `@ServiceConnection`) e roda cada teste em transação com
-  rollback — nenhum estado vaza entre testes. **Docker é obrigatório.**
+  rollback — nenhum estado vaza entre testes. **Docker é obrigatório.** Cada teste
+  registra usuários reais pelo endpoint público e reusa o cookie de sessão emitido;
+  o helper `csrf()` usa o fluxo real de double-submit (cookie + header), não o
+  post-processor do spring-security-test.
+
+### Identidade, sessão e posse
+
+- **Autenticação** (`AuthFlowTest`): registro cria usuário + categorias padrão +
+  settings atomicamente e estabelece sessão; senha guardada como hash BCrypt;
+  normalização de e-mail e rejeição de duplicata case-insensitive; login válido,
+  falhas genéricas (senha errada e e-mail inexistente produzem corpos idênticos —
+  sem enumeração); logout invalida a sessão; CSRF ausente/ inválido é rejeitado e o
+  bootstrap funciona; troca de senha invalida as outras sessões mantendo a atual.
+- **Persistência de sessão** (`AuthFlowTest.sessionsArePersistedInTheJdbcStore`):
+  verifica a linha em `SPRING_SESSION` indexada pelo principal — prova o store JDBC,
+  não sessões em memória.
+- **Transacionalidade do registro** (`RegistrationTransactionalityTest`): forçando a
+  criação de settings a falhar, nenhum usuário ou categoria permanece (rollback
+  atômico); roda fora da transação de rollback do teste para provar o commit real.
+- **Ataques por ID direto** (`OwnershipAttackTest`): usuário B tentando ler, listar,
+  editar, excluir, referenciar como FK, contribuir em meta, gerenciar opção de
+  compra ou analisar recursos de A — tudo resolve para 404 e não altera os dados de
+  A; `?userId=` é ignorado; desativação de categoria é isolada por usuário.
+- **Isolamento de agregados**: dashboards de dois perfis opostos permanecem
+  independentes (`DashboardApiIntegrationTest`); consumo de orçamento não vaza
+  (`BudgetIsolationTest`); contexto financeiro e recomendação de compra ignoram os
+  dados de outro usuário (`FinancialContextServiceTest`,
+  `PurchaseAnalysisEngineTest.anotherUsersFinancesCannotChangeTheRecommendation`);
+  insight de outro usuário não aparece para mim.
+- **Migração e claim legado**: `LegacyDataMigrationTest` roda a V4 (via Flyway
+  programático em containers) contra um banco **com dados v1** — todas as linhas
+  sobrevivem sob o dono pendente — e contra um banco limpo — sem usuário legado nem
+  seeds globais. `LegacyClaimFlowTest` prova que o dono pendente não autentica, que
+  o claim com token válido transfere a identidade e mantém os dados uma única vez,
+  que token errado não transfere nada, e que registro comum não herda os dados.
 - `PurchaseAnalysisEngineTest` fixa a data de referência (2026-07-15) e cobre os
   cenários críticos: à vista mais barato e seguro; à vista violando a reserva;
   parcelado sem juros vencendo à vista com taxa positiva; parcela acima da sobra;
@@ -50,13 +84,17 @@ associação label/erro do `FormField`, navegação do `MonthPicker`, retry do
 npm run e2e   # requer a API em :8080 (docker compose up -d + mvnw spring-boot:run)
 ```
 
-Cenários: registrar receita/despesa e conferir lista + totais do dashboard;
-orçamento com consumo/estado e prevenção de duplicidade; planejar compra com
-opções à vista/parcelada e conferir recomendação explicada; compra insegura
-gerando `WAIT` com estimativa de meses; smoke de navegação mobile (390px) criando
-transação. Determinismo: cada cenário limpa os dados **pela API pública**
-(`helpers.ts`) e semeia o próprio contexto; localizadores acessíveis (roles e
-labels), sem seletores CSS frágeis.
+Isolamento por identidade: cada cenário **registra um usuário único** (e-mail
+determinístico) via UI, então enxerga apenas os próprios dados — não há mais limpeza
+global destrutiva por API aberta (que seria um bypass de posse). Cenários: registrar
+e entrar no app; registrar receita/despesa e conferir lista + dashboard; orçamento
+com consumo/estado e prevenção de duplicidade; planejar compra com opções à
+vista/parcelada e conferir recomendação; **isolamento entre usuários** (B não vê os
+dados de A pela UI nem por ID direto na API, e sua análise de compra é inacessível);
+**ciclo de sessão** (expiração leva ao login e permite reentrar; troca de senha
+mantém a sessão atual e permite login com a nova); navegação e autenticação mobile
+(390px: registro, drawer, criar transação, menu de usuário, logout).
+Localizadores acessíveis (roles e labels), sem seletores CSS frágeis.
 
 ### QA visual
 
