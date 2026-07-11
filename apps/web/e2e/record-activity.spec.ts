@@ -1,15 +1,14 @@
 import { expect, test } from '@playwright/test'
-import { resetData } from './helpers.ts'
+import { registerViaUi } from './helpers.ts'
 
-test.describe('Cenário 1 — Registrar atividade financeira', () => {
-  test.beforeEach(async ({ request }) => {
-    await resetData(request)
+test.describe('Cenário — Registrar atividade financeira (autenticado)', () => {
+  test.beforeEach(async ({ page }) => {
+    await registerViaUi(page)
   })
 
   test('registra receita e despesa e reflete na lista e no dashboard', async ({ page }) => {
     await page.goto('/transactions')
 
-    // Income
     await page.getByRole('button', { name: 'Nova transação' }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('button', { name: 'Receita' }).click()
@@ -20,7 +19,6 @@ test.describe('Cenário 1 — Registrar atividade financeira', () => {
     await expect(dialog).toBeHidden()
     await expect(page.getByRole('cell', { name: 'Salário do mês', exact: true })).toBeVisible()
 
-    // Expense
     await page.getByRole('button', { name: 'Nova transação' }).first().click()
     await dialog.getByLabel('Valor (R$)').fill('320,50')
     await dialog.getByLabel('Descrição').fill('Supermercado semanal')
@@ -29,7 +27,6 @@ test.describe('Cenário 1 — Registrar atividade financeira', () => {
     await expect(dialog).toBeHidden()
     await expect(page.getByRole('cell', { name: 'Supermercado semanal', exact: true })).toBeVisible()
 
-    // Dashboard aggregates
     await page.goto('/dashboard')
     const stats = page.getByRole('region', { name: 'Indicadores do mês' })
     await expect(stats.getByText('R$ 5.000,00').first()).toBeVisible()

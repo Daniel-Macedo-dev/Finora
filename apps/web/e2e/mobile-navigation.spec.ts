@@ -1,22 +1,23 @@
 import { expect, test } from '@playwright/test'
-import { resetData } from './helpers.ts'
+import { registerViaUi, uniqueIdentity } from './helpers.ts'
 
 test.use({ viewport: { width: 390, height: 844 } })
 
-test.describe('Cenário 5 — Navegação mobile', () => {
-  test.beforeEach(async ({ request }) => {
-    await resetData(request)
-  })
+test.describe('Cenário — Navegação e autenticação mobile', () => {
+  test('registra, navega e sai da conta em tela pequena', async ({ page }) => {
+    const identity = uniqueIdentity('mobile')
+    await page.goto('/register')
+    await page.getByLabel('Nome').fill(identity.displayName)
+    await page.getByLabel('E-mail').fill(identity.email)
+    await page.getByLabel('Senha', { exact: true }).fill(identity.password)
+    await page.getByLabel('Confirmar senha').fill(identity.password)
+    await page.getByRole('button', { name: 'Criar conta' }).click()
+    await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
 
-  test('navega pelas páginas principais e cria uma transação no celular', async ({ page }) => {
-    await page.goto('/dashboard')
-
-    // Drawer navigation
     await page.getByRole('button', { name: 'Abrir menu' }).click()
-    await page.getByRole('link', { name: 'Transações' }).click()
+    await page.getByRole('link', { name: 'Transações', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()
 
-    // Create a transaction on a small screen
     await page.getByRole('button', { name: 'Nova transação' }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('Valor (R$)').fill('49,90')
@@ -26,13 +27,26 @@ test.describe('Cenário 5 — Navegação mobile', () => {
     await expect(dialog).toBeHidden()
     await expect(page.getByRole('cell', { name: 'Lanche mobile', exact: true })).toBeVisible()
 
-    // Other core routes remain reachable
     await page.getByRole('button', { name: 'Abrir menu' }).click()
-    await page.getByRole('link', { name: 'Orçamentos' }).click()
-    await expect(page.getByRole('heading', { name: 'Orçamentos' })).toBeVisible()
+    await expect(page.getByText(identity.displayName)).toBeVisible()
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
+  })
 
+  test('usuário não autenticado é enviado ao login', async ({ page }) => {
+    await page.goto('/dashboard')
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
+  })
+
+  test('login mobile leva ao dashboard', async ({ page }) => {
+    const identity = await registerViaUi(page)
     await page.getByRole('button', { name: 'Abrir menu' }).click()
-    await page.getByRole('link', { name: 'Lista de desejos' }).click()
-    await expect(page.getByRole('heading', { name: 'Lista de desejos' })).toBeVisible()
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
+
+    await page.getByLabel('E-mail').fill(identity.email)
+    await page.getByLabel('Senha', { exact: true }).fill(identity.password)
+    await page.getByRole('button', { name: 'Entrar' }).click()
+    await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
   })
 })

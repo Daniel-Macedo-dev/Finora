@@ -1,20 +1,16 @@
-import { test, type APIRequestContext, type Page } from '@playwright/test'
-import {
-  categoryId,
-  createAccount,
-  createTransaction,
-  resetData,
-  resetSettings,
-} from './helpers.ts'
+import { expect, test, type Page } from '@playwright/test'
+import { registerViaUi } from './helpers.ts'
 
 /**
  * Visual QA capture — not a regression test. Run explicitly with:
  *   VISUAL_QA=1 npx playwright test e2e/visual-qa.spec.ts
- * Screenshots land in qa-screenshots/ (gitignored).
+ * Screenshots land in qa-screenshots/ (gitignored). Data is seeded through
+ * the authenticated page's own request context (shares session + CSRF cookies).
  */
 test.skip(!process.env.VISUAL_QA, 'Somente com VISUAL_QA=1')
 
 const OUT = '../../qa-screenshots'
+const API = 'http://localhost:8080/api'
 
 const VIEWPORTS = [
   { name: 'desktop-1440', width: 1440, height: 900 },
@@ -23,107 +19,87 @@ const VIEWPORTS = [
   { name: 'mobile-390', width: 390, height: 844 },
 ]
 
-async function seedDemoData(request: APIRequestContext) {
-  await resetData(request)
-  await resetSettings(request, { minimumCashBuffer: 2000, monthlyOpportunityRate: 0.008 })
-  const accountId = await createAccount(request, 'Conta principal', 8500)
+async function csrfHeader(page: Page): Promise<Record<string, string>> {
+  const token = await page.evaluate(() => {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+    return match ? decodeURIComponent(match[1]) : ''
+  })
+  return token ? { 'X-XSRF-TOKEN': token } : {}
+}
 
-  const salario = await categoryId(request, 'Salário', 'INCOME')
-  const moradia = await categoryId(request, 'Moradia', 'EXPENSE')
-  const alimentacao = await categoryId(request, 'Alimentação', 'EXPENSE')
-  const transporte = await categoryId(request, 'Transporte', 'EXPENSE')
-  const lazer = await categoryId(request, 'Lazer', 'EXPENSE')
-  const assinaturas = await categoryId(request, 'Assinaturas', 'EXPENSE')
+async function categoryId(page: Page, name: string, type: 'INCOME' | 'EXPENSE'): Promise<number> {
+  const categories = await (await page.request.get(`${API}/categories?type=${type}`)).json()
+  return (categories as Array<{ id: number; name: string }>).find((c) => c.name === name)!.id
+}
+
+async function seedDemoData(page: Page) {
+  const headers = await csrfHeader(page)
+  await page.request.put(`${API}/settings`, {
+    headers,
+    data: {
+      minimumCashBuffer: 2000,
+      maxInstallmentCommitmentRatio: 0.3,
+      monthlyOpportunityRate: 0.008,
+      budgetWarningThreshold: 0.8,
+    },
+  })
+  await page.request.post(`${API}/accounts`, {
+    headers,
+    data: { name: 'Conta principal', type: 'CHECKING', openingBalance: 8500 },
+  })
+
+  const salario = await categoryId(page, 'Salário', 'INCOME')
+  const moradia = await categoryId(page, 'Moradia', 'EXPENSE')
+  const alimentacao = await categoryId(page, 'Alimentação', 'EXPENSE')
+  const transporte = await categoryId(page, 'Transporte', 'EXPENSE')
+  const lazer = await categoryId(page, 'Lazer', 'EXPENSE')
+  const assinaturas = await categoryId(page, 'Assinaturas', 'EXPENSE')
 
   const now = new Date()
   for (let i = 3; i >= 0; i--) {
     const month = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
-    await createTransaction(request, {
-      type: 'INCOME', amount: 6200, description: 'Salário',
-      date: `${key}-05`, categoryId: salario, accountId,
-    })
-    await createTransaction(request, {
-      type: 'EXPENSE', amount: 1800, description: 'Aluguel',
-      date: `${key}-10`, categoryId: moradia, accountId,
-    })
-    await createTransaction(request, {
-      type: 'EXPENSE', amount: 950 + i * 60, description: 'Supermercado',
-      date: `${key}-12`, categoryId: alimentacao, accountId,
-    })
-    await createTransaction(request, {
-      type: 'EXPENSE', amount: 320, description: 'Combustível',
-      date: `${key}-15`, categoryId: transporte, accountId,
-    })
-    await createTransaction(request, {
-      type: 'EXPENSE', amount: 260, description: 'Cinema e restaurantes',
-      date: `${key}-20`, categoryId: lazer, accountId,
-    })
+    const tx = (data: object) => page.request.post(`${API}/transactions`, { headers, data })
+    await tx({ type: 'INCOME', amount: 6200, description: 'Salário', date: `${key}-05`, categoryId: salario })
+    await tx({ type: 'EXPENSE', amount: 1800, description: 'Aluguel', date: `${key}-10`, categoryId: moradia })
+    await tx({ type: 'EXPENSE', amount: 950 + i * 60, description: 'Supermercado', date: `${key}-12`, categoryId: alimentacao })
+    await tx({ type: 'EXPENSE', amount: 320, description: 'Combustível', date: `${key}-15`, categoryId: transporte })
+    await tx({ type: 'EXPENSE', amount: 260, description: 'Lazer', date: `${key}-20`, categoryId: lazer })
   }
 
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const api = 'http://localhost:8080/api'
-  await request.post(`${api}/budgets`, {
-    data: { month: monthKey, categoryId: alimentacao, limitAmount: 1100 },
+  await page.request.post(`${API}/budgets`, { headers, data: { month: monthKey, categoryId: alimentacao, limitAmount: 1100 } })
+  await page.request.post(`${API}/budgets`, { headers, data: { month: monthKey, categoryId: lazer, limitAmount: 300 } })
+  await page.request.post(`${API}/commitments`, {
+    headers,
+    data: { description: 'Streaming', amount: 55.9, categoryId: assinaturas, cadence: 'MONTHLY', dueDay: 8, startDate: '2025-01-08' },
   })
-  await request.post(`${api}/budgets`, {
-    data: { month: monthKey, categoryId: lazer, limitAmount: 300 },
+  await page.request.post(`${API}/goals`, { headers, data: { name: 'Reserva de emergência', targetAmount: 20000, currentAmount: 8500 } })
+
+  const item = await (await page.request.post(`${API}/wishlist`, {
+    headers,
+    data: { name: 'Notebook para trabalho', priority: 'HIGH', status: 'MONITORING', referencePrice: 5200, targetPrice: 4600 },
+  })).json()
+  await page.request.post(`${API}/wishlist/${item.id}/options`, {
+    headers, data: { merchant: 'Loja TechPreço', kind: 'CASH', basePrice: 4650, shipping: 45 },
   })
-  await request.post(`${api}/commitments`, {
-    data: {
-      description: 'Streaming de vídeo', amount: 55.9, categoryId: assinaturas,
-      cadence: 'MONTHLY', dueDay: 8, startDate: '2025-01-08',
-    },
+  await page.request.post(`${API}/wishlist/${item.id}/options`, {
+    headers, data: { merchant: 'MegaStore', kind: 'INSTALLMENT', basePrice: 5100, installmentCount: 10, installmentAmount: 510 },
   })
-  await request.post(`${api}/commitments`, {
-    data: {
-      description: 'Academia', amount: 129.9, categoryId: assinaturas,
-      cadence: 'MONTHLY', dueDay: 15, startDate: '2025-03-15',
-    },
-  })
-  await request.post(`${api}/goals`, {
-    data: {
-      name: 'Reserva de emergência', targetAmount: 20000, currentAmount: 8500,
-    },
-  })
-  await request.post(`${api}/goals`, {
-    data: {
-      name: 'Viagem de férias', targetAmount: 6000, currentAmount: 1200,
-      targetDate: `${now.getFullYear() + 1}-01-15`,
-    },
-  })
-  const itemResponse = await request.post(`${api}/wishlist`, {
-    data: {
-      name: 'Notebook para trabalho', priority: 'HIGH', status: 'MONITORING',
-      referencePrice: 5200, targetPrice: 4600,
-    },
-  })
-  const item = (await itemResponse.json()) as { id: number }
-  await request.post(`${api}/wishlist/${item.id}/options`, {
-    data: { merchant: 'Loja TechPreço', kind: 'CASH', basePrice: 4650, shipping: 45 },
-  })
-  await request.post(`${api}/wishlist/${item.id}/options`, {
-    data: {
-      merchant: 'MegaStore Parcelas', kind: 'INSTALLMENT', basePrice: 5100,
-      installmentCount: 10, installmentAmount: 510,
-    },
-  })
-  return item.id
+  return item.id as number
 }
 
 async function capture(page: Page, path: string, name: string, viewport: (typeof VIEWPORTS)[0]) {
   await page.setViewportSize({ width: viewport.width, height: viewport.height })
   await page.goto(path)
   await page.waitForLoadState('networkidle')
-  await page.screenshot({
-    path: `${OUT}/${viewport.name}/${name}.png`,
-    fullPage: true,
-  })
+  await page.screenshot({ path: `${OUT}/${viewport.name}/${name}.png`, fullPage: true })
 }
 
-test('captura estados principais em todos os viewports', async ({ page, request }) => {
+test('captura estados principais em todos os viewports', async ({ page }) => {
   test.setTimeout(300_000)
-  const itemId = await seedDemoData(request)
+  await registerViaUi(page)
+  const itemId = await seedDemoData(page)
 
   const pages: Array<[string, string]> = [
     ['/dashboard', 'dashboard'],
@@ -134,24 +110,25 @@ test('captura estados principais em todos os viewports', async ({ page, request 
     ['/wishlist', 'wishlist'],
     [`/wishlist/${itemId}`, 'wishlist-detail'],
     ['/settings', 'settings'],
+    ['/profile', 'profile'],
   ]
-
   for (const viewport of VIEWPORTS) {
     for (const [path, name] of pages) {
       await capture(page, path, name, viewport)
     }
   }
 
-  // Dark mode sample
+  // Auth screens (public).
+  await page.getByRole('button', { name: 'Sair da conta' }).click().catch(() => {})
+  await capture(page, '/login', 'login', VIEWPORTS[0])
+  await capture(page, '/login', 'login-mobile', VIEWPORTS[3])
+  await capture(page, '/register', 'register', VIEWPORTS[0])
+  await capture(page, '/register', 'register-mobile', VIEWPORTS[3])
+
+  // Dark theme auth screen.
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.addInitScript(() => localStorage.setItem('finora.theme', 'dark'))
-  await capture(page, '/dashboard', 'dashboard-dark', VIEWPORTS[0])
-  await capture(page, `/wishlist/${itemId}`, 'wishlist-detail-dark', VIEWPORTS[0])
+  await capture(page, '/login', 'login-dark', VIEWPORTS[0])
 
-  // Empty state
-  await resetData(request)
-  await page.addInitScript(() => localStorage.removeItem('finora.theme'))
-  await page.emulateMedia({ colorScheme: 'light' })
-  await capture(page, '/dashboard', 'dashboard-empty', VIEWPORTS[0])
-  await capture(page, '/dashboard', 'dashboard-empty-mobile', VIEWPORTS[3])
+  expect(itemId).toBeGreaterThan(0)
 })
