@@ -21,6 +21,9 @@ export interface Transaction {
   category: TransactionCategoryRef
   account: TransactionAccountRef | null
   paymentMethod: PaymentMethod | null
+  /** Pre-card-era CREDIT entry: preserved history, not linked to any invoice. */
+  legacyCredit: boolean
+  wishlistItemId: number | null
   notes: string | null
 }
 

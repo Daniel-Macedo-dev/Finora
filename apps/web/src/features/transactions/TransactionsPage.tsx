@@ -201,9 +201,18 @@ export default function TransactionsPage() {
                       <span className="badge badge-neutral">{transaction.category.name}</span>
                     </td>
                     <td className="tx-col-optional">
-                      {transaction.paymentMethod
-                        ? PAYMENT_METHOD_LABELS[transaction.paymentMethod]
-                        : '—'}
+                      {transaction.legacyCredit ? (
+                        <span
+                          className="badge badge-warning"
+                          title="Registro de crédito anterior à área de Cartões; não está vinculado a nenhuma fatura."
+                        >
+                          Crédito legado
+                        </span>
+                      ) : transaction.paymentMethod ? (
+                        PAYMENT_METHOD_LABELS[transaction.paymentMethod]
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <Money

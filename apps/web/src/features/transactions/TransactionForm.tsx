@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
@@ -50,6 +51,12 @@ export default function TransactionForm({
 
   const categories = useCategories(type)
   const accounts = useAccounts()
+
+  // New credit purchases belong to the card flow (invoices, installments,
+  // limit); the generic CREDIT method survives only on legacy entries.
+  const paymentMethodOptions = Object.entries(PAYMENT_METHOD_LABELS).filter(
+    ([value]) => value !== 'CREDIT' || (initial?.legacyCredit && initial.paymentMethod === 'CREDIT'),
+  )
 
   const activeCategories = (categories.data ?? []).filter(
     (category) => category.active || String(category.id) === categoryId,
@@ -202,7 +209,7 @@ export default function TransactionForm({
               onChange={(event) => setPaymentMethod(event.target.value)}
             >
               <option value="">Não informar</option>
-              {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+              {paymentMethodOptions.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -210,6 +217,13 @@ export default function TransactionForm({
             </select>
           </FormField>
         </div>
+
+        {type === 'EXPENSE' && !initial?.legacyCredit && (
+          <p className="tx-credit-hint">
+            Compra no crédito? <Link to="/credit-cards">Registre na área de Cartões</Link> para
+            acompanhar fatura, parcelas e limite.
+          </p>
+        )}
 
         <FormField label="Observações (opcional)">
           <textarea
