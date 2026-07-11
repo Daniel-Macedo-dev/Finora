@@ -4,6 +4,12 @@ import com.finora.api.budget.BudgetDtos.BudgetResponse;
 import com.finora.api.budget.BudgetDtos.BudgetStatus;
 import com.finora.api.budget.BudgetService;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.CardLimitService;
+import com.finora.api.creditcard.CreditCard;
+import com.finora.api.creditcard.CreditCardRepository;
+import com.finora.api.creditcard.invoice.InvoiceDtos.InvoiceSummaryResponse;
+import com.finora.api.creditcard.invoice.InvoiceService;
+import com.finora.api.creditcard.invoice.InvoiceStatus;
 import com.finora.api.goal.GoalDtos.GoalResponse;
 import com.finora.api.goal.GoalDtos.GoalStatus;
 import com.finora.api.goal.GoalService;
@@ -45,6 +51,12 @@ public class InsightService {
     static final BigDecimal DOMINANT_CATEGORY_SHARE = new BigDecimal("0.40");
     /** Share of average income taken by recurring commitments that deserves attention (30%). */
     static final BigDecimal COMMITMENT_SHARE_THRESHOLD = new BigDecimal("0.30");
+    /** Card utilization that deserves attention (80%). */
+    static final BigDecimal CARD_UTILIZATION_THRESHOLD = new BigDecimal("80.0");
+    /** Days ahead in which an unpaid invoice counts as "due soon". */
+    static final int INVOICE_DUE_SOON_DAYS = 7;
+    /** Share of average income taken by next month's card installments (30%). */
+    static final BigDecimal CARD_BURDEN_THRESHOLD = new BigDecimal("0.30");
 
     private final TransactionRepository transactions;
     private final BudgetService budgets;
@@ -52,6 +64,9 @@ public class InsightService {
     private final WishlistItemRepository wishlist;
     private final FinancialContextService contextService;
     private final SettingsService settings;
+    private final CreditCardRepository cards;
+    private final CardLimitService cardLimits;
+    private final InvoiceService invoices;
     private final CurrentUserProvider currentUser;
 
     public InsightService(TransactionRepository transactions,
@@ -60,6 +75,9 @@ public class InsightService {
                           WishlistItemRepository wishlist,
                           FinancialContextService contextService,
                           SettingsService settings,
+                          CreditCardRepository cards,
+                          CardLimitService cardLimits,
+                          InvoiceService invoices,
                           CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.budgets = budgets;
@@ -67,6 +85,9 @@ public class InsightService {
         this.wishlist = wishlist;
         this.contextService = contextService;
         this.settings = settings;
+        this.cards = cards;
+        this.cardLimits = cardLimits;
+        this.invoices = invoices;
         this.currentUser = currentUser;
     }
 
@@ -85,10 +106,95 @@ public class InsightService {
         dominantCategory(insights, userId, month, expense);
         budgetAlerts(insights, month);
         commitmentShare(insights, context);
+        cardInvoiceAlerts(insights, userId, today);
+        cardUtilization(insights, userId);
+        cardInstallmentBurden(insights, context);
         goalPace(insights, userId, context);
         affordableWishlist(insights, userId, context, config);
 
         return new InsightsResponse(month, List.copyOf(insights));
+    }
+
+    /** Overdue invoices are critical; invoices due within the next days warn. */
+    private void cardInvoiceAlerts(List<Insight> insights, Long userId, LocalDate today) {
+        for (CreditCard card : cards.findAllByUserIdOrderByArchivedAscNameAsc(userId)) {
+            for (InvoiceSummaryResponse invoice : invoices.listForCard(card.getId(), today)) {
+                if (invoice.outstandingAmount().signum() <= 0) {
+                    continue;
+                }
+                if (invoice.status() == InvoiceStatus.OVERDUE) {
+                    insights.add(new Insight(
+                            "INVOICE_OVERDUE",
+                            InsightSeverity.CRITICAL,
+                            "Fatura vencida: " + card.getName(),
+                            "A fatura de %s venceu em %s com %s em aberto.".formatted(
+                                    card.getName(),
+                                    formatDate(invoice.dueDate()),
+                                    brl(invoice.outstandingAmount())),
+                            invoice.outstandingAmount()));
+                } else if (!invoice.dueDate().isBefore(today)
+                        && !invoice.dueDate().isAfter(today.plusDays(INVOICE_DUE_SOON_DAYS))) {
+                    boolean partial = invoice.amountPaid().signum() > 0;
+                    insights.add(new Insight(
+                            "INVOICE_DUE_SOON",
+                            InsightSeverity.WARNING,
+                            "Fatura vence em breve: " + card.getName(),
+                            (partial
+                                    ? "A fatura de %s vence em %s e ainda tem %s em aberto após pagamento parcial."
+                                    : "A fatura de %s vence em %s com %s em aberto.").formatted(
+                                    card.getName(),
+                                    formatDate(invoice.dueDate()),
+                                    brl(invoice.outstandingAmount())),
+                            invoice.outstandingAmount()));
+                }
+            }
+        }
+    }
+
+    /** High utilization means little limit left for the month's remaining spending. */
+    private void cardUtilization(List<Insight> insights, Long userId) {
+        for (CreditCard card : cards.findAllByUserIdOrderByArchivedAscNameAsc(userId)) {
+            if (card.isArchived()) {
+                continue;
+            }
+            var limit = cardLimits.limitOf(card);
+            if (limit.utilizationPercent().compareTo(CARD_UTILIZATION_THRESHOLD) >= 0) {
+                insights.add(new Insight(
+                        "CARD_UTILIZATION_HIGH",
+                        InsightSeverity.WARNING,
+                        "Limite quase comprometido: " + card.getName(),
+                        "O cartão %s está com %s%% do limite em uso; restam %s disponíveis.".formatted(
+                                card.getName(),
+                                limit.utilizationPercent().setScale(0, RoundingMode.HALF_UP),
+                                brl(limit.availableLimit())),
+                        limit.availableLimit()));
+            }
+        }
+    }
+
+    /** Next month's card installments already claiming a big slice of the income. */
+    private void cardInstallmentBurden(List<Insight> insights, FinancialContext context) {
+        if (context.avgMonthlyIncome() == null || context.avgMonthlyIncome().signum() <= 0
+                || context.nextMonthCardInstallments().signum() <= 0) {
+            return;
+        }
+        BigDecimal share = context.nextMonthCardInstallments()
+                .divide(context.avgMonthlyIncome(), MoneyRules.RATE_SCALE, RoundingMode.HALF_UP);
+        if (share.compareTo(CARD_BURDEN_THRESHOLD) >= 0) {
+            insights.add(new Insight(
+                    "CARD_INSTALLMENT_BURDEN_HIGH",
+                    InsightSeverity.WARNING,
+                    "Parcelas de cartão pesam no próximo mês",
+                    ("As parcelas de cartão já programadas para o próximo mês somam %s, cerca de %s%% "
+                            + "da renda média observada.").formatted(
+                            brl(context.nextMonthCardInstallments()),
+                            share.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP)),
+                    context.nextMonthCardInstallments()));
+        }
+    }
+
+    private static String formatDate(LocalDate date) {
+        return date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
     }
 
     private void expenseIncrease(List<Insight> insights, BigDecimal expense, BigDecimal previousExpense) {
