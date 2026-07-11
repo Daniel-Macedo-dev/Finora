@@ -1,0 +1,294 @@
+/* Credit cards feature. Mobile-first; tables scroll inside .table-wrap. */
+
+.cc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+
+.cc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease;
+}
+
+.cc-card:hover,
+.cc-card:focus-visible {
+  border-color: var(--accent);
+}
+
+.cc-card-archived {
+  opacity: 0.72;
+}
+
+.cc-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cc-card-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 650;
+  font-size: var(--text-md);
+}
+
+.cc-card-meta {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.cc-card-facts {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.cc-card-facts dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.cc-card-facts dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
+.cc-card-next-due {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+
+.cc-card-next-due-empty {
+  color: var(--ink-muted);
+}
+
+/* utilization meter */
+
+.cc-utilization {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cc-meter {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+
+.cc-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 160ms ease;
+}
+
+.cc-meter-ok {
+  background: var(--positive);
+}
+
+.cc-meter-warning {
+  background: var(--warning);
+}
+
+.cc-meter-danger {
+  background: var(--negative);
+}
+
+.cc-utilization-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+/* detail sections */
+
+.cc-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cc-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.cc-section-title {
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.cc-cycle-note,
+.cc-archived-note,
+.cc-form-hint,
+.cc-payment-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.cc-archived-note {
+  margin-bottom: var(--space-4);
+}
+
+.cc-payment-note {
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.cc-invoice-link {
+  color: inherit;
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.cc-invoice-link:hover,
+.cc-invoice-link:focus-visible {
+  text-decoration: underline;
+}
+
+.cc-row-cancelled {
+  opacity: 0.6;
+}
+
+.cc-row-cancelled td:first-child {
+  text-decoration: line-through;
+}
+
+.cc-purchase-desc {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cc-col-optional {
+  display: table-cell;
+}
+
+.cc-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.cc-pagination-info {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+/* invoice summary figures */
+
+.cc-invoice-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+}
+
+.cc-invoice-figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cc-figure-label {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.cc-figure-strong {
+  font-weight: 650;
+  font-size: var(--text-md);
+}
+
+/* installment preview */
+
+.cc-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.cc-preview-title,
+.cc-mode-label {
+  font-size: var(--text-sm);
+  font-weight: 550;
+  color: var(--ink-secondary);
+}
+
+.cc-preview-line {
+  font-size: var(--text-md);
+}
+
+.cc-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--space-1) var(--space-3);
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: var(--text-sm);
+}
+
+.cc-preview-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cc-preview-list li span {
+  color: var(--ink-muted);
+}
+
+.cc-preview-note {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+/* mobile: drop optional columns, stack figures */
+
+@media (max-width: 640px) {
+  .cc-col-optional {
+    display: none;
+  }
+
+  .cc-card-facts {
+    gap: var(--space-3);
+  }
+
+  .cc-invoice-figures {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
