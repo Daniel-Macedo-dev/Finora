@@ -53,6 +53,19 @@ public class Transaction extends AuditableEntity {
     @Column(name = "payment_method", length = 20)
     private PaymentMethod paymentMethod;
 
+    /**
+     * True only for CREDIT transactions created before the credit-card domain
+     * existed. They are preserved as plain historical expenses, disconnected
+     * from any card or invoice; new generic CREDIT transactions are rejected.
+     * Set exclusively by migration V7 — never by application code.
+     */
+    @Column(name = "legacy_credit", nullable = false, insertable = false, updatable = false)
+    private boolean legacyCredit;
+
+    /** Set when this transaction executed a wishlist item (idempotency anchor). */
+    @Column(name = "wishlist_item_id", updatable = false)
+    private Long wishlistItemId;
+
     @Column(columnDefinition = "text")
     private String notes;
 
@@ -139,5 +152,17 @@ public class Transaction extends AuditableEntity {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public boolean isLegacyCredit() {
+        return legacyCredit;
+    }
+
+    public Long getWishlistItemId() {
+        return wishlistItemId;
+    }
+
+    public void setWishlistItemId(Long wishlistItemId) {
+        this.wishlistItemId = wishlistItemId;
     }
 }

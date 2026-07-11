@@ -116,6 +116,13 @@ public class TransactionService {
     }
 
     private void applyOptionalFields(Long userId, Transaction transaction, TransactionRequest request) {
+        // Generic CREDIT belongs to the pre-card era: new credit spending goes
+        // through the credit-card domain, where it gets invoices and limits.
+        // Editing a legacy credit entry that keeps its CREDIT method is safe.
+        if (request.paymentMethod() == PaymentMethod.CREDIT && !transaction.isLegacyCredit()) {
+            throw new BusinessRuleException("USE_CREDIT_CARD_PURCHASE",
+                    "Para registrar uma nova compra no crédito, use a área de Cartões.");
+        }
         if (request.accountId() != null) {
             // Owner-scoped lookup: another user's account id behaves as absent.
             Account account = accounts.findByIdAndUserId(request.accountId(), userId)
