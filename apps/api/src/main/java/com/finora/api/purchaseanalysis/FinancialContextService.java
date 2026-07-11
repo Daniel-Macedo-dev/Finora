@@ -1,6 +1,6 @@
 package com.finora.api.purchaseanalysis;
 
-import com.finora.api.account.Account;
+import com.finora.api.account.AccountBalanceService;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.commitment.CommitmentService;
 import com.finora.api.common.money.MoneyRules;
@@ -26,13 +26,16 @@ public class FinancialContextService {
     static final int HISTORY_WINDOW_MONTHS = 3;
 
     private final AccountRepository accounts;
+    private final AccountBalanceService balances;
     private final TransactionRepository transactions;
     private final CommitmentService commitments;
 
     public FinancialContextService(AccountRepository accounts,
+                                   AccountBalanceService balances,
                                    TransactionRepository transactions,
                                    CommitmentService commitments) {
         this.accounts = accounts;
+        this.balances = balances;
         this.transactions = transactions;
         this.commitments = commitments;
     }
@@ -47,7 +50,7 @@ public class FinancialContextService {
         BigDecimal availableCash = accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId)
                 .stream()
                 .filter(account -> !account.isArchived())
-                .map(this::currentBalance)
+                .map(balances::currentBalance)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         YearMonth reference = YearMonth.from(referenceDate);
@@ -86,10 +89,5 @@ public class FinancialContextService {
                 avgSurplus,
                 MoneyRules.normalize(monthlyCommitments),
                 monthsWithData);
-    }
-
-    private BigDecimal currentBalance(Account account) {
-        BigDecimal movement = accounts.netMovement(account.getId(), account.getUserId());
-        return account.getOpeningBalance().add(movement != null ? movement : BigDecimal.ZERO);
     }
 }

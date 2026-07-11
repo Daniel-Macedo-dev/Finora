@@ -1,6 +1,6 @@
 package com.finora.api.dashboard;
 
-import com.finora.api.account.Account;
+import com.finora.api.account.AccountBalanceService;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.budget.BudgetDtos.BudgetSummaryResponse;
 import com.finora.api.budget.BudgetService;
@@ -32,6 +32,7 @@ public class DashboardService {
 
     private final TransactionRepository transactions;
     private final AccountRepository accounts;
+    private final AccountBalanceService balances;
     private final BudgetService budgets;
     private final CommitmentService commitments;
     private final GoalService goals;
@@ -39,12 +40,14 @@ public class DashboardService {
 
     public DashboardService(TransactionRepository transactions,
                             AccountRepository accounts,
+                            AccountBalanceService balances,
                             BudgetService budgets,
                             CommitmentService commitments,
                             GoalService goals,
                             CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.accounts = accounts;
+        this.balances = balances;
         this.budgets = budgets;
         this.commitments = commitments;
         this.goals = goals;
@@ -108,13 +111,8 @@ public class DashboardService {
         return MoneyRules.normalize(accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId)
                 .stream()
                 .filter(account -> !account.isArchived())
-                .map(this::currentBalance)
+                .map(balances::currentBalance)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
-    private BigDecimal currentBalance(Account account) {
-        BigDecimal movement = accounts.netMovement(account.getId(), account.getUserId());
-        return account.getOpeningBalance().add(movement != null ? movement : BigDecimal.ZERO);
     }
 
     private BigDecimal sum(Long userId, TransactionType type, YearMonth month) {

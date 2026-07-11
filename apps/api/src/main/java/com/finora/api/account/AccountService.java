@@ -5,6 +5,7 @@ import com.finora.api.account.AccountDtos.AccountResponse;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.payment.InvoicePaymentRepository;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.transaction.TransactionRepository;
 import java.math.BigDecimal;
@@ -18,13 +19,19 @@ public class AccountService {
 
     private final AccountRepository accounts;
     private final TransactionRepository transactions;
+    private final AccountBalanceService balances;
+    private final InvoicePaymentRepository invoicePayments;
     private final CurrentUserProvider currentUser;
 
     public AccountService(AccountRepository accounts,
                           TransactionRepository transactions,
+                          AccountBalanceService balances,
+                          InvoicePaymentRepository invoicePayments,
                           CurrentUserProvider currentUser) {
         this.accounts = accounts;
         this.transactions = transactions;
+        this.balances = balances;
+        this.invoicePayments = invoicePayments;
         this.currentUser = currentUser;
     }
 
@@ -82,6 +89,11 @@ public class AccountService {
                     "ACCOUNT_HAS_TRANSACTIONS",
                     "Esta conta possui transações e não pode ser excluída. Arquive a conta para preservá-la no histórico.");
         }
+        if (invoicePayments.existsByAccountId(account.getId())) {
+            throw new BusinessRuleException(
+                    "ACCOUNT_HAS_INVOICE_PAYMENTS",
+                    "Esta conta pagou faturas de cartão e não pode ser excluída. Arquive a conta para preservá-la no histórico.");
+        }
         accounts.delete(account);
     }
 
@@ -92,11 +104,9 @@ public class AccountService {
     }
 
     private AccountResponse toResponse(Account account) {
-        BigDecimal movement = account.getId() != null
-                ? accounts.netMovement(account.getId(), account.getUserId())
-                : null;
-        BigDecimal current = account.getOpeningBalance()
-                .add(movement != null ? movement : BigDecimal.ZERO);
+        BigDecimal current = account.getId() != null
+                ? balances.currentBalance(account)
+                : account.getOpeningBalance();
         return new AccountResponse(
                 account.getId(),
                 account.getName(),
