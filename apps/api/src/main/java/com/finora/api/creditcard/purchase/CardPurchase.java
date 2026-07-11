@@ -1,0 +1,171 @@
+package com.finora.api.creditcard.purchase;
+
+import com.finora.api.category.Category;
+import com.finora.api.common.persistence.AuditableEntity;
+import com.finora.api.creditcard.CreditCard;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+/**
+ * A credit-card purchase. The purchase itself is never an expense: its
+ * installments are, each in its invoice's reference month. The original
+ * purchase date is kept for history; expense recognition follows the invoice.
+ */
+@Entity
+@Table(name = "credit_card_purchases")
+public class CardPurchase extends AuditableEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "card_id", nullable = false)
+    private CreditCard card;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
+
+    @Column(nullable = false, length = 200)
+    private String description;
+
+    @Column(length = 150)
+    private String merchant;
+
+    @Column(name = "purchase_date", nullable = false)
+    private LocalDate purchaseDate;
+
+    @Column(name = "total_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal totalAmount;
+
+    @Column(name = "installment_count", nullable = false)
+    private int installmentCount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private PurchaseStatus status = PurchaseStatus.ACTIVE;
+
+    /** Set when this purchase executed a wishlist item (idempotency anchor). */
+    @Column(name = "wishlist_item_id", updatable = false)
+    private Long wishlistItemId;
+
+    @Column(columnDefinition = "text")
+    private String notes;
+
+    protected CardPurchase() {
+    }
+
+    public CardPurchase(Long userId, CreditCard card, Category category, String description,
+                        LocalDate purchaseDate, BigDecimal totalAmount, int installmentCount) {
+        this.userId = userId;
+        this.card = card;
+        this.category = category;
+        this.description = description;
+        this.purchaseDate = purchaseDate;
+        this.totalAmount = totalAmount;
+        this.installmentCount = installmentCount;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public CreditCard getCard() {
+        return card;
+    }
+
+    public void setCard(CreditCard card) {
+        this.card = card;
+    }
+
+    public Category getCategory() {
+        return category;
+    }
+
+    public void setCategory(Category category) {
+        this.category = category;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getMerchant() {
+        return merchant;
+    }
+
+    public void setMerchant(String merchant) {
+        this.merchant = merchant;
+    }
+
+    public LocalDate getPurchaseDate() {
+        return purchaseDate;
+    }
+
+    public void setPurchaseDate(LocalDate purchaseDate) {
+        this.purchaseDate = purchaseDate;
+    }
+
+    public BigDecimal getTotalAmount() {
+        return totalAmount;
+    }
+
+    public void setTotalAmount(BigDecimal totalAmount) {
+        this.totalAmount = totalAmount;
+    }
+
+    public int getInstallmentCount() {
+        return installmentCount;
+    }
+
+    public void setInstallmentCount(int installmentCount) {
+        this.installmentCount = installmentCount;
+    }
+
+    public PurchaseStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(PurchaseStatus status) {
+        this.status = status;
+    }
+
+    public Long getWishlistItemId() {
+        return wishlistItemId;
+    }
+
+    public void setWishlistItemId(Long wishlistItemId) {
+        this.wishlistItemId = wishlistItemId;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+}
