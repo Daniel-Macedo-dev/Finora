@@ -41,6 +41,8 @@ export interface PurchaseOption {
   nominalCost: number
   installmentCount: number | null
   installmentAmount: number | null
+  creditCardId: number | null
+  creditCardName: string | null
   notes: string | null
 }
 
@@ -76,7 +78,22 @@ export interface PurchaseOptionRequest {
   fees?: number
   installmentCount?: number | null
   installmentAmount?: number | null
+  creditCardId?: number | null
   notes?: string | null
+}
+
+export interface ExecutePurchaseRequest {
+  optionId: number
+  accountId?: number | null
+  creditCardId?: number | null
+  purchasedOn?: string | null
+}
+
+export interface ExecutePurchaseResponse {
+  itemId: number
+  status: WishlistStatus
+  transactionId: number | null
+  cardPurchaseId: number | null
 }
 
 /* ---- analysis ---- */
@@ -89,6 +106,16 @@ export interface OptionIssue {
   blocking: boolean
 }
 
+export interface CardAnalysis {
+  cardId: number
+  cardName: string
+  availableLimit: number
+  availableLimitAfter: number
+  utilizationAfterPercent: number
+  firstInvoiceMonth: string
+  limitSufficient: boolean
+}
+
 export interface OptionAnalysis {
   optionId: number
   merchant: string
@@ -99,6 +126,7 @@ export interface OptionAnalysis {
   monthlyBurden: number | null
   installmentCount: number | null
   cashAfterPurchase: number
+  card: CardAnalysis | null
   safe: boolean
   issues: OptionIssue[]
 }
@@ -112,6 +140,8 @@ export interface AnalysisAssumptions {
   avgMonthlyExpense: number | null
   avgMonthlySurplus: number | null
   monthlyCommitments: number
+  cardOutstandingTotal: number
+  nextMonthCardInstallments: number
   historyMonthsUsed: number
 }
 

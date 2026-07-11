@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import type {
+  ExecutePurchaseRequest,
+  ExecutePurchaseResponse,
   PurchaseAnalysis,
   PurchaseOption,
   PurchaseOptionRequest,
@@ -88,5 +90,26 @@ export function useDeleteOption(itemId: number) {
   return useMutation({
     mutationFn: (optionId: number) => api.delete(`/wishlist/${itemId}/options/${optionId}`),
     onSuccess: () => invalidateItem(queryClient, itemId),
+  })
+}
+
+/**
+ * Executes a selected option as a real financial event (expense transaction
+ * or card purchase). Every financial aggregate may change, so the whole
+ * financial cache is invalidated.
+ */
+export function useExecutePurchase(itemId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: ExecutePurchaseRequest) =>
+      api.post<ExecutePurchaseResponse>(`/wishlist/${itemId}/purchase`, request),
+    onSuccess: () => {
+      invalidateItem(queryClient, itemId)
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['credit-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    },
   })
 }

@@ -3,6 +3,7 @@ import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
 import { parseMoneyInput } from '../../lib/format'
+import { useCreditCards } from '../credit-cards/api'
 import type { PurchaseOption, PurchaseOptionKind, PurchaseOptionRequest } from './types'
 
 interface PurchaseOptionFormProps {
@@ -39,8 +40,16 @@ export default function PurchaseOptionForm({
       ? initial.installmentAmount.toFixed(2).replace('.', ',')
       : '',
   )
+  const [creditCardId, setCreditCardId] = useState(
+    initial?.creditCardId ? String(initial.creditCardId) : '',
+  )
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [formError, setFormError] = useState<string | null>(null)
+
+  const cards = useCreditCards()
+  const activeCards = (cards.data ?? []).filter(
+    (card) => !card.archived || String(card.id) === creditCardId,
+  )
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -86,6 +95,7 @@ export default function PurchaseOptionForm({
       fees: feesValue,
       installmentCount: count,
       installmentAmount: amount,
+      creditCardId: kind === 'INSTALLMENT' && creditCardId ? Number(creditCardId) : null,
       notes: notes.trim() || null,
     })
   }
@@ -172,6 +182,25 @@ export default function PurchaseOptionForm({
                 />
               </FormField>
             </>
+          )}
+          {kind === 'INSTALLMENT' && (
+            <FormField
+              label="Cartão de crédito (opcional)"
+              hint="Permite analisar limite e faturas e executar a compra direto no cartão."
+            >
+              <select
+                className="select"
+                value={creditCardId}
+                onChange={(event) => setCreditCardId(event.target.value)}
+              >
+                <option value="">Sem cartão</option>
+                {activeCards.map((card) => (
+                  <option key={card.id} value={card.id}>
+                    {card.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
           )}
           <FormField label="Frete (R$)">
             <input

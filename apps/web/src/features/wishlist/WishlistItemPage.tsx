@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, ShoppingCart, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
 import Dialog from '../../components/Dialog'
@@ -9,11 +9,13 @@ import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
 import { formatBRL, formatDate } from '../../lib/format'
 import WishlistItemForm from './WishlistItemForm'
 import PurchaseOptionForm from './PurchaseOptionForm'
+import ExecutePurchaseForm from './ExecutePurchaseDialog'
 import AnalysisPanel from './AnalysisPanel'
 import {
   useAddOption,
   useDeleteOption,
   useDeleteWishlistItem,
+  useExecutePurchase,
   usePurchaseAnalysis,
   useUpdateOption,
   useUpdateWishlistItem,
@@ -43,11 +45,14 @@ export default function WishlistItemPage() {
   const updateOption = useUpdateOption(itemId)
   const deleteOption = useDeleteOption(itemId)
 
+  const executePurchase = useExecutePurchase(itemId)
+
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [optionFormOpen, setOptionFormOpen] = useState(false)
   const [editingOption, setEditingOption] = useState<PurchaseOption | null>(null)
   const [deletingOption, setDeletingOption] = useState<PurchaseOption | null>(null)
+  const [executingOption, setExecutingOption] = useState<PurchaseOption | null>(null)
 
   if (!Number.isInteger(itemId)) {
     return (
@@ -197,6 +202,7 @@ export default function WishlistItemPage() {
                       : `${option.installmentCount}× de ${formatBRL(option.installmentAmount)} · total ${formatBRL(option.basePrice)}`}
                     {option.shipping > 0 && ` · frete ${formatBRL(option.shipping)}`}
                     {option.fees > 0 && ` · taxas ${formatBRL(option.fees)}`}
+                    {option.creditCardName && ` · cartão ${option.creditCardName}`}
                   </span>
                   {option.notes && <span className="option-notes">{option.notes}</span>}
                 </div>
@@ -205,6 +211,19 @@ export default function WishlistItemPage() {
                   <Money value={option.nominalCost} />
                 </div>
                 <div className="option-actions">
+                  {data.status !== 'PURCHASED' && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        executePurchase.reset()
+                        setExecutingOption(option)
+                      }}
+                    >
+                      <ShoppingCart size={15} aria-hidden="true" />
+                      Comprar
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn-ghost btn-icon"
@@ -293,6 +312,28 @@ export default function WishlistItemPage() {
         }
         onCancel={() => setDeleteOpen(false)}
       />
+
+      <Dialog
+        open={executingOption !== null}
+        title={executingOption ? `Comprar — ${executingOption.merchant}` : 'Comprar'}
+        onClose={() => setExecutingOption(null)}
+        wide
+      >
+        {executingOption && (
+          <ExecutePurchaseForm
+            key={executingOption.id}
+            option={executingOption}
+            busy={executePurchase.isPending}
+            submitError={executePurchase.error}
+            onSubmit={(request) =>
+              executePurchase.mutate(request, {
+                onSuccess: () => setExecutingOption(null),
+              })
+            }
+            onCancel={() => setExecutingOption(null)}
+          />
+        )}
+      </Dialog>
 
       <ConfirmDialog
         open={deletingOption !== null}
