@@ -11,9 +11,29 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  session:
+    jdbc:
+      # Flyway owns the SPRING_SESSION schema (V5); never auto-initialize.
+      initialize-schema: never
+    timeout: ${FINORA_SESSION_TIMEOUT:12h}
+
 server:
   port: ${FINORA_API_PORT:8080}
+  servlet:
+    session:
+      cookie:
+        name: FINORA_SESSION
+        http-only: true
+        same-site: lax
+        secure: ${FINORA_COOKIE_SECURE:false}
+        path: /
 
 finora:
   cors:
     allowed-origins: ${FINORA_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  security:
+    # Adaptive one-way hashing: BCrypt. Tests lower the cost for speed.
+    bcrypt-strength: ${FINORA_BCRYPT_STRENGTH:10}
+  legacy-claim:
+    # One-time secret that enables claiming pre-multiuser data. Empty = disabled.
+    token: ${FINORA_LEGACY_CLAIM_TOKEN:}

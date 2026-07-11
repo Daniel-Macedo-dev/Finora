@@ -14,10 +14,12 @@ public class CorsConfig {
     @Bean
     CorsFilter corsFilter(@Value("${finora.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
+        // Explicit origins only: credentials (session cookie) are now required,
+        // so a wildcard origin would be rejected by the browser and is never set.
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "Accept"));
-        config.setAllowCredentials(false);
+        config.setAllowedHeaders(List.of("Content-Type", "Accept", "X-XSRF-TOKEN"));
+        config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
