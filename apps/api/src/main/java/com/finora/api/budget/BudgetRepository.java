@@ -7,7 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BudgetRepository extends JpaRepository<Budget, Long> {
 
-    List<Budget> findAllByMonthRefOrderByIdAsc(LocalDate monthRef);
+    List<Budget> findAllByUserIdAndMonthRefOrderByIdAsc(Long userId, LocalDate monthRef);
 
-    Optional<Budget> findByMonthRefAndCategoryId(LocalDate monthRef, Long categoryId);
+    Optional<Budget> findByUserIdAndMonthRefAndCategoryId(Long userId, LocalDate monthRef, Long categoryId);
+
+    Optional<Budget> findByIdAndUserId(Long id, Long userId);
 }

@@ -11,6 +11,7 @@ import com.finora.api.dashboard.DashboardDtos.CategoryShare;
 import com.finora.api.dashboard.DashboardDtos.DashboardResponse;
 import com.finora.api.dashboard.DashboardDtos.MonthTrendPoint;
 import com.finora.api.goal.GoalService;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
 import com.finora.api.transaction.TransactionRepository;
 import com.finora.api.transaction.TransactionType;
@@ -34,24 +35,29 @@ public class DashboardService {
     private final BudgetService budgets;
     private final CommitmentService commitments;
     private final GoalService goals;
+    private final CurrentUserProvider currentUser;
 
     public DashboardService(TransactionRepository transactions,
                             AccountRepository accounts,
                             BudgetService budgets,
                             CommitmentService commitments,
-                            GoalService goals) {
+                            GoalService goals,
+                            CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.accounts = accounts;
         this.budgets = budgets;
         this.commitments = commitments;
         this.goals = goals;
+        this.currentUser = currentUser;
     }
 
+    /** Every section below aggregates exclusively the authenticated user's data. */
     @Transactional(readOnly = true)
     public DashboardResponse build(YearMonth month, LocalDate today) {
-        BigDecimal income = sum(TransactionType.INCOME, month);
-        BigDecimal expense = sum(TransactionType.EXPENSE, month);
-        BigDecimal previousExpense = sum(TransactionType.EXPENSE, month.minusMonths(1));
+        Long userId = currentUser.currentUserId();
+        BigDecimal income = sum(userId, TransactionType.INCOME, month);
+        BigDecimal expense = sum(userId, TransactionType.EXPENSE, month);
+        BigDecimal previousExpense = sum(userId, TransactionType.EXPENSE, month.minusMonths(1));
 
         BigDecimal savingsRate = null;
         if (income.signum() > 0) {
@@ -68,11 +74,11 @@ public class DashboardService {
         }
 
         BudgetSummaryResponse budgetSummary = budgets.summary(month);
-        var upcoming = commitments.upcoming(today, 1);
+        var upcoming = commitments.upcomingForUser(userId, today, 1);
 
         return new DashboardResponse(
                 month,
-                totalBalance(),
+                totalBalance(userId),
                 MoneyRules.normalize(income),
                 MoneyRules.normalize(expense),
                 MoneyRules.normalize(income.subtract(expense)),
@@ -86,39 +92,40 @@ public class DashboardService {
                         budgetSummary.budgets().size(),
                         budgetSummary.warningCount(),
                         budgetSummary.exceededCount()),
-                topCategories(month, expense),
-                trend(month),
+                topCategories(userId, month, expense),
+                trend(userId, month),
                 upcoming.items(),
                 upcoming.totalAmount(),
-                goals.list().stream()
+                goals.listForUser(userId).stream()
                         .filter(goal -> goal.status() != com.finora.api.goal.GoalDtos.GoalStatus.ARCHIVED)
                         .toList(),
-                transactions.findTop10ByOrderByOccurredOnDescIdDesc().stream()
+                transactions.findTop10ByUserIdOrderByOccurredOnDescIdDesc(userId).stream()
                         .map(TransactionResponse::from)
                         .toList());
     }
 
-    private BigDecimal totalBalance() {
-        return MoneyRules.normalize(accounts.findAllByOrderByDisplayOrderAscNameAsc().stream()
+    private BigDecimal totalBalance(Long userId) {
+        return MoneyRules.normalize(accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId)
+                .stream()
                 .filter(account -> !account.isArchived())
                 .map(this::currentBalance)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     private BigDecimal currentBalance(Account account) {
-        BigDecimal movement = accounts.netMovement(account.getId());
+        BigDecimal movement = accounts.netMovement(account.getId(), account.getUserId());
         return account.getOpeningBalance().add(movement != null ? movement : BigDecimal.ZERO);
     }
 
-    private BigDecimal sum(TransactionType type, YearMonth month) {
-        return transactions.sumAmountByTypeAndPeriod(type, month.atDay(1), month.atEndOfMonth());
+    private BigDecimal sum(Long userId, TransactionType type, YearMonth month) {
+        return transactions.sumAmountByTypeAndPeriod(userId, type, month.atDay(1), month.atEndOfMonth());
     }
 
-    private List<CategoryShare> topCategories(YearMonth month, BigDecimal totalExpense) {
+    private List<CategoryShare> topCategories(Long userId, YearMonth month, BigDecimal totalExpense) {
         if (totalExpense.signum() <= 0) {
             return List.of();
         }
-        return transactions.sumExpensesGroupedByCategory(month.atDay(1), month.atEndOfMonth()).stream()
+        return transactions.sumExpensesGroupedByCategory(userId, month.atDay(1), month.atEndOfMonth()).stream()
                 .limit(TOP_CATEGORIES)
                 .map(row -> {
                     BigDecimal amount = (BigDecimal) row[2];
@@ -132,14 +139,14 @@ public class DashboardService {
                 .toList();
     }
 
-    private List<MonthTrendPoint> trend(YearMonth month) {
+    private List<MonthTrendPoint> trend(Long userId, YearMonth month) {
         List<MonthTrendPoint> points = new ArrayList<>();
         for (int i = TREND_MONTHS - 1; i >= 0; i--) {
             YearMonth m = month.minusMonths(i);
             points.add(new MonthTrendPoint(
                     m,
-                    MoneyRules.normalize(sum(TransactionType.INCOME, m)),
-                    MoneyRules.normalize(sum(TransactionType.EXPENSE, m))));
+                    MoneyRules.normalize(sum(userId, TransactionType.INCOME, m)),
+                    MoneyRules.normalize(sum(userId, TransactionType.EXPENSE, m))));
         }
         return points;
     }

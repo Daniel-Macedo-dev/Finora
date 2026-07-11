@@ -3,22 +3,27 @@ package com.finora.api.settings;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 
 /**
- * Singleton row (id = 1) with the financial assumptions used by budget status
- * and the purchase analysis engine.
+ * Per-user financial assumptions used by budget status and the purchase
+ * analysis engine. One row per user, created at registration with
+ * conservative defaults.
  */
 @Entity
 @Table(name = "app_settings")
 public class AppSettings extends AuditableEntity {
 
-    public static final long SINGLETON_ID = 1L;
-
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "user_id", nullable = false, updatable = false, unique = true)
+    private Long userId;
 
     /** Cash the user never wants to go below (emergency liquidity). */
     @Column(name = "minimum_cash_buffer", nullable = false, precision = 14, scale = 2)
@@ -39,8 +44,23 @@ public class AppSettings extends AuditableEntity {
     protected AppSettings() {
     }
 
+    /** Creates the user's settings row with the documented conservative defaults. */
+    public static AppSettings withDefaults(Long userId) {
+        AppSettings settings = new AppSettings();
+        settings.userId = userId;
+        settings.minimumCashBuffer = new BigDecimal("0.00");
+        settings.maxInstallmentCommitmentRatio = new BigDecimal("0.3000");
+        settings.monthlyOpportunityRate = new BigDecimal("0.000000");
+        settings.budgetWarningThreshold = new BigDecimal("0.8000");
+        return settings;
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public BigDecimal getMinimumCashBuffer() {

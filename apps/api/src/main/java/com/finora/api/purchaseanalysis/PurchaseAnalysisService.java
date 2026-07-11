@@ -2,6 +2,7 @@ package com.finora.api.purchaseanalysis;
 
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisAssumptions;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisResponse;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.OptionAnalysis;
@@ -51,21 +52,29 @@ public class PurchaseAnalysisService {
     private final WishlistItemRepository items;
     private final SettingsService settings;
     private final FinancialContextService contextService;
+    private final CurrentUserProvider currentUser;
 
     public PurchaseAnalysisService(WishlistItemRepository items,
                                    SettingsService settings,
-                                   FinancialContextService contextService) {
+                                   FinancialContextService contextService,
+                                   CurrentUserProvider currentUser) {
         this.items = items;
         this.settings = settings;
         this.contextService = contextService;
+        this.currentUser = currentUser;
     }
 
+    /**
+     * Analyzes one of the authenticated user's wishlist items using only that
+     * user's settings and financial context. A foreign item id resolves to 404.
+     */
     @Transactional(readOnly = true)
     public AnalysisResponse analyze(Long itemId, LocalDate referenceDate) {
-        WishlistItem item = items.findById(itemId)
+        Long userId = currentUser.currentUserId();
+        WishlistItem item = items.findByIdAndUserId(itemId, userId)
                 .orElseThrow(() -> new NotFoundException("Item da lista de desejos", itemId));
-        AppSettings config = settings.current();
-        FinancialContext context = contextService.build(referenceDate);
+        AppSettings config = settings.forUser(userId);
+        FinancialContext context = contextService.build(userId, referenceDate);
 
         List<OptionAnalysis> analyses = item.getOptions().stream()
                 .map(option -> analyzeOption(option, config, context))

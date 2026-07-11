@@ -18,6 +18,9 @@ public class Goal extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -36,7 +39,9 @@ public class Goal extends AuditableEntity {
     protected Goal() {
     }
 
-    public Goal(String name, BigDecimal targetAmount, BigDecimal currentAmount, LocalDate targetDate) {
+    public Goal(Long userId, String name, BigDecimal targetAmount, BigDecimal currentAmount,
+                LocalDate targetDate) {
+        this.userId = userId;
         this.name = name;
         this.targetAmount = targetAmount;
         this.currentAmount = currentAmount;
@@ -46,6 +51,10 @@ public class Goal extends AuditableEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getName() {

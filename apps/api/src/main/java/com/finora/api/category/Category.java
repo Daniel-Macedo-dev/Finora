@@ -18,6 +18,9 @@ public class Category extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 60)
     private String name;
 
@@ -34,15 +37,25 @@ public class Category extends AuditableEntity {
     protected Category() {
     }
 
-    public Category(String name, CategoryType type) {
+    public Category(Long userId, String name, CategoryType type) {
+        this.userId = userId;
         this.name = name;
         this.type = type;
         this.active = true;
         this.isDefault = false;
     }
 
+    public Category(Long userId, String name, CategoryType type, boolean isDefault) {
+        this(userId, name, type);
+        this.isDefault = isDefault;
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getName() {

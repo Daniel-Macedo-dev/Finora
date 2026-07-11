@@ -11,6 +11,7 @@ import com.finora.api.category.CategoryType;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.TransactionRepository;
 import java.math.BigDecimal;
@@ -21,10 +22,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Monthly budgets per expense category. Consumption is always derived from the
- * month's transactions at read time — never stored — so budget figures cannot
- * drift from the transaction history. A budget is WARNING at the configurable
- * threshold (settings) and EXCEEDED at 100%; percentUsed may exceed 100.
+ * Monthly budgets per expense category, always scoped to the authenticated
+ * owner. Consumption is derived from the owner's transactions at read time —
+ * never stored — so budget figures cannot drift from the transaction history.
+ * A budget is WARNING at the owner's configurable threshold and EXCEEDED at
+ * 100%; percentUsed may exceed 100.
  */
 @Service
 @Transactional
@@ -34,20 +36,25 @@ public class BudgetService {
     private final CategoryRepository categories;
     private final TransactionRepository transactions;
     private final SettingsService settings;
+    private final CurrentUserProvider currentUser;
 
     public BudgetService(BudgetRepository budgets,
                          CategoryRepository categories,
                          TransactionRepository transactions,
-                         SettingsService settings) {
+                         SettingsService settings,
+                         CurrentUserProvider currentUser) {
         this.budgets = budgets;
         this.categories = categories;
         this.transactions = transactions;
         this.settings = settings;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public BudgetSummaryResponse summary(YearMonth month) {
-        List<BudgetResponse> items = budgets.findAllByMonthRefOrderByIdAsc(month.atDay(1)).stream()
+        Long userId = currentUser.currentUserId();
+        List<BudgetResponse> items = budgets
+                .findAllByUserIdAndMonthRefOrderByIdAsc(userId, month.atDay(1)).stream()
                 .map(this::toResponse)
                 .toList();
         BigDecimal totalLimit = items.stream()
@@ -73,18 +80,20 @@ public class BudgetService {
     }
 
     public BudgetResponse create(BudgetRequest request) {
-        Category category = categories.findById(request.categoryId())
+        Long userId = currentUser.currentUserId();
+        Category category = categories.findByIdAndUserId(request.categoryId(), userId)
                 .orElseThrow(() -> new NotFoundException("Categoria", request.categoryId()));
         if (category.getType() != CategoryType.EXPENSE) {
             throw new BusinessRuleException("BUDGET_CATEGORY_NOT_EXPENSE",
                     "Orçamentos só podem ser definidos para categorias de despesa.");
         }
-        budgets.findByMonthRefAndCategoryId(request.month().atDay(1), request.categoryId())
+        budgets.findByUserIdAndMonthRefAndCategoryId(userId, request.month().atDay(1), request.categoryId())
                 .ifPresent(existing -> {
                     throw new BusinessRuleException("BUDGET_ALREADY_EXISTS",
                             "Já existe um orçamento para essa categoria nesse mês.");
                 });
-        Budget budget = new Budget(request.month(), category, MoneyRules.normalize(request.limitAmount()));
+        Budget budget = new Budget(userId, request.month(), category,
+                MoneyRules.normalize(request.limitAmount()));
         return toResponse(budgets.save(budget));
     }
 
@@ -104,13 +113,15 @@ public class BudgetService {
     }
 
     private Budget find(Long id) {
-        return budgets.findById(id).orElseThrow(() -> new NotFoundException("Orçamento", id));
+        return budgets.findByIdAndUserId(id, currentUser.currentUserId())
+                .orElseThrow(() -> new NotFoundException("Orçamento", id));
     }
 
     private BudgetResponse toResponse(Budget budget) {
         YearMonth month = budget.getMonth();
         BigDecimal consumed = transactions.sumExpensesByCategoryAndPeriod(
-                budget.getCategory().getId(), month.atDay(1), month.atEndOfMonth());
+                budget.getUserId(), budget.getCategory().getId(),
+                month.atDay(1), month.atEndOfMonth());
         BigDecimal limit = budget.getLimitAmount();
         BigDecimal percentUsed = percent(consumed, limit);
         return new BudgetResponse(
@@ -124,10 +135,10 @@ public class BudgetService {
                 MoneyRules.normalize(consumed),
                 MoneyRules.normalize(limit.subtract(consumed)),
                 percentUsed,
-                status(consumed, limit));
+                status(budget.getUserId(), consumed, limit));
     }
 
-    private BudgetStatus status(BigDecimal consumed, BigDecimal limit) {
+    private BudgetStatus status(Long userId, BigDecimal consumed, BigDecimal limit) {
         if (limit.signum() <= 0) {
             return BudgetStatus.HEALTHY;
         }
@@ -135,7 +146,7 @@ public class BudgetService {
         if (ratio.compareTo(BigDecimal.ONE) >= 0) {
             return BudgetStatus.EXCEEDED;
         }
-        if (ratio.compareTo(settings.current().getBudgetWarningThreshold()) >= 0) {
+        if (ratio.compareTo(settings.forUser(userId).getBudgetWarningThreshold()) >= 0) {
             return BudgetStatus.WARNING;
         }
         return BudgetStatus.HEALTHY;

@@ -29,6 +29,9 @@ public class WishlistItem extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 150)
     private String name;
 
@@ -63,7 +66,8 @@ public class WishlistItem extends AuditableEntity {
     protected WishlistItem() {
     }
 
-    public WishlistItem(String name, WishlistPriority priority) {
+    public WishlistItem(Long userId, String name, WishlistPriority priority) {
+        this.userId = userId;
         this.name = name;
         this.priority = priority;
         this.status = WishlistStatus.PLANNING;
@@ -71,6 +75,10 @@ public class WishlistItem extends AuditableEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getName() {

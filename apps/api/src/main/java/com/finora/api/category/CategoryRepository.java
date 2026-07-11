@@ -6,9 +6,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    List<Category> findAllByOrderByTypeAscNameAsc();
+    List<Category> findAllByUserIdOrderByTypeAscNameAsc(Long userId);
 
-    List<Category> findAllByTypeOrderByNameAsc(CategoryType type);
+    List<Category> findAllByUserIdAndTypeOrderByNameAsc(Long userId, CategoryType type);
 
-    Optional<Category> findByNameIgnoreCaseAndType(String name, CategoryType type);
+    Optional<Category> findByUserIdAndNameIgnoreCaseAndType(Long userId, String name, CategoryType type);
+
+    Optional<Category> findByIdAndUserId(Long id, Long userId);
 }

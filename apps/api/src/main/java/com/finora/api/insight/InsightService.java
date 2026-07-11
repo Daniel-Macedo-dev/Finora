@@ -7,6 +7,7 @@ import com.finora.api.common.money.MoneyRules;
 import com.finora.api.goal.GoalDtos.GoalResponse;
 import com.finora.api.goal.GoalDtos.GoalStatus;
 import com.finora.api.goal.GoalService;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.insight.InsightDtos.Insight;
 import com.finora.api.insight.InsightDtos.InsightSeverity;
 import com.finora.api.insight.InsightDtos.InsightsResponse;
@@ -51,36 +52,41 @@ public class InsightService {
     private final WishlistItemRepository wishlist;
     private final FinancialContextService contextService;
     private final SettingsService settings;
+    private final CurrentUserProvider currentUser;
 
     public InsightService(TransactionRepository transactions,
                           BudgetService budgets,
                           GoalService goals,
                           WishlistItemRepository wishlist,
                           FinancialContextService contextService,
-                          SettingsService settings) {
+                          SettingsService settings,
+                          CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.budgets = budgets;
         this.goals = goals;
         this.wishlist = wishlist;
         this.contextService = contextService;
         this.settings = settings;
+        this.currentUser = currentUser;
     }
 
+    /** Every rule below reads exclusively the authenticated user's data. */
     @Transactional(readOnly = true)
     public InsightsResponse generate(YearMonth month, LocalDate today) {
+        Long userId = currentUser.currentUserId();
         List<Insight> insights = new ArrayList<>();
-        AppSettings config = settings.current();
-        FinancialContext context = contextService.build(today);
+        AppSettings config = settings.forUser(userId);
+        FinancialContext context = contextService.build(userId, today);
 
-        BigDecimal expense = sum(TransactionType.EXPENSE, month);
-        BigDecimal previousExpense = sum(TransactionType.EXPENSE, month.minusMonths(1));
+        BigDecimal expense = sum(userId, TransactionType.EXPENSE, month);
+        BigDecimal previousExpense = sum(userId, TransactionType.EXPENSE, month.minusMonths(1));
 
         expenseIncrease(insights, expense, previousExpense);
-        dominantCategory(insights, month, expense);
+        dominantCategory(insights, userId, month, expense);
         budgetAlerts(insights, month);
         commitmentShare(insights, context);
-        goalPace(insights, context);
-        affordableWishlist(insights, context, config);
+        goalPace(insights, userId, context);
+        affordableWishlist(insights, userId, context, config);
 
         return new InsightsResponse(month, List.copyOf(insights));
     }
@@ -102,12 +108,13 @@ public class InsightService {
         }
     }
 
-    private void dominantCategory(List<Insight> insights, YearMonth month, BigDecimal totalExpense) {
+    private void dominantCategory(List<Insight> insights, Long userId, YearMonth month,
+                                  BigDecimal totalExpense) {
         if (totalExpense.signum() <= 0) {
             return;
         }
         List<Object[]> byCategory = transactions.sumExpensesGroupedByCategory(
-                month.atDay(1), month.atEndOfMonth());
+                userId, month.atDay(1), month.atEndOfMonth());
         if (byCategory.isEmpty()) {
             return;
         }
@@ -171,11 +178,11 @@ public class InsightService {
         }
     }
 
-    private void goalPace(List<Insight> insights, FinancialContext context) {
+    private void goalPace(List<Insight> insights, Long userId, FinancialContext context) {
         if (context.avgMonthlySurplus() == null) {
             return;
         }
-        for (GoalResponse goal : goals.list()) {
+        for (GoalResponse goal : goals.listForUser(userId)) {
             if (goal.status() != GoalStatus.IN_PROGRESS || goal.suggestedMonthlyContribution() == null) {
                 continue;
             }
@@ -194,8 +201,10 @@ public class InsightService {
         }
     }
 
-    private void affordableWishlist(List<Insight> insights, FinancialContext context, AppSettings config) {
-        List<WishlistItem> candidates = wishlist.findAllByStatusIn(
+    private void affordableWishlist(List<Insight> insights, Long userId,
+                                    FinancialContext context, AppSettings config) {
+        List<WishlistItem> candidates = wishlist.findAllByUserIdAndStatusIn(
+                userId,
                 List.of(WishlistStatus.PLANNING, WishlistStatus.MONITORING, WishlistStatus.READY_TO_BUY));
         BigDecimal spendable = context.availableCash().subtract(config.getMinimumCashBuffer());
         if (spendable.signum() <= 0) {
@@ -218,8 +227,8 @@ public class InsightService {
         }
     }
 
-    private BigDecimal sum(TransactionType type, YearMonth month) {
-        return transactions.sumAmountByTypeAndPeriod(type, month.atDay(1), month.atEndOfMonth());
+    private BigDecimal sum(Long userId, TransactionType type, YearMonth month) {
+        return transactions.sumAmountByTypeAndPeriod(userId, type, month.atDay(1), month.atEndOfMonth());
     }
 
     private static String brl(BigDecimal value) {

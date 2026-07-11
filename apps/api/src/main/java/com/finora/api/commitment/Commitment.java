@@ -27,6 +27,9 @@ public class Commitment extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 200)
     private String description;
 
@@ -61,8 +64,9 @@ public class Commitment extends AuditableEntity {
     protected Commitment() {
     }
 
-    public Commitment(String description, BigDecimal amount, Category category,
+    public Commitment(Long userId, String description, BigDecimal amount, Category category,
                       CommitmentCadence cadence, Integer dueDay, LocalDate startDate) {
+        this.userId = userId;
         this.description = description;
         this.amount = amount;
         this.category = category;
@@ -106,6 +110,10 @@ public class Commitment extends AuditableEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getDescription() {

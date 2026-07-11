@@ -5,6 +5,7 @@ import com.finora.api.account.AccountDtos.AccountResponse;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.transaction.TransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,15 +18,20 @@ public class AccountService {
 
     private final AccountRepository accounts;
     private final TransactionRepository transactions;
+    private final CurrentUserProvider currentUser;
 
-    public AccountService(AccountRepository accounts, TransactionRepository transactions) {
+    public AccountService(AccountRepository accounts,
+                          TransactionRepository transactions,
+                          CurrentUserProvider currentUser) {
         this.accounts = accounts;
         this.transactions = transactions;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public List<AccountResponse> list() {
-        return accounts.findAllByOrderByDisplayOrderAscNameAsc().stream()
+        Long userId = currentUser.currentUserId();
+        return accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -36,10 +42,12 @@ public class AccountService {
     }
 
     public AccountResponse create(AccountRequest request) {
-        accounts.findByNameIgnoreCase(request.name().trim()).ifPresent(existing -> {
+        Long userId = currentUser.currentUserId();
+        accounts.findByUserIdAndNameIgnoreCase(userId, request.name().trim()).ifPresent(existing -> {
             throw new BusinessRuleException("ACCOUNT_NAME_TAKEN", "Já existe uma conta com esse nome.");
         });
         Account account = new Account(
+                userId,
                 request.name().trim(),
                 request.type(),
                 MoneyRules.normalize(request.openingBalance()),
@@ -48,8 +56,9 @@ public class AccountService {
     }
 
     public AccountResponse update(Long id, AccountRequest request) {
+        Long userId = currentUser.currentUserId();
         Account account = find(id);
-        accounts.findByNameIgnoreCase(request.name().trim()).ifPresent(existing -> {
+        accounts.findByUserIdAndNameIgnoreCase(userId, request.name().trim()).ifPresent(existing -> {
             if (!existing.getId().equals(id)) {
                 throw new BusinessRuleException("ACCOUNT_NAME_TAKEN", "Já existe uma conta com esse nome.");
             }
@@ -68,7 +77,7 @@ public class AccountService {
 
     public void delete(Long id) {
         Account account = find(id);
-        if (transactions.existsByAccountId(id)) {
+        if (transactions.existsByAccountId(account.getId())) {
             throw new BusinessRuleException(
                     "ACCOUNT_HAS_TRANSACTIONS",
                     "Esta conta possui transações e não pode ser excluída. Arquive a conta para preservá-la no histórico.");
@@ -76,12 +85,16 @@ public class AccountService {
         accounts.delete(account);
     }
 
+    /** Foreign-owned ids resolve to 404 — never 403 — to avoid enumeration. */
     private Account find(Long id) {
-        return accounts.findById(id).orElseThrow(() -> new NotFoundException("Conta", id));
+        return accounts.findByIdAndUserId(id, currentUser.currentUserId())
+                .orElseThrow(() -> new NotFoundException("Conta", id));
     }
 
     private AccountResponse toResponse(Account account) {
-        BigDecimal movement = account.getId() != null ? accounts.netMovement(account.getId()) : null;
+        BigDecimal movement = account.getId() != null
+                ? accounts.netMovement(account.getId(), account.getUserId())
+                : null;
         BigDecimal current = account.getOpeningBalance()
                 .add(movement != null ? movement : BigDecimal.ZERO);
         return new AccountResponse(

@@ -9,19 +9,23 @@ import org.springframework.data.repository.query.Param;
 
 public interface AccountRepository extends JpaRepository<Account, Long> {
 
-    List<Account> findAllByOrderByDisplayOrderAscNameAsc();
+    List<Account> findAllByUserIdOrderByDisplayOrderAscNameAsc(Long userId);
 
-    Optional<Account> findByNameIgnoreCase(String name);
+    Optional<Account> findByUserIdAndNameIgnoreCase(Long userId, String name);
+
+    Optional<Account> findByIdAndUserId(Long id, Long userId);
 
     /**
-     * Net movement of an account: sum of incomes minus sum of expenses.
-     * Returns null when the account has no transactions.
+     * Net movement of one of the user's accounts: incomes minus expenses.
+     * The user predicate is defense in depth — the account id is always
+     * owner-verified before this runs. Returns null without transactions.
      */
     @Query("""
             select sum(case when t.type = com.finora.api.transaction.TransactionType.INCOME
                             then t.amount else -t.amount end)
             from Transaction t
             where t.account.id = :accountId
+              and t.userId = :userId
             """)
-    BigDecimal netMovement(@Param("accountId") Long accountId);
+    BigDecimal netMovement(@Param("accountId") Long accountId, @Param("userId") Long userId);
 }

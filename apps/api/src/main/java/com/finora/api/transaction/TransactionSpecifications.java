@@ -8,6 +8,14 @@ final class TransactionSpecifications {
     private TransactionSpecifications() {
     }
 
+    /**
+     * Mandatory root predicate of every transaction search — the service
+     * always starts from this, so no filter combination can run unscoped.
+     */
+    static Specification<Transaction> ownedBy(Long userId) {
+        return (root, query, cb) -> cb.equal(root.get("userId"), userId);
+    }
+
     static Specification<Transaction> hasType(TransactionType type) {
         return (root, query, cb) -> cb.equal(root.get("type"), type);
     }

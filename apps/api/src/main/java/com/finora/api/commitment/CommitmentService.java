@@ -11,6 +11,7 @@ import com.finora.api.commitment.CommitmentDtos.UpcomingResponse;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.identity.CurrentUserProvider;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -26,16 +27,21 @@ public class CommitmentService {
 
     private final CommitmentRepository commitments;
     private final CategoryRepository categories;
+    private final CurrentUserProvider currentUser;
 
-    public CommitmentService(CommitmentRepository commitments, CategoryRepository categories) {
+    public CommitmentService(CommitmentRepository commitments,
+                             CategoryRepository categories,
+                             CurrentUserProvider currentUser) {
         this.commitments = commitments;
         this.categories = categories;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public List<CommitmentResponse> list() {
         LocalDate today = LocalDate.now();
-        return commitments.findAllByOrderByActiveDescDescriptionAsc().stream()
+        return commitments.findAllByUserIdOrderByActiveDescDescriptionAsc(currentUser.currentUserId())
+                .stream()
                 .map(c -> toResponse(c, today))
                 .toList();
     }
@@ -51,10 +57,16 @@ public class CommitmentService {
      */
     @Transactional(readOnly = true)
     public UpcomingResponse upcoming(LocalDate from, int months) {
+        return upcomingForUser(currentUser.currentUserId(), from, months);
+    }
+
+    /** Owner-explicit variant used by services that already resolved identity. */
+    @Transactional(readOnly = true)
+    public UpcomingResponse upcomingForUser(Long userId, LocalDate from, int months) {
         int window = Math.clamp(months, 1, 12);
         LocalDate to = YearMonth.from(from).plusMonths(window - 1L).atEndOfMonth();
         List<UpcomingCommitment> items = new ArrayList<>();
-        for (Commitment commitment : commitments.findAllByActiveTrue()) {
+        for (Commitment commitment : commitments.findAllByUserIdAndActiveTrue(userId)) {
             YearMonth cursor = YearMonth.from(from);
             YearMonth last = YearMonth.from(to);
             while (!cursor.isAfter(last)) {
@@ -78,19 +90,21 @@ public class CommitmentService {
         return new UpcomingResponse(from, to, MoneyRules.normalize(total), items);
     }
 
-    /** Total of active commitments falling due inside the given month. */
+    /** Total of the user's active commitments falling due inside the given month. */
     @Transactional(readOnly = true)
-    public BigDecimal monthlyTotal(YearMonth month) {
-        return commitments.findAllByActiveTrue().stream()
+    public BigDecimal monthlyTotal(Long userId, YearMonth month) {
+        return commitments.findAllByUserIdAndActiveTrue(userId).stream()
                 .filter(c -> c.occurrenceIn(month).isPresent())
                 .map(Commitment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public CommitmentResponse create(CommitmentRequest request) {
-        Category category = resolveCategory(request.categoryId());
+        Long userId = currentUser.currentUserId();
+        Category category = resolveCategory(userId, request.categoryId());
         validate(request);
         Commitment commitment = new Commitment(
+                userId,
                 request.description().trim(),
                 MoneyRules.normalize(request.amount()),
                 category,
@@ -107,7 +121,7 @@ public class CommitmentService {
 
     public CommitmentResponse update(Long id, CommitmentRequest request) {
         Commitment commitment = find(id);
-        Category category = resolveCategory(request.categoryId());
+        Category category = resolveCategory(currentUser.currentUserId(), request.categoryId());
         validate(request);
         commitment.setDescription(request.description().trim());
         commitment.setAmount(MoneyRules.normalize(request.amount()));
@@ -138,8 +152,9 @@ public class CommitmentService {
         }
     }
 
-    private Category resolveCategory(Long categoryId) {
-        Category category = categories.findById(categoryId)
+    private Category resolveCategory(Long userId, Long categoryId) {
+        // Owner-scoped: another user's category id behaves as absent.
+        Category category = categories.findByIdAndUserId(categoryId, userId)
                 .orElseThrow(() -> new NotFoundException("Categoria", categoryId));
         if (category.getType() != CategoryType.EXPENSE) {
             throw new BusinessRuleException("COMMITMENT_CATEGORY_NOT_EXPENSE",
@@ -149,7 +164,8 @@ public class CommitmentService {
     }
 
     private Commitment find(Long id) {
-        return commitments.findById(id).orElseThrow(() -> new NotFoundException("Compromisso", id));
+        return commitments.findByIdAndUserId(id, currentUser.currentUserId())
+                .orElseThrow(() -> new NotFoundException("Compromisso", id));
     }
 
     private CommitmentResponse toResponse(Commitment commitment, LocalDate reference) {

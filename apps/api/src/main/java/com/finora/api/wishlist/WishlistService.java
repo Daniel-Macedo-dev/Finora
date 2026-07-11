@@ -5,6 +5,7 @@ import com.finora.api.category.CategoryRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.wishlist.WishlistDtos.PurchaseOptionRequest;
 import com.finora.api.wishlist.WishlistDtos.PurchaseOptionResponse;
 import com.finora.api.wishlist.WishlistDtos.WishlistCategory;
@@ -31,18 +32,22 @@ public class WishlistService {
     private final WishlistItemRepository items;
     private final PurchaseOptionRepository options;
     private final CategoryRepository categories;
+    private final CurrentUserProvider currentUser;
 
     public WishlistService(WishlistItemRepository items,
                            PurchaseOptionRepository options,
-                           CategoryRepository categories) {
+                           CategoryRepository categories,
+                           CurrentUserProvider currentUser) {
         this.items = items;
         this.options = options;
         this.categories = categories;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public List<WishlistItemResponse> list() {
-        return items.findAllByOrderByStatusAscPriorityDescNameAsc().stream()
+        return items.findAllByUserIdOrderByStatusAscPriorityDescNameAsc(currentUser.currentUserId())
+                .stream()
                 .map(this::toSummary)
                 .toList();
     }
@@ -53,7 +58,8 @@ public class WishlistService {
     }
 
     public WishlistItemDetailResponse create(WishlistItemRequest request) {
-        WishlistItem item = new WishlistItem(request.name().trim(), request.priority());
+        WishlistItem item = new WishlistItem(
+                currentUser.currentUserId(), request.name().trim(), request.priority());
         apply(item, request);
         return toDetail(items.save(item));
     }
@@ -88,7 +94,8 @@ public class WishlistService {
     }
 
     public PurchaseOptionResponse updateOption(Long itemId, Long optionId, PurchaseOptionRequest request) {
-        PurchaseOption option = options.findByIdAndItemId(optionId, itemId)
+        PurchaseOption option = options
+                .findByIdAndItemIdAndItemUserId(optionId, itemId, currentUser.currentUserId())
                 .orElseThrow(() -> new NotFoundException("Opção de compra", optionId));
         validateOption(request);
         option.setMerchant(request.merchant().trim());
@@ -102,7 +109,8 @@ public class WishlistService {
     }
 
     public void deleteOption(Long itemId, Long optionId) {
-        PurchaseOption option = options.findByIdAndItemId(optionId, itemId)
+        PurchaseOption option = options
+                .findByIdAndItemIdAndItemUserId(optionId, itemId, currentUser.currentUserId())
                 .orElseThrow(() -> new NotFoundException("Opção de compra", optionId));
         option.getItem().getOptions().remove(option);
     }
@@ -147,7 +155,9 @@ public class WishlistService {
     private void apply(WishlistItem item, WishlistItemRequest request) {
         item.setNotes(trimmedOrNull(request.notes()));
         if (request.categoryId() != null) {
-            Category category = categories.findById(request.categoryId())
+            // Owner-scoped: another user's category id behaves as absent.
+            Category category = categories
+                    .findByIdAndUserId(request.categoryId(), currentUser.currentUserId())
                     .orElseThrow(() -> new NotFoundException("Categoria", request.categoryId()));
             item.setCategory(category);
         } else {
@@ -162,7 +172,8 @@ public class WishlistService {
     }
 
     private WishlistItem find(Long id) {
-        return items.findById(id).orElseThrow(() -> new NotFoundException("Item da lista de desejos", id));
+        return items.findByIdAndUserId(id, currentUser.currentUserId())
+                .orElseThrow(() -> new NotFoundException("Item da lista de desejos", id));
     }
 
     private WishlistItemResponse toSummary(WishlistItem item) {

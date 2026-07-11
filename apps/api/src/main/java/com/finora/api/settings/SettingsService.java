@@ -1,8 +1,8 @@
 package com.finora.api.settings;
 
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.settings.SettingsDtos.SettingsRequest;
 import com.finora.api.settings.SettingsDtos.SettingsResponse;
-import java.lang.IllegalStateException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,16 +11,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class SettingsService {
 
     private final SettingsRepository repository;
+    private final CurrentUserProvider currentUser;
 
-    public SettingsService(SettingsRepository repository) {
+    public SettingsService(SettingsRepository repository, CurrentUserProvider currentUser) {
         this.repository = repository;
+        this.currentUser = currentUser;
     }
 
+    /** The authenticated user's settings row (created at registration). */
     @Transactional(readOnly = true)
     public AppSettings current() {
-        return repository.findById(AppSettings.SINGLETON_ID)
+        return forUser(currentUser.currentUserId());
+    }
+
+    /** Settings for an explicit owner — used by services that already resolved identity. */
+    @Transactional(readOnly = true)
+    public AppSettings forUser(Long userId) {
+        return repository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalStateException(
-                        "app_settings singleton row missing; check Flyway migrations"));
+                        "settings row missing for user " + userId + "; registration must create it"));
     }
 
     @Transactional(readOnly = true)

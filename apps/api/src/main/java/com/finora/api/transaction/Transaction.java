@@ -25,6 +25,9 @@ public class Transaction extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     private TransactionType type;
@@ -56,8 +59,9 @@ public class Transaction extends AuditableEntity {
     protected Transaction() {
     }
 
-    public Transaction(TransactionType type, BigDecimal amount, String description,
+    public Transaction(Long userId, TransactionType type, BigDecimal amount, String description,
                        LocalDate occurredOn, Category category) {
+        this.userId = userId;
         this.type = type;
         this.amount = amount;
         this.description = description;
@@ -67,6 +71,10 @@ public class Transaction extends AuditableEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public TransactionType getType() {

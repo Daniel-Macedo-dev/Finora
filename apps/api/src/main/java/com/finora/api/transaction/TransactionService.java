@@ -8,9 +8,9 @@ import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.common.web.PageResponse;
+import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.transaction.TransactionDtos.TransactionRequest;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,19 +28,23 @@ public class TransactionService {
     private final TransactionRepository transactions;
     private final CategoryRepository categories;
     private final AccountRepository accounts;
+    private final CurrentUserProvider currentUser;
 
     public TransactionService(TransactionRepository transactions,
                               CategoryRepository categories,
-                              AccountRepository accounts) {
+                              AccountRepository accounts,
+                              CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.categories = categories;
         this.accounts = accounts;
+        this.currentUser = currentUser;
     }
 
     /**
-     * Paginated search over transactions. All provided filters are combined
-     * with AND; {@code month} covers the full calendar month and {@code search}
-     * is a case-insensitive substring match on the description. Results are
+     * Paginated search over the authenticated user's transactions. The
+     * ownership predicate is the mandatory root of the Specification — every
+     * filter combination (and the pagination count query) runs inside it.
+     * Filters are ANDed; {@code month} covers the calendar month; results are
      * ordered by date (newest first), then id.
      */
     @Transactional(readOnly = true)
@@ -51,7 +55,8 @@ public class TransactionService {
                                                     String search,
                                                     int page,
                                                     int size) {
-        Specification<Transaction> spec = Specification.unrestricted();
+        Specification<Transaction> spec =
+                TransactionSpecifications.ownedBy(currentUser.currentUserId());
         if (month != null) {
             spec = spec.and(TransactionSpecifications.occurredBetween(month.atDay(1), month.atEndOfMonth()));
         }
@@ -80,26 +85,29 @@ public class TransactionService {
     }
 
     public TransactionResponse create(TransactionRequest request) {
-        Category category = resolveCategory(request);
+        Long userId = currentUser.currentUserId();
+        Category category = resolveCategory(userId, request);
         Transaction transaction = new Transaction(
+                userId,
                 request.type(),
                 MoneyRules.normalize(request.amount()),
                 request.description().trim(),
                 request.date(),
                 category);
-        applyOptionalFields(transaction, request);
+        applyOptionalFields(userId, transaction, request);
         return TransactionResponse.from(transactions.save(transaction));
     }
 
     public TransactionResponse update(Long id, TransactionRequest request) {
+        Long userId = currentUser.currentUserId();
         Transaction transaction = find(id);
-        Category category = resolveCategory(request);
+        Category category = resolveCategory(userId, request);
         transaction.setType(request.type());
         transaction.setAmount(MoneyRules.normalize(request.amount()));
         transaction.setDescription(request.description().trim());
         transaction.setOccurredOn(request.date());
         transaction.setCategory(category);
-        applyOptionalFields(transaction, request);
+        applyOptionalFields(userId, transaction, request);
         return TransactionResponse.from(transaction);
     }
 
@@ -107,9 +115,10 @@ public class TransactionService {
         transactions.delete(find(id));
     }
 
-    private void applyOptionalFields(Transaction transaction, TransactionRequest request) {
+    private void applyOptionalFields(Long userId, Transaction transaction, TransactionRequest request) {
         if (request.accountId() != null) {
-            Account account = accounts.findById(request.accountId())
+            // Owner-scoped lookup: another user's account id behaves as absent.
+            Account account = accounts.findByIdAndUserId(request.accountId(), userId)
                     .orElseThrow(() -> new NotFoundException("Conta", request.accountId()));
             transaction.setAccount(account);
         } else {
@@ -121,8 +130,8 @@ public class TransactionService {
                 : null);
     }
 
-    private Category resolveCategory(TransactionRequest request) {
-        Category category = categories.findById(request.categoryId())
+    private Category resolveCategory(Long userId, TransactionRequest request) {
+        Category category = categories.findByIdAndUserId(request.categoryId(), userId)
                 .orElseThrow(() -> new NotFoundException("Categoria", request.categoryId()));
         if (!category.getType().name().equals(request.type().name())) {
             throw new BusinessRuleException("CATEGORY_TYPE_MISMATCH",
@@ -132,6 +141,7 @@ public class TransactionService {
     }
 
     private Transaction find(Long id) {
-        return transactions.findById(id).orElseThrow(() -> new NotFoundException("Transação", id));
+        return transactions.findByIdAndUserId(id, currentUser.currentUserId())
+                .orElseThrow(() -> new NotFoundException("Transação", id));
     }
 }

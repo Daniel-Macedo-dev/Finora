@@ -37,9 +37,15 @@ public class FinancialContextService {
         this.commitments = commitments;
     }
 
+    /**
+     * Builds the snapshot exclusively from the given owner's data — every
+     * query below carries the user predicate, so another user's income,
+     * expenses, accounts or commitments can never influence this context.
+     */
     @Transactional(readOnly = true)
-    public FinancialContext build(LocalDate referenceDate) {
-        BigDecimal availableCash = accounts.findAllByOrderByDisplayOrderAscNameAsc().stream()
+    public FinancialContext build(Long userId, LocalDate referenceDate) {
+        BigDecimal availableCash = accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId)
+                .stream()
                 .filter(account -> !account.isArchived())
                 .map(this::currentBalance)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -51,9 +57,9 @@ public class FinancialContextService {
         for (int i = 1; i <= HISTORY_WINDOW_MONTHS; i++) {
             YearMonth month = reference.minusMonths(i);
             BigDecimal income = transactions.sumAmountByTypeAndPeriod(
-                    TransactionType.INCOME, month.atDay(1), month.atEndOfMonth());
+                    userId, TransactionType.INCOME, month.atDay(1), month.atEndOfMonth());
             BigDecimal expense = transactions.sumAmountByTypeAndPeriod(
-                    TransactionType.EXPENSE, month.atDay(1), month.atEndOfMonth());
+                    userId, TransactionType.EXPENSE, month.atDay(1), month.atEndOfMonth());
             if (income.signum() != 0 || expense.signum() != 0) {
                 monthsWithData++;
                 totalIncome = totalIncome.add(income);
@@ -71,7 +77,7 @@ public class FinancialContextService {
             avgSurplus = avgIncome.subtract(avgExpense);
         }
 
-        BigDecimal monthlyCommitments = commitments.monthlyTotal(reference.plusMonths(1));
+        BigDecimal monthlyCommitments = commitments.monthlyTotal(userId, reference.plusMonths(1));
 
         return new FinancialContext(
                 MoneyRules.normalize(availableCash),
@@ -83,7 +89,7 @@ public class FinancialContextService {
     }
 
     private BigDecimal currentBalance(Account account) {
-        BigDecimal movement = accounts.netMovement(account.getId());
+        BigDecimal movement = accounts.netMovement(account.getId(), account.getUserId());
         return account.getOpeningBalance().add(movement != null ? movement : BigDecimal.ZERO);
     }
 }

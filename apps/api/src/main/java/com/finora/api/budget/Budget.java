@@ -23,6 +23,9 @@ public class Budget extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     /** Persisted as the first day of the month the budget refers to. */
     @Column(name = "month_ref", nullable = false)
     private LocalDate monthRef;
@@ -37,7 +40,8 @@ public class Budget extends AuditableEntity {
     protected Budget() {
     }
 
-    public Budget(YearMonth month, Category category, BigDecimal limitAmount) {
+    public Budget(Long userId, YearMonth month, Category category, BigDecimal limitAmount) {
+        this.userId = userId;
         this.monthRef = month.atDay(1);
         this.category = category;
         this.limitAmount = limitAmount;
@@ -45,6 +49,10 @@ public class Budget extends AuditableEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public YearMonth getMonth() {

@@ -7,6 +7,7 @@ import com.finora.api.goal.GoalDtos.ContributionRequest;
 import com.finora.api.goal.GoalDtos.GoalRequest;
 import com.finora.api.goal.GoalDtos.GoalResponse;
 import com.finora.api.goal.GoalDtos.GoalStatus;
+import com.finora.api.identity.CurrentUserProvider;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -21,15 +22,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class GoalService {
 
     private final GoalRepository goals;
+    private final CurrentUserProvider currentUser;
 
-    public GoalService(GoalRepository goals) {
+    public GoalService(GoalRepository goals, CurrentUserProvider currentUser) {
         this.goals = goals;
+        this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public List<GoalResponse> list() {
+        return listForUser(currentUser.currentUserId());
+    }
+
+    /** Owner-explicit variant used by the dashboard aggregation. */
+    @Transactional(readOnly = true)
+    public List<GoalResponse> listForUser(Long userId) {
         LocalDate today = LocalDate.now();
-        return goals.findAllByOrderByArchivedAscNameAsc().stream()
+        return goals.findAllByUserIdOrderByArchivedAscNameAsc(userId).stream()
                 .map(goal -> toResponse(goal, today))
                 .toList();
     }
@@ -41,6 +50,7 @@ public class GoalService {
 
     public GoalResponse create(GoalRequest request) {
         Goal goal = new Goal(
+                currentUser.currentUserId(),
                 request.name().trim(),
                 MoneyRules.normalize(request.targetAmount()),
                 request.currentAmount() != null
@@ -88,7 +98,8 @@ public class GoalService {
     }
 
     private Goal find(Long id) {
-        return goals.findById(id).orElseThrow(() -> new NotFoundException("Meta", id));
+        return goals.findByIdAndUserId(id, currentUser.currentUserId())
+                .orElseThrow(() -> new NotFoundException("Meta", id));
     }
 
     private GoalResponse toResponse(Goal goal, LocalDate today) {

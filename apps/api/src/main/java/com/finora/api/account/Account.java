@@ -19,6 +19,9 @@ public class Account extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -38,7 +41,8 @@ public class Account extends AuditableEntity {
     protected Account() {
     }
 
-    public Account(String name, AccountType type, BigDecimal openingBalance, int displayOrder) {
+    public Account(Long userId, String name, AccountType type, BigDecimal openingBalance, int displayOrder) {
+        this.userId = userId;
         this.name = name;
         this.type = type;
         this.openingBalance = openingBalance;
@@ -48,6 +52,10 @@ public class Account extends AuditableEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getName() {
