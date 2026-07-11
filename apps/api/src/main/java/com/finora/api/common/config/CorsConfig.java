@@ -5,17 +5,24 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
 
 @Configuration
 public class CorsConfig {
 
+    /**
+     * Exposed as a {@link CorsConfigurationSource} (not a standalone
+     * {@code CorsFilter}) so Spring Security's {@code http.cors()} integrates
+     * it into the single security filter chain. Credentials are allowed
+     * because authentication uses a session cookie, so origins must be an
+     * explicit list — a wildcard origin is invalid with credentials and is
+     * never configured.
+     */
     @Bean
-    CorsFilter corsFilter(@Value("${finora.cors.allowed-origins}") List<String> allowedOrigins) {
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${finora.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
-        // Explicit origins only: credentials (session cookie) are now required,
-        // so a wildcard origin would be rejected by the browser and is never set.
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Content-Type", "Accept", "X-XSRF-TOKEN"));
@@ -24,6 +31,6 @@ public class CorsConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
-        return new CorsFilter(source);
+        return source;
     }
 }
