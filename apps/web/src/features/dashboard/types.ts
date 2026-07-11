@@ -44,6 +44,37 @@ export interface GoalSnapshot {
   suggestedMonthlyContribution: number | null
 }
 
+export interface CardInvoiceBrief {
+  cardId: number
+  cardName: string
+  invoiceId: number
+  referenceMonth: string
+  dueDate: string
+  status: import('../credit-cards/types').InvoiceStatus
+  outstandingAmount: number
+}
+
+export interface RecentCardPurchase {
+  id: number
+  cardId: number
+  cardName: string
+  description: string
+  purchaseDate: string
+  totalAmount: number
+  installmentCount: number
+}
+
+/** Card debt view — deliberately separate from cash balance. */
+export interface CardsOverview {
+  cardCount: number
+  totalOutstanding: number
+  totalAvailableLimit: number
+  monthCardExpense: number
+  overdueCount: number
+  nextDueInvoice: CardInvoiceBrief | null
+  recentPurchases: RecentCardPurchase[]
+}
+
 export interface DashboardData {
   month: string
   totalBalance: number
@@ -60,6 +91,7 @@ export interface DashboardData {
   upcomingCommitmentsTotal: number
   goals: GoalSnapshot[]
   recentTransactions: Transaction[]
+  cards: CardsOverview | null
 }
 
 export type InsightSeverity = 'POSITIVE' | 'INFO' | 'WARNING' | 'CRITICAL'

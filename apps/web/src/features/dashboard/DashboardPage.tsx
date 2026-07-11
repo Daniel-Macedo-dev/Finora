@@ -9,6 +9,7 @@ import {
   Info,
   CheckCircle2,
   AlertOctagon,
+  CreditCard,
 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
@@ -19,6 +20,7 @@ import { formatBRL, formatDate, formatPercent } from '../../lib/format'
 import { useDashboard, useInsights } from './api'
 import TrendChart from './TrendChart'
 import CategoryBars from './CategoryBars'
+import InvoiceStatusBadge from '../credit-cards/InvoiceStatusBadge'
 import type { Insight, InsightSeverity } from './types'
 import './dashboard.css'
 
@@ -217,6 +219,47 @@ export default function DashboardPage() {
               </>
             )}
           </section>
+
+          {data.cards && (
+            <section className="card dash-panel" aria-label="Cartões de crédito">
+              <h2 className="panel-title">
+                <CreditCard size={15} aria-hidden="true" /> Cartões
+              </h2>
+              <div className="dash-cards-figures">
+                <div>
+                  <span className="stat-footnote">Dívida de cartão</span>
+                  <p className="dash-cards-value">{formatBRL(data.cards.totalOutstanding)}</p>
+                </div>
+                <div>
+                  <span className="stat-footnote">Limite disponível</span>
+                  <p className="dash-cards-value">{formatBRL(data.cards.totalAvailableLimit)}</p>
+                </div>
+                <div>
+                  <span className="stat-footnote">Despesa no cartão (mês)</span>
+                  <p className="dash-cards-value">{formatBRL(data.cards.monthCardExpense)}</p>
+                </div>
+              </div>
+              {data.cards.overdueCount > 0 && (
+                <span className="badge badge-negative">
+                  <AlertOctagon size={13} aria-hidden="true" />
+                  {data.cards.overdueCount} fatura(s) vencida(s)
+                </span>
+              )}
+              {data.cards.nextDueInvoice ? (
+                <p className="stat-footnote dash-cards-next">
+                  Próxima fatura: {data.cards.nextDueInvoice.cardName} vence em{' '}
+                  {formatDate(data.cards.nextDueInvoice.dueDate)} (
+                  {formatBRL(data.cards.nextDueInvoice.outstandingAmount)} em aberto){' '}
+                  <InvoiceStatusBadge status={data.cards.nextDueInvoice.status} />
+                </p>
+              ) : (
+                <p className="stat-footnote dash-cards-next">Nenhuma fatura em aberto.</p>
+              )}
+              <Link to="/credit-cards" className="panel-link">
+                Ver cartões
+              </Link>
+            </section>
+          )}
 
           <section className="card dash-panel" aria-label="Próximos compromissos">
             <h2 className="panel-title">Próximos compromissos</h2>
