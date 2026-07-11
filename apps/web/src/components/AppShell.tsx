@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LoadingCards } from './states'
 import {
   LayoutDashboard,
@@ -11,7 +11,10 @@ import {
   Settings,
   Menu,
   X,
+  UserRound,
+  LogOut,
 } from 'lucide-react'
+import { useCurrentUser, useLogout } from '../features/auth/api'
 import './AppShell.css'
 
 const NAV_ITEMS = [
@@ -32,6 +35,47 @@ function BrandMark() {
       </span>
       <span className="brand-name">Finora</span>
     </span>
+  )
+}
+
+function UserPanel() {
+  const currentUser = useCurrentUser()
+  const logout = useLogout()
+  const navigate = useNavigate()
+
+  const user = currentUser.data
+  if (!user) {
+    return null
+  }
+
+  function handleLogout() {
+    logout.mutate(undefined, {
+      onSettled: () => navigate('/login', { replace: true }),
+    })
+  }
+
+  return (
+    <div className="user-panel">
+      <NavLink to="/profile" className="user-identity" title="Abrir perfil">
+        <span className="user-avatar" aria-hidden="true">
+          <UserRound size={16} />
+        </span>
+        <span className="user-meta">
+          <span className="user-name">{user.displayName}</span>
+          <span className="user-email">{user.email}</span>
+        </span>
+      </NavLink>
+      <button
+        type="button"
+        className="btn btn-ghost btn-icon"
+        onClick={handleLogout}
+        disabled={logout.isPending}
+        aria-label="Sair da conta"
+        title="Sair"
+      >
+        <LogOut size={16} aria-hidden="true" />
+      </button>
+    </div>
   )
 }
 
@@ -101,6 +145,9 @@ export default function AppShell() {
           <BrandMark />
         </div>
         {navLinks}
+        <div className="sidebar-footer">
+          <UserPanel />
+        </div>
       </nav>
 
       <main id="main-content" className="app-main">
