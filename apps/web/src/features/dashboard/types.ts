@@ -75,6 +75,21 @@ export interface CardsOverview {
   recentPurchases: RecentCardPurchase[]
 }
 
+export interface FutureCashEvent {
+  date: string
+  description: string
+  amount: number
+}
+
+/** Compact 30-day forecast summary served by the backend forecast engine. */
+export interface FutureCashOverview {
+  projectedBalance30d: number
+  nextRecurringEvent: FutureCashEvent | null
+  nextInvoiceObligation: FutureCashEvent | null
+  firstNegativeDate: string | null
+  failedOccurrences: number
+}
+
 export interface DashboardData {
   month: string
   totalBalance: number
@@ -92,6 +107,7 @@ export interface DashboardData {
   goals: GoalSnapshot[]
   recentTransactions: Transaction[]
   cards: CardsOverview | null
+  futureCash: FutureCashOverview | null
 }
 
 export type InsightSeverity = 'POSITIVE' | 'INFO' | 'WARNING' | 'CRITICAL'

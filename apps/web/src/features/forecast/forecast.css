@@ -1,0 +1,149 @@
+/* Cash-flow forecast page. */
+
+.forecast-controls {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.forecast-horizons {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.forecast-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.forecast-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.forecast-kpi-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.forecast-kpi-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.forecast-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  background: color-mix(in srgb, var(--negative) 10%, transparent);
+  color: var(--ink-primary);
+  border: 1px solid color-mix(in srgb, var(--negative) 35%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.forecast-warning svg {
+  flex-shrink: 0;
+  color: var(--negative);
+}
+
+.forecast-warning-neutral {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+
+.forecast-warning-neutral svg {
+  color: var(--warning);
+}
+
+.forecast-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* event timeline */
+
+.forecast-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.forecast-timeline li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.forecast-timeline li:last-child {
+  border-bottom: none;
+}
+
+.forecast-event-date {
+  flex-shrink: 0;
+  width: 84px;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-event-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.forecast-event-source {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.forecast-event-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.forecast-event-balance {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+@media (max-width: 640px) {
+  /* The 84px date column cannot fit dd/mm/yyyy beside the text at 390px —
+     the date becomes its own line above the event instead. */
+  .forecast-timeline li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 2px;
+  }
+
+  .forecast-event-date {
+    width: auto;
+    grid-column: 1 / -1;
+  }
+
+  .forecast-kpi-value {
+    font-size: var(--text-lg);
+  }
+}

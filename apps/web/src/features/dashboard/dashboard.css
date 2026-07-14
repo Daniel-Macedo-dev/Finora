@@ -40,11 +40,6 @@
   color: var(--negative);
 }
 
-.stat-footnote {
-  color: var(--ink-muted);
-  font-size: var(--text-xs);
-}
-
 .dash-panel {
   display: flex;
   flex-direction: column;
@@ -54,20 +49,6 @@
 
 .dash-panel-wide {
   grid-column: 1 / -1;
-}
-
-.panel-title {
-  font-size: var(--text-md);
-}
-
-.panel-empty {
-  color: var(--ink-muted);
-  font-size: var(--text-sm);
-}
-
-.panel-link {
-  font-size: var(--text-sm);
-  align-self: flex-start;
 }
 
 .budget-overview {
@@ -87,42 +68,6 @@
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
-}
-
-.mini-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.mini-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-}
-
-.mini-list-main {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 550;
-}
-
-.mini-list-meta {
-  color: var(--ink-muted);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-
-.mini-list progress {
-  width: 90px;
-  accent-color: var(--brand);
 }
 
 .insight-list {

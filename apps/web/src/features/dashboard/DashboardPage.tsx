@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   AlertOctagon,
   CreditCard,
+  ChartSpline,
 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
@@ -257,6 +258,50 @@ export default function DashboardPage() {
               )}
               <Link to="/credit-cards" className="panel-link">
                 Ver cartões
+              </Link>
+            </section>
+          )}
+
+          {data.futureCash && (
+            <section className="card dash-panel" aria-label="Caixa futuro">
+              <h2 className="panel-title">
+                <ChartSpline size={15} aria-hidden="true" /> Caixa futuro (30 dias)
+              </h2>
+              <div className="dash-cards-figures">
+                <div>
+                  <span className="stat-footnote">Saldo projetado</span>
+                  <p className="dash-cards-value">
+                    {formatBRL(data.futureCash.projectedBalance30d)}
+                  </p>
+                </div>
+              </div>
+              {data.futureCash.firstNegativeDate && (
+                <span className="badge badge-negative">
+                  <AlertOctagon size={13} aria-hidden="true" />
+                  Saldo negativo previsto em {formatDate(data.futureCash.firstNegativeDate)}
+                </span>
+              )}
+              {data.futureCash.failedOccurrences > 0 && (
+                <span className="badge badge-warning">
+                  {data.futureCash.failedOccurrences} recorrência(s) com falha
+                </span>
+              )}
+              {data.futureCash.nextRecurringEvent && (
+                <p className="stat-footnote dash-cards-next">
+                  Próximo recorrente: {data.futureCash.nextRecurringEvent.description} em{' '}
+                  {formatDate(data.futureCash.nextRecurringEvent.date)} (
+                  {formatBRL(Math.abs(data.futureCash.nextRecurringEvent.amount))})
+                </p>
+              )}
+              {data.futureCash.nextInvoiceObligation && (
+                <p className="stat-footnote dash-cards-next">
+                  Próxima fatura a pagar: {data.futureCash.nextInvoiceObligation.description} em{' '}
+                  {formatDate(data.futureCash.nextInvoiceObligation.date)} (
+                  {formatBRL(Math.abs(data.futureCash.nextInvoiceObligation.amount))})
+                </p>
+              )}
+              <Link to="/forecast" className="panel-link">
+                Ver previsão completa
               </Link>
             </section>
           )}

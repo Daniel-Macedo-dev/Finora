@@ -12,6 +12,7 @@ const CreditCardDetailPage = lazy(() => import('./features/credit-cards/CreditCa
 const InvoiceDetailPage = lazy(() => import('./features/credit-cards/InvoiceDetailPage'))
 const BudgetsPage = lazy(() => import('./features/budgets/BudgetsPage'))
 const CommitmentsPage = lazy(() => import('./features/commitments/CommitmentsPage'))
+const ForecastPage = lazy(() => import('./features/forecast/ForecastPage'))
 const GoalsPage = lazy(() => import('./features/goals/GoalsPage'))
 const WishlistPage = lazy(() => import('./features/wishlist/WishlistPage'))
 const WishlistItemPage = lazy(() => import('./features/wishlist/WishlistItemPage'))
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/credit-cards/:cardId/invoices/:invoiceId" element={<InvoiceDetailPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/commitments" element={<CommitmentsPage />} />
+        <Route path="/forecast" element={<ForecastPage />} />
         <Route path="/goals" element={<GoalsPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/wishlist/:id" element={<WishlistItemPage />} />
