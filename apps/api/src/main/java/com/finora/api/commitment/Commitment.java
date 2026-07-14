@@ -1,7 +1,9 @@
 package com.finora.api.commitment;
 
+import com.finora.api.account.Account;
 import com.finora.api.category.Category;
 import com.finora.api.common.persistence.AuditableEntity;
+import com.finora.api.creditcard.CreditCard;
 import com.finora.api.transaction.PaymentMethod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,8 +18,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.YearMonth;
-import java.util.Optional;
 
 @Entity
 @Table(name = "commitments")
@@ -61,6 +61,25 @@ public class Commitment extends AuditableEntity {
     @Column(name = "payment_method", length = 20)
     private PaymentMethod paymentMethod;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "execution_mode", nullable = false, length = 20)
+    private ExecutionMode executionMode = ExecutionMode.MANUAL;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_kind", nullable = false, length = 30)
+    private RecurrenceTarget targetKind = RecurrenceTarget.PROJECTION_ONLY;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credit_card_id")
+    private CreditCard creditCard;
+
+    @Column(name = "installment_count", nullable = false)
+    private int installmentCount = 1;
+
     protected Commitment() {
     }
 
@@ -74,38 +93,6 @@ public class Commitment extends AuditableEntity {
         this.dueDay = dueDay;
         this.startDate = startDate;
         this.active = true;
-    }
-
-    /**
-     * The date this commitment falls due inside the given month, or empty when
-     * it does not occur in that month (inactive, before start, after end, or a
-     * YEARLY commitment anchored to another month).
-     */
-    public Optional<LocalDate> occurrenceIn(YearMonth month) {
-        if (!active) {
-            return Optional.empty();
-        }
-        YearMonth startMonth = YearMonth.from(startDate);
-        if (month.isBefore(startMonth)) {
-            return Optional.empty();
-        }
-        if (endDate != null && month.isAfter(YearMonth.from(endDate))) {
-            return Optional.empty();
-        }
-        LocalDate due;
-        if (cadence == CommitmentCadence.MONTHLY) {
-            int day = dueDay != null ? dueDay : startDate.getDayOfMonth();
-            due = month.atDay(Math.min(day, month.lengthOfMonth()));
-        } else {
-            if (month.getMonthValue() != startDate.getMonthValue()) {
-                return Optional.empty();
-            }
-            due = month.atDay(Math.min(startDate.getDayOfMonth(), month.lengthOfMonth()));
-        }
-        if (due.isBefore(startDate) || (endDate != null && due.isAfter(endDate))) {
-            return Optional.empty();
-        }
-        return Optional.of(due);
     }
 
     public Long getId() {
@@ -186,5 +173,45 @@ public class Commitment extends AuditableEntity {
 
     public void setPaymentMethod(PaymentMethod paymentMethod) {
         this.paymentMethod = paymentMethod;
+    }
+
+    public ExecutionMode getExecutionMode() {
+        return executionMode;
+    }
+
+    public void setExecutionMode(ExecutionMode executionMode) {
+        this.executionMode = executionMode;
+    }
+
+    public RecurrenceTarget getTargetKind() {
+        return targetKind;
+    }
+
+    public void setTargetKind(RecurrenceTarget targetKind) {
+        this.targetKind = targetKind;
+    }
+
+    public Account getAccount() {
+        return account;
+    }
+
+    public void setAccount(Account account) {
+        this.account = account;
+    }
+
+    public CreditCard getCreditCard() {
+        return creditCard;
+    }
+
+    public void setCreditCard(CreditCard creditCard) {
+        this.creditCard = creditCard;
+    }
+
+    public int getInstallmentCount() {
+        return installmentCount;
+    }
+
+    public void setInstallmentCount(int installmentCount) {
+        this.installmentCount = installmentCount;
     }
 }

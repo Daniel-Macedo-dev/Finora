@@ -4,6 +4,7 @@ import com.finora.api.commitment.CommitmentDtos.CommitmentRequest;
 import com.finora.api.commitment.CommitmentDtos.CommitmentResponse;
 import com.finora.api.commitment.CommitmentDtos.UpcomingResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -38,7 +39,25 @@ public class CommitmentController {
     public UpcomingResponse upcoming(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(defaultValue = "2") int months) {
-        return service.upcoming(from != null ? from : LocalDate.now(), months);
+        return service.upcoming(from, months);
+    }
+
+    @PostMapping("/{id}/pause")
+    public CommitmentResponse pause(@PathVariable Long id) {
+        return service.pause(id);
+    }
+
+    @PostMapping("/{id}/resume")
+    public CommitmentResponse resume(@PathVariable Long id) {
+        return service.resume(id);
+    }
+
+    @PostMapping("/{id}/end")
+    public CommitmentResponse end(@PathVariable Long id, @Valid @RequestBody EndRequest request) {
+        return service.end(id, request.endDate());
+    }
+
+    public record EndRequest(@NotNull(message = "Informe a data de término.") LocalDate endDate) {
     }
 
     @GetMapping("/{id}")

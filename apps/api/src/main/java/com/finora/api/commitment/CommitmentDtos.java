@@ -45,7 +45,23 @@ public final class CommitmentDtos {
 
             Boolean active,
 
-            PaymentMethod paymentMethod) {
+            PaymentMethod paymentMethod,
+
+            /** Defaults to MANUAL when omitted (backward compatible). */
+            ExecutionMode executionMode,
+
+            /** Defaults to PROJECTION_ONLY when omitted (backward compatible). */
+            RecurrenceTarget targetKind,
+
+            /** Required for ACCOUNT_TRANSACTION targets. */
+            Long accountId,
+
+            /** Required for CREDIT_CARD_PURCHASE targets. */
+            Long creditCardId,
+
+            @Min(value = 1, message = "O número de parcelas deve estar entre 1 e 120.")
+            @Max(value = 120, message = "O número de parcelas deve estar entre 1 e 120.")
+            Integer installmentCount) {
     }
 
     public record CommitmentCategory(Long id, String name, CategoryType type) {
@@ -62,7 +78,17 @@ public final class CommitmentDtos {
             LocalDate endDate,
             boolean active,
             PaymentMethod paymentMethod,
-            LocalDate nextDueDate) {
+            LocalDate nextDueDate,
+            ExecutionMode executionMode,
+            RecurrenceTarget targetKind,
+            Long accountId,
+            String accountName,
+            Long creditCardId,
+            String creditCardName,
+            int installmentCount,
+            /** True for pre-automation rows kept projection-only for safety. */
+            boolean legacyProjectionOnly,
+            long failedOccurrences) {
     }
 
     public record UpcomingCommitment(
