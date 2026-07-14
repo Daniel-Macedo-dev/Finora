@@ -185,7 +185,7 @@ export default function CreditCardDetailPage() {
                   </th>
                   <th scope="col">Vencimento</th>
                   <th scope="col">Status</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>
+                  <th scope="col" className="cc-col-optional" style={{ textAlign: 'right' }}>
                     Total
                   </th>
                   <th scope="col" style={{ textAlign: 'right' }}>
@@ -209,7 +209,7 @@ export default function CreditCardDetailPage() {
                     <td>
                       <InvoiceStatusBadge status={invoice.status} />
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td className="cc-col-optional" style={{ textAlign: 'right' }}>
                       <Money value={invoice.invoiceTotal} />
                     </td>
                     <td style={{ textAlign: 'right' }}>
@@ -250,7 +250,9 @@ export default function CreditCardDetailPage() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th scope="col">Data</th>
+                    <th scope="col" className="cc-col-optional">
+                      Data
+                    </th>
                     <th scope="col">Descrição</th>
                     <th scope="col" className="cc-col-optional">
                       Categoria
@@ -270,7 +272,7 @@ export default function CreditCardDetailPage() {
                       key={purchase.id}
                       className={purchase.status === 'CANCELLED' ? 'cc-row-cancelled' : ''}
                     >
-                      <td>{formatDate(purchase.purchaseDate)}</td>
+                      <td className="cc-col-optional">{formatDate(purchase.purchaseDate)}</td>
                       <td className="cc-purchase-desc">
                         {purchase.description}
                         {purchase.status === 'CANCELLED' && (

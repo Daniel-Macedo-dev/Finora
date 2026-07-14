@@ -208,7 +208,9 @@ export default function InvoiceDetailPage() {
               <thead>
                 <tr>
                   <th scope="col">Data</th>
-                  <th scope="col">Conta</th>
+                  <th scope="col" className="cc-col-optional">
+                    Conta
+                  </th>
                   <th scope="col">Situação</th>
                   <th scope="col" style={{ textAlign: 'right' }}>
                     Valor
@@ -225,7 +227,7 @@ export default function InvoiceDetailPage() {
                     className={payment.status === 'REVERSED' ? 'cc-row-cancelled' : ''}
                   >
                     <td>{formatDate(payment.paidOn)}</td>
-                    <td>{payment.accountName}</td>
+                    <td className="cc-col-optional">{payment.accountName}</td>
                     <td>
                       {payment.status === 'REVERSED' ? (
                         <span className="badge badge-neutral">Estornado</span>

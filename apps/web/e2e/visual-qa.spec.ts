@@ -86,7 +86,27 @@ async function seedDemoData(page: Page) {
   await page.request.post(`${API}/wishlist/${item.id}/options`, {
     headers, data: { merchant: 'MegaStore', kind: 'INSTALLMENT', basePrice: 5100, installmentCount: 10, installmentAmount: 510 },
   })
-  return item.id as number
+
+  // Credit card with a mixed invoice history: paid, partially paid and open.
+  const compras = await categoryId(page, 'Compras', 'EXPENSE')
+  const card = await (await page.request.post(`${API}/credit-cards`, {
+    headers,
+    data: { name: 'Cartão Roxinho', issuer: 'Nu Pagamentos', brand: 'MASTERCARD',
+            lastFourDigits: '4242', creditLimit: 6000, closingDay: 10, dueDay: 17 },
+  })).json()
+  const purchase = (data: object) =>
+    page.request.post(`${API}/credit-cards/${card.id}/purchases`, { headers, data })
+  await purchase({ description: 'Notebook parcelado', merchant: 'MegaStore', categoryId: compras,
+    purchaseDate: '2031-03-05', totalAmount: 3100.01, installmentCount: 10 })
+  await purchase({ description: 'Fone de ouvido', merchant: 'TechShop', categoryId: compras,
+    purchaseDate: '2031-03-06', totalAmount: 349.9, installmentCount: 1 })
+  const accounts = await (await page.request.get(`${API}/accounts`)).json()
+  const invoices = await (await page.request.get(`${API}/credit-cards/${card.id}/invoices`)).json()
+  await page.request.post(`${API}/credit-cards/${card.id}/invoices/${invoices[0].id}/payments`, {
+    headers,
+    data: { accountId: accounts[0].id, amount: 200, paidOn: '2031-03-15' },
+  })
+  return { itemId: item.id as number, cardId: card.id as number, invoiceId: invoices[0].id as number }
 }
 
 async function capture(page: Page, path: string, name: string, viewport: (typeof VIEWPORTS)[0]) {
@@ -97,13 +117,16 @@ async function capture(page: Page, path: string, name: string, viewport: (typeof
 }
 
 test('captura estados principais em todos os viewports', async ({ page }) => {
-  test.setTimeout(300_000)
+  test.setTimeout(480_000)
   await registerViaUi(page)
-  const itemId = await seedDemoData(page)
+  const { itemId, cardId, invoiceId } = await seedDemoData(page)
 
   const pages: Array<[string, string]> = [
     ['/dashboard', 'dashboard'],
     ['/transactions', 'transactions'],
+    ['/credit-cards', 'credit-cards'],
+    [`/credit-cards/${cardId}`, 'credit-card-detail'],
+    [`/credit-cards/${cardId}/invoices/${invoiceId}`, 'invoice-detail'],
     ['/budgets', 'budgets'],
     ['/commitments', 'commitments'],
     ['/goals', 'goals'],
@@ -118,17 +141,23 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
     }
   }
 
+  // Dark theme (while still authenticated): dashboard and card screens.
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.addInitScript(() => localStorage.setItem('finora.theme', 'dark'))
+  await capture(page, '/dashboard', 'dashboard-dark', VIEWPORTS[0])
+  await capture(page, `/credit-cards/${cardId}`, 'credit-card-detail-dark', VIEWPORTS[0])
+  await capture(page, `/credit-cards/${cardId}/invoices/${invoiceId}`, 'invoice-detail-dark', VIEWPORTS[0])
+
   // Auth screens (public).
   await page.getByRole('button', { name: 'Sair da conta' }).click().catch(() => {})
+  await capture(page, '/login', 'login-dark', VIEWPORTS[0])
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.addInitScript(() => localStorage.setItem('finora.theme', 'light'))
   await capture(page, '/login', 'login', VIEWPORTS[0])
   await capture(page, '/login', 'login-mobile', VIEWPORTS[3])
   await capture(page, '/register', 'register', VIEWPORTS[0])
   await capture(page, '/register', 'register-mobile', VIEWPORTS[3])
 
-  // Dark theme auth screen.
-  await page.emulateMedia({ colorScheme: 'dark' })
-  await page.addInitScript(() => localStorage.setItem('finora.theme', 'dark'))
-  await capture(page, '/login', 'login-dark', VIEWPORTS[0])
-
   expect(itemId).toBeGreaterThan(0)
+  expect(cardId).toBeGreaterThan(0)
 })

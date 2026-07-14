@@ -284,6 +284,11 @@
     display: none;
   }
 
+  .cc-section table.data th,
+  .cc-section table.data td {
+    padding: var(--space-2);
+  }
+
   .cc-card-facts {
     gap: var(--space-3);
   }
