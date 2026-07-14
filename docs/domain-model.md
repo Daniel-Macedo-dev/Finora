@@ -10,7 +10,8 @@ User 1──n Account
 User 1──n Category ──┐
 User 1──n Transaction n──1 Category, 0..1 Account
 User 1──n Budget      n──1 Category   (unique: user + mês + categoria)
-User 1──n Commitment  n──1 Category
+User 1──n Commitment  n──1 Category, 0..1 Account, 0..1 CreditCard
+Commitment 1──n CommitmentOccurrence ──0..1 {Transaction, CardPurchase}
 User 1──n Goal
 User 1──n WishlistItem 1──n PurchaseOption, 0..1 Category
 User 1──1 AppSettings
@@ -68,13 +69,30 @@ percentual e status são derivados das transações do mês na leitura. Status:
 `HEALTHY` < limiar de alerta ≤ `WARNING` < 100% ≤ `EXCEEDED` (limiar em
 `app_settings.budget_warning_threshold`). Mês e categoria são imutáveis.
 
-### Compromisso recorrente (`commitments`)
-`MONTHLY` (com `due_day` obrigatório, ajustado ao tamanho do mês — dia 31 vira
-28/29 em fevereiro) ou `YEARLY` (aniversário da data de início). Período
-`[start_date, end_date?]`; inativo sai de todas as projeções. `occurrenceIn(mês)`
-é a única fonte de verdade das ocorrências — usada por projeções, dashboard e
-análise de compra. Compromissos **não geram transações automaticamente** nesta
-release: são dados de planejamento.
+### Definição recorrente (`commitments`)
+`WEEKLY` (a cada 7 dias a partir de `start_date`), `MONTHLY` (com `due_day`
+obrigatório, ajustado ao tamanho do mês — dia 31 vira 28/29 em fevereiro e
+volta a 31 em março) ou `YEARLY` (aniversário da data de início; 29/02 ajusta
+em anos não bissextos). Período `[start_date, end_date?]` inclusivo; inativo
+sai de todas as projeções e do processamento. `RecurrenceCalculator` é a única
+fonte de verdade das datas — usado por preview, processamento, forecast,
+dashboard e análise de compra.
+
+Cada definição tem modo de execução (`MANUAL`/`AUTOMATIC`) e destino
+(`PROJECTION_ONLY`, `ACCOUNT_TRANSACTION` com conta própria não arquivada, ou
+`CREDIT_CARD_PURCHASE` com cartão próprio ativo e 1–120 parcelas) — coerência
+garantida por constraints. Legados com `payment_method = 'CREDIT'` permanecem
+somente-planejamento até ganharem um cartão real. Ver
+[recurring-automation.md](recurring-automation.md).
+
+### Ocorrência (`commitment_occurrences`)
+Identidade estável `UNIQUE (commitment_id, scheduled_date)`; reagendamento
+altera só `effective_date`. Ciclo de vida
+`SCHEDULED → MATERIALIZED | SKIPPED | FAILED`, `MATERIALIZED → REVERSED`
+(terminal). No máximo um artefato gerado por ocorrência (transação **ou**
+compra de cartão), com índices únicos parciais garantindo que cada artefato
+pertence a exatamente uma ocorrência. Histórico materializado é imutável a
+edições da definição.
 
 ### Meta (`goals`)
 `current_amount` é gerido pela aplicação (aportes via

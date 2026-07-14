@@ -82,6 +82,41 @@
 - **Wishlist → compra real** (`WishlistPurchaseExecutionTest`): execução à vista
   e parcelada, retry não duplica, opção/cartão de outro dono inacessíveis.
 
+### Recorrentes e previsão
+
+- **Calculadora** (`RecurrenceCalculatorTest`): sequência semanal ancorada;
+  dia 31 mensal em fevereiro (bissexto e não bissexto) voltando a 31 em março;
+  29/02 anual; fronteiras inclusivas de início/fim; pausado sem ocorrências;
+  nenhuma ocorrência antes do início.
+- **Materialização em conta** (`RecurringMaterializationTest`): receita e
+  despesa com valor/categoria/conta exatos e rastreabilidade; repetição não
+  duplica; conta arquivada e destino somente-planejamento falham com erro de
+  negócio; retry após falha; estorno restaura o saldo exatamente uma vez e é
+  terminal; edição da definição não reescreve histórico; isolamento entre
+  usuários em toda a família de mutações.
+- **Materialização no cartão** (`RecurringCardMaterializationTest`): compra
+  real com parcelas pelo alocador existente na fatura do ciclo correto; limite
+  insuficiente falha sem artefato parcial (sem compra órfã, sem parcela, sem
+  mutação de fatura) e permanece re-executável; estorno usa o cancelamento do
+  domínio de cartões.
+- **Processamento** (`RecurringProcessingTest`): process-due materializa tudo
+  que venceu (catch-up desde o início), segunda execução não duplica; pausa
+  interrompe; ocorrência pulada não regenera; **concorrência real** — dois
+  processadores com `CountDownLatch` sobre o mesmo banco não criam dois
+  artefatos (constraint de identidade + lock).
+- **Forecast** (`ForecastApiIntegrationTest`): saldo de abertura; transações
+  futuras reais; recorrentes projetados; fatura corrente e futura no
+  vencimento; compra recorrente projetada no ciclo real; pagamento parcial
+  reduz a projeção e estorno a restaura; ocorrência materializada substitui a
+  projeção; pulada/estornada excluídas; fluxos sem conta separados; primeira
+  data negativa; filtro por conta; validação do horizonte máximo.
+- **Eventos** (`DueEventApiIntegrationTest`): vencido/vence hoje/em breve,
+  falha de execução, caixa insuficiente projetado; validação de range e
+  isolamento entre usuários.
+- **Migração** (`MigrationFromPopulatedV8Test`): banco V8 populado → V9
+  preservando todos os dados; legados migram `MANUAL`/`PROJECTION_ONLY` (nunca
+  auto-executam); constraints e FKs de posse do V9 válidas.
+
 - `PurchaseAnalysisEngineTest` fixa a data de referência (2026-07-15) e cobre os
   cenários críticos: à vista mais barato e seguro; à vista violando a reserva;
   parcelado sem juros vencendo à vista com taxa positiva; parcela acima da sobra;
@@ -89,7 +124,7 @@
   histórico; empate preferindo à vista; frete invertendo a opção preferida.
 - `PresentValueTest` valida o PV puro, inclusive taxa zero e arredondamento.
 - Fronteiras cobertas de propósito: dia 31 em meses curtos e ano bissexto
-  (`CommitmentOccurrenceTest`), tolerância exata de reconciliação de parcelas
+  (`RecurrenceCalculatorTest`), tolerância exata de reconciliação de parcelas
   (`OptionReconciliationBoundaryTest`), médias com histórico parcial e exclusão
   do mês corrente (`FinancialContextServiceTest`), datas alvo no mês corrente e
   no passado (`GoalContributionEdgeTest`), despesas de outros meses fora do
@@ -106,7 +141,11 @@ npm run lint         # oxlint
 Testes de comportamento, não de snapshot: `formatBRL/formatDate` (inclusive
 imunidade a timezone), `parseMoneyInput` pt-BR, `ApiError`/`NetworkError`,
 associação label/erro do `FormField`, navegação do `MonthPicker`, retry do
-`ErrorState`.
+`ErrorState`; formulário recorrente (campos condicionais por cadência e
+destino, sem `CREDIT` genérico, validação de destino, submit completo),
+rótulos pt-BR de status de ocorrência, invalidação de queries após
+materialização; página de previsão (KPIs, alerta de saldo negativo, fluxos sem
+conta, rótulos de fonte por evento, link para fatura, estado vazio).
 
 ## E2E (`apps/web/e2e`)
 
@@ -127,8 +166,20 @@ crédito legado preservado e novo crédito genérico redirecionado; fluxo mobile
 dados de A pela UI nem por ID direto na API, e sua análise de compra é inacessível);
 **ciclo de sessão** (expiração leva ao login e permite reentrar; troca de senha
 mantém a sessão atual e permite login com a nova); navegação e autenticação mobile
-(390px: registro, drawer, criar transação, menu de usuário, logout).
-Localizadores acessíveis (roles e labels), sem seletores CSS frágeis.
+(390px: registro, drawer, criar transação, menu de usuário, logout);
+**recorrentes** (criar despesa e receita recorrentes; preview de ocorrências;
+executar manualmente com estorno exato e terminal; pular/reativar/reagendar
+mantendo a identidade; "Processar vencidos" idempotente — segunda execução não
+muda saldo; compra recorrente parcelada na fatura correta; falha por limite
+visível e re-executável após corrigir a causa; isolamento entre usuários);
+**previsão** (recorrentes projetados; caixa de cartão aplicado na data de
+vencimento da fatura — provado que todo evento projetado de cartão cai no dia
+de vencimento, nunca na data da compra; alerta de saldo negativo; fluxos sem
+conta; ocorrência materializada substitui a projeção sem contagem dupla;
+seção de caixa futuro no dashboard; jornada mobile de recorrentes e previsão).
+As datas dos cenários recorrentes são calculadas por offset a partir de hoje —
+as asserções derivam dos mesmos offsets, então o resultado independe do dia de
+execução. Localizadores acessíveis (roles e labels), sem seletores CSS frágeis.
 
 ### QA visual
 
@@ -138,7 +189,10 @@ VISUAL_QA=1 npx playwright test e2e/visual-qa.spec.ts
 
 Semeia dados demo determinísticos e captura os estados principais em
 1440/1024/768/390px + tema escuro + estado vazio, em `qa-screenshots/`
-(ignorado pelo Git).
+(ignorado pelo Git). Inclui a área recorrente e a previsão: lista de
+recorrentes, formulário, histórico de ocorrências, ocorrência com falha,
+diálogo de reagendamento, previsão com saldo negativo e seção de caixa futuro
+do dashboard — desktop e mobile, claro e escuro.
 
 ## CI
 

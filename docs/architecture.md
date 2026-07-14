@@ -51,7 +51,10 @@ com.finora.api
 ├── creditcard/    # cartões, ciclo de fatura, parcelas, pagamentos e ajustes
 │   ├── purchase/  invoice/  installment/  payment/  adjustment/
 ├── budget/        # orçamentos mensais (consumo derivado em leitura)
-├── commitment/    # recorrentes + projeção de ocorrências (occurrenceIn)
+├── commitment/    # definições recorrentes + RecurrenceCalculator determinístico
+│   ├── occurrence/  # ledger de ocorrências, materializador idempotente,
+│   │                # scheduler de vencidos com catch-up
+├── forecast/      # previsão de caixa determinística + eventos de vencimento
 ├── goal/          # metas de poupança e aportes
 ├── wishlist/      # itens + opções de compra validadas
 ├── purchaseanalysis/  # FinancialContext + motor determinístico de recomendação
@@ -70,6 +73,9 @@ usa `SettingsService`; `InsightService` usa `FinancialContextService`).
 - `MoneyRules` centraliza escala (2), arredondamento (HALF_UP) e formatação BRL
   para mensagens; **nenhum cálculo financeiro usa ponto flutuante**.
 - Datas de negócio são `LocalDate`; meses trafegam como `YearMonth` (`YYYY-MM`).
+- Um `Clock` de aplicação (`TimeConfig`) é injetado em toda a lógica recorrente
+  e de previsão — testes substituem por relógio fixo; código novo não chama
+  `LocalDate.now()` diretamente nesses caminhos.
 - Valores derivados (saldo de conta, consumo de orçamento, progresso de meta,
   totais e status de fatura, limite disponível de cartão) são sempre calculados
   na leitura — nunca armazenados — para não divergirem do histórico. A exceção
@@ -84,7 +90,11 @@ usa `SettingsService`; `InsightService` usa `FinancialContextService`).
   `V4` identidade e posse por usuário, `V5` sessões JDBC, `V6` cartões de
   crédito (cartões, faturas, compras, parcelas, pagamentos, ajustes), `V7`
   compatibilidade de crédito legado em transações, `V8` cartão opcional em
-  opções de compra da wishlist.
+  opções de compra da wishlist, `V9` automação de recorrentes (destinos de
+  execução nos commitments, ledger `commitment_occurrences` com identidade
+  única e índices únicos parciais nos artefatos, rastreabilidade
+  `commitment_id` em transações e compras) — com teste de migração a partir de
+  um banco V8 populado.
 - Invariantes críticas duplicadas como constraints: unicidade orçamento
   (mês, categoria), checks de positividade, consistência à vista × parcelado
   (`ck_options_kind_consistency`), enum checks e FKs. Índices apenas nos padrões

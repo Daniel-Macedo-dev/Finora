@@ -24,8 +24,23 @@ Interface em português do Brasil; código, banco e API em inglês.
   **uma única vez** (nas parcelas do mês da fatura, nunca no pagamento).
 - **Orçamentos mensais** — limite por categoria com consumo calculado em tempo real,
   estados saudável / perto do limite / estourado.
-- **Compromissos recorrentes** — assinaturas e contas fixas com projeção de
-  vencimentos e impacto nos próximos meses.
+- **Recorrentes automatizados** — receitas e despesas com cadência semanal,
+  mensal ou anual que viram registros reais: cada ocorrência tem identidade
+  estável e ciclo de vida auditável (executar, repetir após falha, pular,
+  reagendar, estornar, pausar, encerrar); materialização idempotente em
+  transação de conta ou compra de cartão, manual ou automática com catch-up
+  após downtime — sem duplicatas mesmo sob concorrência. Ver
+  [docs/recurring-automation.md](docs/recurring-automation.md).
+- **Previsão de caixa** — projeção determinística da movimentação futura:
+  lançamentos registrados, recorrentes projetados e faturas de cartão **no
+  vencimento** (nunca na data da compra); menor saldo projetado, primeira data
+  de saldo negativo e fluxos sem conta divulgados separadamente. Página
+  dedicada com gráfico e linha do tempo + resumo no dashboard. Ver
+  [docs/forecast.md](docs/forecast.md).
+- **Eventos prontos para notificação** — feed derivado de vencimentos
+  (recorrentes e faturas: em breve / hoje / vencidos), falhas de execução e
+  caixa projetado insuficiente — dados estáveis para entrega futura, sem
+  envio de notificações.
 - **Metas de poupança** — progresso, aportes e sugestão de contribuição mensal
   para alcançar a data alvo.
 - **Lista de desejos + opções de compra** — cada item aceita múltiplas ofertas
