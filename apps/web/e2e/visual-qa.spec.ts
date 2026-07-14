@@ -87,6 +87,45 @@ async function seedDemoData(page: Page) {
     headers, data: { merchant: 'MegaStore', kind: 'INSTALLMENT', basePrice: 5100, installmentCount: 10, installmentAmount: 510 },
   })
 
+  // Recurring definitions: income, account expense driving the forecast
+  // negative, and a card target whose materialization fails (limit exceeded)
+  // so the failed-occurrence state is capturable.
+  const isoFromToday = (days: number) => {
+    const date = new Date()
+    date.setDate(date.getDate() + days)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+      date.getDate(),
+    ).padStart(2, '0')}`
+  }
+  const recurring = (data: object) =>
+    page.request.post(`${API}/commitments`, { headers, data })
+  const accounts0 = await (await page.request.get(`${API}/accounts`)).json()
+  await recurring({
+    description: 'Salário CLT', amount: 6200, categoryId: salario, cadence: 'MONTHLY',
+    dueDay: 5, startDate: '2025-01-05', executionMode: 'MANUAL',
+    targetKind: 'ACCOUNT_TRANSACTION', accountId: accounts0[0].id, installmentCount: 1,
+  })
+  await recurring({
+    description: 'Aluguel do escritório', amount: 15000, categoryId: moradia,
+    cadence: 'MONTHLY', dueDay: 28, startDate: isoFromToday(10),
+    executionMode: 'MANUAL', targetKind: 'ACCOUNT_TRANSACTION',
+    accountId: accounts0[0].id, installmentCount: 1,
+  })
+  const failingCard = await (await page.request.post(`${API}/credit-cards`, {
+    headers,
+    data: { name: 'Cartão Apertado', brand: 'VISA', creditLimit: 100, closingDay: 5, dueDay: 12 },
+  })).json()
+  const failing = await (await recurring({
+    description: 'Assinatura anual cara', amount: 900, categoryId: assinaturas,
+    cadence: 'WEEKLY', dueDay: null, startDate: isoFromToday(-7),
+    executionMode: 'MANUAL', targetKind: 'CREDIT_CARD_PURCHASE',
+    creditCardId: failingCard.id, installmentCount: 1,
+  })).json()
+  await page.request.post(
+    `${API}/commitments/${failing.id}/occurrences/${isoFromToday(-7)}/materialize`,
+    { headers },
+  )
+
   // Credit card with a mixed invoice history: paid, partially paid and open.
   const compras = await categoryId(page, 'Compras', 'EXPENSE')
   const card = await (await page.request.post(`${API}/credit-cards`, {
@@ -129,6 +168,7 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
     [`/credit-cards/${cardId}/invoices/${invoiceId}`, 'invoice-detail'],
     ['/budgets', 'budgets'],
     ['/commitments', 'commitments'],
+    ['/forecast', 'forecast'],
     ['/goals', 'goals'],
     ['/wishlist', 'wishlist'],
     [`/wishlist/${itemId}`, 'wishlist-detail'],
@@ -141,12 +181,40 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
     }
   }
 
-  // Dark theme (while still authenticated): dashboard and card screens.
+  // Recurring dialogs: form, occurrence history, failed occurrence and the
+  // reschedule flow — desktop and mobile.
+  for (const viewport of [VIEWPORTS[0], VIEWPORTS[3]]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/commitments')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: 'Novo recorrente' }).first().click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/commitment-form.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('button', { name: 'Ocorrências de Salário CLT' }).click()
+    await page.waitForLoadState('networkidle')
+    await page.screenshot({ path: `${OUT}/${viewport.name}/occurrences.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Reagendar' }).first().click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/occurrence-reschedule.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('button', { name: 'Ocorrências de Assinatura anual cara' }).click()
+    await page.waitForLoadState('networkidle')
+    await page.screenshot({ path: `${OUT}/${viewport.name}/occurrence-failed.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+  }
+
+  // Dark theme (while still authenticated): dashboard, cards, recurring and
+  // forecast screens.
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.addInitScript(() => localStorage.setItem('finora.theme', 'dark'))
   await capture(page, '/dashboard', 'dashboard-dark', VIEWPORTS[0])
   await capture(page, `/credit-cards/${cardId}`, 'credit-card-detail-dark', VIEWPORTS[0])
   await capture(page, `/credit-cards/${cardId}/invoices/${invoiceId}`, 'invoice-detail-dark', VIEWPORTS[0])
+  await capture(page, '/commitments', 'commitments-dark', VIEWPORTS[0])
+  await capture(page, '/forecast', 'forecast-dark', VIEWPORTS[0])
 
   // Auth screens (public).
   await page.getByRole('button', { name: 'Sair da conta' }).click().catch(() => {})
