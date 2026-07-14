@@ -93,6 +93,58 @@
   color: var(--ink-secondary);
 }
 
+/* recurring target section of the form */
+
+.commitment-target {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.commitment-target-legend {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  padding: 0 var(--space-1);
+}
+
+.commitment-form-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin: 0;
+}
+
+/* occurrence timeline */
+
+.btn-small {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.occurrence-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.occurrence-moved,
+.occurrence-failure {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.occurrence-failure {
+  color: var(--negative);
+}
+
 @media (max-width: 900px) {
   .commitments-layout {
     grid-template-columns: 1fr;

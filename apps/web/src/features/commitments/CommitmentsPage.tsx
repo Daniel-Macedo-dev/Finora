@@ -1,72 +1,46 @@
-import { useState, type FormEvent } from 'react'
-import { Plus, Pencil, Trash2, CalendarClock } from 'lucide-react'
+import { useState } from 'react'
+import { CalendarClock, History, Pause, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
 import Dialog from '../../components/Dialog'
 import ConfirmDialog from '../../components/ConfirmDialog'
-import FormActions from '../../components/FormActions'
-import FormField from '../../components/FormField'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
-import { formatBRL, formatDate, parseMoneyInput } from '../../lib/format'
-import { todayIso } from '../../lib/month'
-import { useCategories } from '../shared/api'
-import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../shared/types'
+import { formatBRL, formatDate } from '../../lib/format'
+import CommitmentForm from './CommitmentForm'
+import OccurrencesDialog from './OccurrencesDialog'
 import {
   useCommitments,
   useCreateCommitment,
   useDeleteCommitment,
+  useProcessDue,
+  useSetCommitmentActive,
   useUpcomingCommitments,
   useUpdateCommitment,
 } from './api'
-import type { Commitment, CommitmentCadence, CommitmentRequest } from './types'
+import {
+  CADENCE_LABELS,
+  TARGET_LABELS,
+  type Commitment,
+  type CommitmentRequest,
+} from './types'
 import './commitments.css'
-
-interface FormState {
-  description: string
-  amount: string
-  categoryId: string
-  cadence: CommitmentCadence
-  dueDay: string
-  startDate: string
-  endDate: string
-  active: boolean
-  paymentMethod: string
-}
-
-const EMPTY_FORM: FormState = {
-  description: '',
-  amount: '',
-  categoryId: '',
-  cadence: 'MONTHLY',
-  dueDay: '',
-  startDate: todayIso(),
-  endDate: '',
-  active: true,
-  paymentMethod: '',
-}
 
 export default function CommitmentsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Commitment | null>(null)
   const [deleting, setDeleting] = useState<Commitment | null>(null)
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [inspecting, setInspecting] = useState<Commitment | null>(null)
 
   const commitments = useCommitments()
   const upcoming = useUpcomingCommitments(2)
-  const categories = useCategories('EXPENSE')
   const createMutation = useCreateCommitment()
   const updateMutation = useUpdateCommitment()
   const deleteMutation = useDeleteCommitment()
-
-  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((state) => ({ ...state, [key]: value }))
-  }
+  const activeMutation = useSetCommitmentActive()
+  const processDue = useProcessDue()
 
   function openCreate() {
     setEditing(null)
-    setForm(EMPTY_FORM)
-    setFormError(null)
     createMutation.reset()
     updateMutation.reset()
     setFormOpen(true)
@@ -74,58 +48,12 @@ export default function CommitmentsPage() {
 
   function openEdit(commitment: Commitment) {
     setEditing(commitment)
-    setForm({
-      description: commitment.description,
-      amount: commitment.amount.toFixed(2).replace('.', ','),
-      categoryId: String(commitment.category.id),
-      cadence: commitment.cadence,
-      dueDay: commitment.dueDay !== null ? String(commitment.dueDay) : '',
-      startDate: commitment.startDate,
-      endDate: commitment.endDate ?? '',
-      active: commitment.active,
-      paymentMethod: commitment.paymentMethod ?? '',
-    })
-    setFormError(null)
     createMutation.reset()
     updateMutation.reset()
     setFormOpen(true)
   }
 
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    const amount = parseMoneyInput(form.amount)
-    if (!form.description.trim()) {
-      setFormError('Informe a descrição.')
-      return
-    }
-    if (amount === null || amount <= 0) {
-      setFormError('Informe um valor maior que zero.')
-      return
-    }
-    if (!form.categoryId) {
-      setFormError('Selecione a categoria.')
-      return
-    }
-    if (form.cadence === 'MONTHLY' && !form.dueDay) {
-      setFormError('Informe o dia de vencimento para compromissos mensais.')
-      return
-    }
-    if (!form.startDate) {
-      setFormError('Informe a data de início.')
-      return
-    }
-    setFormError(null)
-    const request: CommitmentRequest = {
-      description: form.description.trim(),
-      amount,
-      categoryId: Number(form.categoryId),
-      cadence: form.cadence,
-      dueDay: form.cadence === 'MONTHLY' ? Number(form.dueDay) : null,
-      startDate: form.startDate,
-      endDate: form.endDate || null,
-      active: form.active,
-      paymentMethod: (form.paymentMethod || null) as PaymentMethod | null,
-    }
+  function handleSubmit(request: CommitmentRequest) {
     const onSuccess = () => setFormOpen(false)
     if (editing) {
       updateMutation.mutate({ id: editing.id, request }, { onSuccess })
@@ -134,21 +62,62 @@ export default function CommitmentsPage() {
     }
   }
 
+  function statusOf(commitment: Commitment): { label: string; className: string } | null {
+    const today = new Date().toISOString().slice(0, 10)
+    if (commitment.endDate && commitment.endDate < today) {
+      return { label: 'Encerrado', className: 'badge-neutral' }
+    }
+    if (!commitment.active) {
+      return { label: 'Pausado', className: 'badge-warning' }
+    }
+    return null
+  }
+
   const busy = createMutation.isPending || updateMutation.isPending
   const submitError = editing ? updateMutation.error : createMutation.error
 
   return (
     <>
       <PageHeader
-        title="Compromissos recorrentes"
-        description="Assinaturas, aluguel e contas fixas — com projeção dos próximos vencimentos."
+        title="Recorrentes"
+        description="Receitas e despesas que se repetem — projete, execute e acompanhe cada ocorrência."
         actions={
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            <Plus size={16} aria-hidden="true" />
-            Novo compromisso
-          </button>
+          <div className="cc-detail-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => processDue.mutate()}
+              disabled={processDue.isPending}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              Processar vencidos
+            </button>
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <Plus size={16} aria-hidden="true" />
+              Novo recorrente
+            </button>
+          </div>
         }
       />
+
+      {processDue.isSuccess && (
+        <p className="commitment-form-note" role="status">
+          {processDue.data.materialized > 0
+            ? `${processDue.data.materialized} ocorrência(s) executada(s).`
+            : 'Nenhuma ocorrência automática pendente.'}
+          {processDue.data.failed > 0 && ` ${processDue.data.failed} falharam — veja o histórico.`}
+        </p>
+      )}
+      {processDue.isError && (
+        <div role="alert" className="field-error">
+          {errorMessage(processDue.error)}
+        </div>
+      )}
+      {deleteMutation.isError && (
+        <div role="alert" className="field-error">
+          {errorMessage(deleteMutation.error)}
+        </div>
+      )}
 
       {commitments.isPending ? (
         <LoadingCards count={3} height={72} />
@@ -156,64 +125,130 @@ export default function CommitmentsPage() {
         <ErrorState error={commitments.error} onRetry={() => commitments.refetch()} />
       ) : commitments.data && commitments.data.length === 0 ? (
         <EmptyState
-          title="Nenhum compromisso recorrente"
-          description="Cadastre assinaturas e contas fixas para projetar os próximos meses e alimentar a análise de compras."
+          title="Nenhum recorrente cadastrado"
+          description="Cadastre salários, assinaturas e contas fixas para projetar o caixa e executar lançamentos automaticamente."
           action={
             <button type="button" className="btn btn-primary" onClick={openCreate}>
               <Plus size={16} aria-hidden="true" />
-              Novo compromisso
+              Novo recorrente
             </button>
           }
         />
       ) : commitments.data ? (
         <div className="commitments-layout">
-          <section aria-label="Compromissos cadastrados" className="commitments-main">
+          <section aria-label="Recorrentes cadastrados" className="commitments-main">
             <ul className="commitment-list">
-              {commitments.data.map((commitment) => (
-                <li key={commitment.id} className={`card commitment-row ${commitment.active ? '' : 'commitment-inactive'}`}>
-                  <div className="commitment-info">
-                    <span className="commitment-description">{commitment.description}</span>
-                    <span className="commitment-meta">
-                      <span className="badge badge-neutral">{commitment.category.name}</span>
-                      <span>
-                        {commitment.cadence === 'MONTHLY'
-                          ? `Mensal · dia ${commitment.dueDay}`
-                          : 'Anual'}
+              {commitments.data.map((commitment) => {
+                const status = statusOf(commitment)
+                return (
+                  <li
+                    key={commitment.id}
+                    className={`card commitment-row ${commitment.active ? '' : 'commitment-inactive'}`}
+                  >
+                    <div className="commitment-info">
+                      <span className="commitment-description">{commitment.description}</span>
+                      <span className="commitment-meta">
+                        <span className="badge badge-neutral">{commitment.category.name}</span>
+                        <span>
+                          {CADENCE_LABELS[commitment.cadence]}
+                          {commitment.cadence === 'MONTHLY' && ` · dia ${commitment.dueDay}`}
+                        </span>
+                        <span className="badge badge-info">
+                          {TARGET_LABELS[commitment.targetKind]}
+                          {commitment.targetKind === 'ACCOUNT_TRANSACTION' &&
+                            commitment.accountName &&
+                            ` · ${commitment.accountName}`}
+                          {commitment.targetKind === 'CREDIT_CARD_PURCHASE' &&
+                            commitment.creditCardName &&
+                            ` · ${commitment.creditCardName}${
+                              commitment.installmentCount > 1
+                                ? ` · ${commitment.installmentCount}×`
+                                : ''
+                            }`}
+                        </span>
+                        {commitment.executionMode === 'AUTOMATIC' && (
+                          <span className="badge badge-positive">Automático</span>
+                        )}
+                        {status && (
+                          <span className={`badge ${status.className}`}>{status.label}</span>
+                        )}
+                        {commitment.legacyProjectionOnly && (
+                          <span
+                            className="badge badge-neutral"
+                            title="Criado antes da automação com pagamento no crédito: continua apenas como planejamento até você escolher um cartão de destino."
+                          >
+                            Crédito legado
+                          </span>
+                        )}
+                        {commitment.failedOccurrences > 0 && (
+                          <span className="badge badge-negative">
+                            {commitment.failedOccurrences} falha(s)
+                          </span>
+                        )}
                       </span>
-                      {commitment.paymentMethod && (
-                        <span>{PAYMENT_METHOD_LABELS[commitment.paymentMethod]}</span>
-                      )}
-                      {!commitment.active && <span className="badge badge-neutral">Inativo</span>}
-                    </span>
-                  </div>
-                  <div className="commitment-side">
-                    <Money value={commitment.amount} />
-                    <span className="commitment-next">
-                      {commitment.nextDueDate
-                        ? `Próximo: ${formatDate(commitment.nextDueDate)}`
-                        : 'Sem próxima ocorrência'}
-                    </span>
-                  </div>
-                  <div className="commitment-actions">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-icon"
-                      onClick={() => openEdit(commitment)}
-                      aria-label={`Editar ${commitment.description}`}
-                    >
-                      <Pencil size={16} aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-icon"
-                      onClick={() => setDeleting(commitment)}
-                      aria-label={`Excluir ${commitment.description}`}
-                    >
-                      <Trash2 size={16} aria-hidden="true" />
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    </div>
+                    <div className="commitment-side">
+                      <Money
+                        value={
+                          commitment.category.type === 'INCOME'
+                            ? commitment.amount
+                            : -commitment.amount
+                        }
+                        signed
+                      />
+                      <span className="commitment-next">
+                        {commitment.nextDueDate
+                          ? `Próximo: ${formatDate(commitment.nextDueDate)}`
+                          : 'Sem próxima ocorrência'}
+                      </span>
+                    </div>
+                    <div className="commitment-actions">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        onClick={() => setInspecting(commitment)}
+                        aria-label={`Ocorrências de ${commitment.description}`}
+                      >
+                        <History size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        onClick={() =>
+                          activeMutation.mutate({ id: commitment.id, active: !commitment.active })
+                        }
+                        aria-label={
+                          commitment.active
+                            ? `Pausar ${commitment.description}`
+                            : `Retomar ${commitment.description}`
+                        }
+                      >
+                        {commitment.active ? (
+                          <Pause size={16} aria-hidden="true" />
+                        ) : (
+                          <Play size={16} aria-hidden="true" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        onClick={() => openEdit(commitment)}
+                        aria-label={`Editar ${commitment.description}`}
+                      >
+                        <Pencil size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        onClick={() => setDeleting(commitment)}
+                        aria-label={`Excluir ${commitment.description}`}
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           </section>
 
@@ -249,130 +284,36 @@ export default function CommitmentsPage() {
 
       <Dialog
         open={formOpen}
-        title={editing ? 'Editar compromisso' : 'Novo compromisso'}
+        title={editing ? 'Editar recorrente' : 'Novo recorrente'}
         onClose={() => setFormOpen(false)}
         wide
       >
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="form-grid">
-            <FormField label="Descrição">
-              <input
-                className="input"
-                maxLength={200}
-                value={form.description}
-                onChange={(event) => set('description', event.target.value)}
-              />
-            </FormField>
-            <div className="commitment-form-grid">
-              <FormField label="Valor (R$)">
-                <input
-                  className="input"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  value={form.amount}
-                  onChange={(event) => set('amount', event.target.value)}
-                />
-              </FormField>
-              <FormField label="Categoria">
-                <select
-                  className="select"
-                  value={form.categoryId}
-                  onChange={(event) => set('categoryId', event.target.value)}
-                >
-                  <option value="">Selecione…</option>
-                  {(categories.data ?? [])
-                    .filter((category) => category.active)
-                    .map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                </select>
-              </FormField>
-              <FormField label="Recorrência">
-                <select
-                  className="select"
-                  value={form.cadence}
-                  onChange={(event) => set('cadence', event.target.value as CommitmentCadence)}
-                >
-                  <option value="MONTHLY">Mensal</option>
-                  <option value="YEARLY">Anual</option>
-                </select>
-              </FormField>
-              {form.cadence === 'MONTHLY' && (
-                <FormField label="Dia de vencimento" hint="Ajustado em meses mais curtos.">
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={form.dueDay}
-                    onChange={(event) => set('dueDay', event.target.value)}
-                  />
-                </FormField>
-              )}
-              <FormField label="Início">
-                <input
-                  className="input"
-                  type="date"
-                  value={form.startDate}
-                  onChange={(event) => set('startDate', event.target.value)}
-                />
-              </FormField>
-              <FormField label="Fim (opcional)">
-                <input
-                  className="input"
-                  type="date"
-                  value={form.endDate}
-                  onChange={(event) => set('endDate', event.target.value)}
-                />
-              </FormField>
-              <FormField label="Forma de pagamento (opcional)">
-                <select
-                  className="select"
-                  value={form.paymentMethod}
-                  onChange={(event) => set('paymentMethod', event.target.value)}
-                >
-                  <option value="">Não informar</option>
-                  {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-            </div>
-            <label className="commitment-active-toggle">
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(event) => set('active', event.target.checked)}
-              />
-              Compromisso ativo (entra nas projeções)
-            </label>
-            {(formError || submitError) && (
-              <div role="alert" className="field-error">
-                {formError ?? errorMessage(submitError)}
-              </div>
-            )}
-            <FormActions
-              busy={busy}
-              submitLabel={editing ? 'Salvar' : 'Criar compromisso'}
-              onCancel={() => setFormOpen(false)}
-            />
-          </div>
-        </form>
+        {formOpen && (
+          <CommitmentForm
+            key={editing?.id ?? 'new'}
+            editing={editing}
+            busy={busy}
+            submitError={submitError}
+            onSubmit={handleSubmit}
+            onCancel={() => setFormOpen(false)}
+          />
+        )}
       </Dialog>
+
+      {inspecting && (
+        <OccurrencesDialog commitment={inspecting} onClose={() => setInspecting(null)} />
+      )}
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Excluir compromisso"
-        message={`Excluir "${deleting?.description}"? As projeções deixarão de considerá-lo.`}
+        title="Excluir recorrente"
+        message={`Excluir "${deleting?.description}"? Recorrentes com histórico executado devem ser pausados ou encerrados.`}
         confirmLabel="Excluir"
         danger
         busy={deleteMutation.isPending}
         onConfirm={() =>
-          deleting && deleteMutation.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+          deleting &&
+          deleteMutation.mutate(deleting.id, { onSettled: () => setDeleting(null) })
         }
         onCancel={() => setDeleting(null)}
       />
