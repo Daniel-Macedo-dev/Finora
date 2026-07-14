@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { pageGet, pagePost, registerViaUi } from './helpers'
+import { pageGet, pagePost, registerViaUi } from './helpers.ts'
 
 /** The full card journey at 390px: create, buy, inspect the invoice and pay. */
 

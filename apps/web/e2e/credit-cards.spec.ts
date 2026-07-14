@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { apiSession, pageGet, pagePost, registerViaUi } from './helpers'
+import { apiSession, pageGet, pagePost, registerViaUi } from './helpers.ts'
 
 /**
  * Credit-card lifecycle: card creation, one-time and installment purchases,

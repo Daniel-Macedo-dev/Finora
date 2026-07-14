@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { pageGet, pagePost, registerViaUi } from './helpers'
+import { pageGet, pagePost, registerViaUi } from './helpers.ts'
 
 /**
  * Wishlist execution: a selected installment option becomes a real card
