@@ -18,6 +18,10 @@ Interface em português do Brasil; código, banco e API em inglês.
   pagamento, busca, filtros por mês/tipo/categoria e paginação.
 - **Contas** — contas correntes, poupança e dinheiro físico com saldo derivado do
   histórico (nunca armazenado).
+- **Cartões de crédito** — cartões com limite, fechamento e vencimento; compras à
+  vista ou parceladas com distribuição exata de centavos; faturas mensais com ciclo
+  determinístico; pagamento total/parcial com estorno auditável; a despesa conta
+  **uma única vez** (nas parcelas do mês da fatura, nunca no pagamento).
 - **Orçamentos mensais** — limite por categoria com consumo calculado em tempo real,
   estados saudável / perto do limite / estourado.
 - **Compromissos recorrentes** — assinaturas e contas fixas com projeção de
@@ -53,8 +57,8 @@ Interface em português do Brasil; código, banco e API em inglês.
 ```
 Finora/
 ├── apps/
-│   ├── api/    # Spring Boot — pacotes por domínio (account, transaction, budget,
-│   │           # commitment, goal, wishlist, purchaseanalysis, dashboard, insight…)
+│   ├── api/    # Spring Boot — pacotes por domínio (account, transaction, creditcard,
+│   │           # budget, commitment, goal, wishlist, purchaseanalysis, dashboard…)
 │   └── web/    # React — features por domínio + lib (api, format) + components
 ├── docs/       # arquitetura, domínio, análise de compra, testes, roadmap
 ├── scripts/    # verify.ps1 (validação completa)
@@ -112,17 +116,21 @@ Endpoints principais (JSON, erros em RFC 9457 Problem Details):
 | Contas | `GET/POST /api/accounts`, `GET/PUT/DELETE /api/accounts/{id}` |
 | Categorias | `GET/POST /api/categories`, `GET/PUT/DELETE /api/categories/{id}` |
 | Transações | `GET /api/transactions?month=YYYY-MM&type=&categoryId=&search=&page=`, `POST`, `PUT/DELETE /{id}` |
+| Cartões | `GET/POST /api/credit-cards`, `GET/PUT/DELETE /{id}`, `POST /{id}/archive`, `POST /{id}/unarchive` |
+| Compras no cartão | `GET/POST /api/credit-cards/{id}/purchases`, `GET/PUT /{purchaseId}`, `POST /{purchaseId}/cancel` |
+| Faturas | `GET /api/credit-cards/{id}/invoices`, `GET /{invoiceId}`, `POST /{invoiceId}/payments`, `POST /{invoiceId}/payments/{payId}/reverse`, `POST /{invoiceId}/adjustments[/{adjId}/reverse]` |
 | Orçamentos | `GET /api/budgets?month=YYYY-MM`, `POST`, `PUT/DELETE /{id}` |
 | Recorrentes | `GET/POST /api/commitments`, `GET /api/commitments/upcoming?months=`, `PUT/DELETE /{id}` |
 | Metas | `GET/POST /api/goals`, `PUT/DELETE /{id}`, `POST /{id}/contributions` |
-| Lista de desejos | `GET/POST /api/wishlist`, `GET/PUT/DELETE /{id}`, `POST/PUT/DELETE /{id}/options[/{optionId}]` |
+| Lista de desejos | `GET/POST /api/wishlist`, `GET/PUT/DELETE /{id}`, `POST/PUT/DELETE /{id}/options[/{optionId}]`, `POST /{id}/purchase` |
 | Análise | `GET /api/wishlist/{id}/analysis` |
 | Dashboard | `GET /api/dashboard?month=YYYY-MM` |
 | Insights | `GET /api/insights?month=YYYY-MM` |
 | Configurações | `GET/PUT /api/settings` |
 
 Todas as rotas de dados exigem autenticação (sessão via cookie + CSRF). Detalhes de
-contratos e invariantes em [`docs/domain-model.md`](docs/domain-model.md); o método
+contratos e invariantes em [`docs/domain-model.md`](docs/domain-model.md); cartões,
+faturas e parcelamento em [`docs/credit-cards.md`](docs/credit-cards.md); o método
 da análise de compra em [`docs/purchase-analysis.md`](docs/purchase-analysis.md); o
 modelo de segurança e posse em [`docs/security.md`](docs/security.md).
 
@@ -144,10 +152,11 @@ modelo de segurança e posse em [`docs/security.md`](docs/security.md).
 Segunda release: multiusuário com autenticação por sessão. Ainda de uso local:
 
 - **Sem verificação de e-mail, recuperação de senha, MFA ou OAuth.**
-- **Sem integração bancária ou coleta de preços** — transações e ofertas são
-  registradas manualmente.
-- **Cartão de crédito não é modelado como fatura** — compras no crédito são
-  transações comuns marcadas com a forma de pagamento.
+- **Sem integração bancária, com emissor de cartão ou coleta de preços** —
+  transações, compras de cartão e ofertas são registradas manualmente.
+- **Transações antigas com forma de pagamento `CREDIT` são preservadas como
+  "crédito legado"** — visíveis e contadas como sempre, mas sem ligação com
+  faturas; novas compras no crédito passam pela área de Cartões.
 - **Sem rate limiting distribuído de login** (adequado a um app pessoal same-origin).
 - As recomendações são **projeções baseadas nos seus dados e em premissas
   configuráveis** — não são aconselhamento financeiro profissional.

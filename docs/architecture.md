@@ -48,6 +48,8 @@ com.finora.api
 ├── account/       # contas com saldo derivado
 ├── category/      # categorias de receita/despesa (padrões seeded via Flyway)
 ├── transaction/   # transações + busca com Specifications + agregações
+├── creditcard/    # cartões, ciclo de fatura, parcelas, pagamentos e ajustes
+│   ├── purchase/  invoice/  installment/  payment/  adjustment/
 ├── budget/        # orçamentos mensais (consumo derivado em leitura)
 ├── commitment/    # recorrentes + projeção de ocorrências (occurrenceIn)
 ├── goal/          # metas de poupança e aportes
@@ -68,15 +70,21 @@ usa `SettingsService`; `InsightService` usa `FinancialContextService`).
 - `MoneyRules` centraliza escala (2), arredondamento (HALF_UP) e formatação BRL
   para mensagens; **nenhum cálculo financeiro usa ponto flutuante**.
 - Datas de negócio são `LocalDate`; meses trafegam como `YearMonth` (`YYYY-MM`).
-- Valores derivados (saldo de conta, consumo de orçamento, progresso de meta)
-  são sempre calculados na leitura — nunca armazenados — para não divergirem do
-  histórico.
+- Valores derivados (saldo de conta, consumo de orçamento, progresso de meta,
+  totais e status de fatura, limite disponível de cartão) são sempre calculados
+  na leitura — nunca armazenados — para não divergirem do histórico. A exceção
+  deliberada são as **datas de fechamento/vencimento de fatura**, snapshots
+  imutáveis gravados na criação (reconfigurar o cartão não reescreve o passado).
 
 ### Persistência e migrações
 
 - Flyway desde o início; `ddl-auto=validate` (o Hibernate nunca cria esquema).
 - `V1` core (contas, categorias + seeds, transações), `V2` planejamento
-  (orçamentos, recorrentes, metas), `V3` compras (settings, wishlist, opções).
+  (orçamentos, recorrentes, metas), `V3` compras (settings, wishlist, opções),
+  `V4` identidade e posse por usuário, `V5` sessões JDBC, `V6` cartões de
+  crédito (cartões, faturas, compras, parcelas, pagamentos, ajustes), `V7`
+  compatibilidade de crédito legado em transações, `V8` cartão opcional em
+  opções de compra da wishlist.
 - Invariantes críticas duplicadas como constraints: unicidade orçamento
   (mês, categoria), checks de positividade, consistência à vista × parcelado
   (`ck_options_kind_consistency`), enum checks e FKs. Índices apenas nos padrões

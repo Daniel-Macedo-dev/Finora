@@ -14,6 +14,8 @@ User 1──n Commitment  n──1 Category
 User 1──n Goal
 User 1──n WishlistItem 1──n PurchaseOption, 0..1 Category
 User 1──1 AppSettings
+User 1──n CreditCard 1──n CardInvoice 1──n {CardInstallment, InvoicePayment, InvoiceAdjustment}
+CreditCard 1──n CardPurchase 1──n CardInstallment
 ```
 
 Uniqueness é por usuário e, onde a aplicação compara sem distinção de caixa, o
@@ -29,7 +31,10 @@ banco. Ver [security.md](security.md).
 Tipos: `CHECKING`, `SAVINGS`, `CASH`, `OTHER`. Guarda apenas o **saldo inicial**;
 o saldo atual é derivado (`inicial + receitas − despesas` da conta). Nome único.
 Conta com transações **não pode ser excluída** (`ACCOUNT_HAS_TRANSACTIONS`) —
-arquive para preservar o histórico. Cartão de crédito não é modelado como conta.
+arquive para preservar o histórico. O saldo derivado também desconta os
+**pagamentos de fatura de cartão** liquidados pela conta (exatamente uma vez —
+estorno devolve). Cartão de crédito não é uma conta: é um domínio próprio com
+faturas e parcelas — ver [credit-cards.md](credit-cards.md).
 
 ### Categoria (`categories`)
 `INCOME` ou `EXPENSE`; única por (nome, tipo). O tipo é imutável após a criação
@@ -42,8 +47,19 @@ pela migração V1 (`is_default=true`).
 `type` (`INCOME`/`EXPENSE`) + **valor sempre positivo** (check no banco). O sinal
 é semântico, nunca aritmético no armazenamento. A categoria deve ter o mesmo tipo
 da transação (`CATEGORY_TYPE_MISMATCH`). Conta, forma de pagamento
-(`PIX`, `DEBIT`, `CREDIT`, `CASH`, `BANK_TRANSFER`, `OTHER`) e observações são
-opcionais. Busca paginada (máx. 100/página) com filtros combinados por AND.
+(`PIX`, `DEBIT`, `CASH`, `BANK_TRANSFER`, `OTHER`) e observações são opcionais.
+Busca paginada (máx. 100/página) com filtros combinados por AND.
+
+**`CREDIT` é somente legado**: transações antigas com essa forma de pagamento
+são preservadas e marcadas `legacyCredit` (sem ligação com faturas); criar uma
+nova é rejeitado (`USE_CREDIT_CARD_PURCHASE`) — compras no crédito vivem no
+domínio de cartões ([credit-cards.md](credit-cards.md)).
+
+### Cartão de crédito (`credit_cards` e satélites)
+Cartões, faturas, compras, parcelas, pagamentos e ajustes têm documento
+dedicado: [credit-cards.md](credit-cards.md). Invariante central: despesa de
+cartão conta **uma vez**, nas parcelas ativas do mês da fatura; o pagamento da
+fatura movimenta a conta, nunca a despesa.
 
 ### Orçamento (`budgets`)
 Par (mês, categoria de despesa) único — o banco também garante
