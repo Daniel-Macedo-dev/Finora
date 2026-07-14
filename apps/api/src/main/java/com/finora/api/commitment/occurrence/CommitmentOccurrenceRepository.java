@@ -43,15 +43,20 @@ public interface CommitmentOccurrenceRepository extends JpaRepository<Commitment
 
     List<CommitmentOccurrence> findAllByUserIdAndStatus(Long userId, OccurrenceStatus status);
 
-    /** Non-terminal occurrences of one user inside a window (forecast overlay). */
+    /**
+     * Every row that can influence a window overlay, across all of one user's
+     * definitions in a single query: identity (scheduled) date inside the
+     * window, or rescheduled into it (effective date inside the window).
+     */
     @Query("""
             select o from CommitmentOccurrence o
             where o.userId = :userId
-              and o.effectiveDate between :from and :to
+              and (o.scheduledDate between :from and :to
+                   or o.effectiveDate between :from and :to)
             """)
-    List<CommitmentOccurrence> findAllByUserInWindow(@Param("userId") Long userId,
-                                                     @Param("from") LocalDate from,
-                                                     @Param("to") LocalDate to);
+    List<CommitmentOccurrence> findAllByUserTouchingWindow(@Param("userId") Long userId,
+                                                           @Param("from") LocalDate from,
+                                                           @Param("to") LocalDate to);
 
     /** All persisted occurrences of one user's definition (any window). */
     List<CommitmentOccurrence> findAllByCommitmentIdAndUserId(Long commitmentId, Long userId);

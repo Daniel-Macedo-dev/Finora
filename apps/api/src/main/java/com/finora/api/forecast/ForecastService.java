@@ -138,11 +138,17 @@ public class ForecastService {
                     .subtract(settled);
         }
 
+        // One bulk load feeds both recurring collectors: the active definitions
+        // and every occurrence row touching the window, grouped by definition.
+        List<Commitment> activeCommitments = commitments.findAllByUserIdAndActiveTrue(userId);
+        Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay =
+                occurrenceOverlay(userId, today.plusDays(1), end);
+
         List<ForecastDtos.ForecastEvent> events = new ArrayList<>();
         collectFutureTransactions(userId, today, end, events);
-        collectRecurringAccountOccurrences(userId, today, end, events);
+        collectRecurringAccountOccurrences(activeCommitments, overlay, today, end, events);
         collectCardInvoices(userId, today, end, events);
-        collectProjectedRecurringCardPurchases(userId, today, end, events);
+        collectProjectedRecurringCardPurchases(activeCommitments, overlay, today, end, events);
 
         if (accountId != null) {
             Long filter = accountId;
@@ -181,6 +187,7 @@ public class ForecastService {
                     t.getCommitmentId(),
                     t.getId(),
                     null,
+                    null,
                     null));
         }
     }
@@ -189,13 +196,15 @@ public class ForecastService {
      * Unmaterialized recurring occurrences with an account (or no) target.
      * Card-target definitions are projected through their invoices instead.
      */
-    private void collectRecurringAccountOccurrences(Long userId, LocalDate today, LocalDate end,
+    private void collectRecurringAccountOccurrences(List<Commitment> activeCommitments,
+                                                    Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay,
+                                                    LocalDate today, LocalDate end,
                                                     List<ForecastDtos.ForecastEvent> events) {
-        for (Commitment commitment : commitments.findAllByUserIdAndActiveTrue(userId)) {
+        for (Commitment commitment : activeCommitments) {
             if (commitment.getTargetKind() == RecurrenceTarget.CREDIT_CARD_PURCHASE) {
                 continue;
             }
-            for (LocalDate date : projectedOccurrenceDates(commitment, today, end)) {
+            for (LocalDate date : projectedOccurrenceDates(commitment, overlay, today, end)) {
                 boolean unassigned = commitment.getAccount() == null;
                 BigDecimal amount = commitment.getCategory().getType() == CategoryType.INCOME
                         ? commitment.getAmount()
@@ -209,6 +218,7 @@ public class ForecastService {
                         unassigned ? null : commitment.getAccount().getName(),
                         unassigned,
                         commitment.getId(),
+                        null,
                         null,
                         null,
                         null));
@@ -254,7 +264,8 @@ public class ForecastService {
                     null,
                     null,
                     invoice.getId(),
-                    card.getId()));
+                    card.getId(),
+                    null));
         }
     }
 
@@ -264,9 +275,11 @@ public class ForecastService {
      * invoice due dates. Existing invoice rows only ever contain materialized
      * charges, so the two sources never overlap.
      */
-    private void collectProjectedRecurringCardPurchases(Long userId, LocalDate today, LocalDate end,
+    private void collectProjectedRecurringCardPurchases(List<Commitment> activeCommitments,
+                                                        Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay,
+                                                        LocalDate today, LocalDate end,
                                                         List<ForecastDtos.ForecastEvent> events) {
-        for (Commitment commitment : commitments.findAllByUserIdAndActiveTrue(userId)) {
+        for (Commitment commitment : activeCommitments) {
             if (commitment.getTargetKind() != RecurrenceTarget.CREDIT_CARD_PURCHASE
                     || commitment.getCreditCard() == null) {
                 continue;
@@ -274,7 +287,7 @@ public class ForecastService {
             CreditCard card = commitment.getCreditCard();
             Account payingAccount = card.getDefaultPaymentAccount();
             boolean unassigned = payingAccount == null || payingAccount.isArchived();
-            for (LocalDate purchaseDate : projectedOccurrenceDates(commitment, today, end)) {
+            for (LocalDate purchaseDate : projectedOccurrenceDates(commitment, overlay, today, end)) {
                 List<BigDecimal> amounts;
                 try {
                     amounts = InstallmentAllocator.allocate(
@@ -304,10 +317,23 @@ public class ForecastService {
                             commitment.getId(),
                             null,
                             null,
-                            card.getId()));
+                            card.getId(),
+                            null));
                 }
             }
         }
+    }
+
+    /** Occurrence rows touching the window, one query, grouped by definition. */
+    private Map<Long, Map<LocalDate, CommitmentOccurrence>> occurrenceOverlay(
+            Long userId, LocalDate from, LocalDate to) {
+        Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay = new HashMap<>();
+        for (CommitmentOccurrence occurrence : occurrences
+                .findAllByUserTouchingWindow(userId, from, to)) {
+            overlay.computeIfAbsent(occurrence.getCommitment().getId(), key -> new HashMap<>())
+                    .put(occurrence.getScheduledDate(), occurrence);
+        }
+        return overlay;
     }
 
     /**
@@ -317,12 +343,10 @@ public class ForecastService {
      * move to their effective date, and failed ones stay expected.
      */
     private List<LocalDate> projectedOccurrenceDates(Commitment commitment,
+                                                     Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay,
                                                      LocalDate today, LocalDate end) {
-        Map<LocalDate, CommitmentOccurrence> persisted = new HashMap<>();
-        for (CommitmentOccurrence occurrence : occurrences
-                .findAllByCommitmentIdAndUserId(commitment.getId(), commitment.getUserId())) {
-            persisted.put(occurrence.getScheduledDate(), occurrence);
-        }
+        Map<LocalDate, CommitmentOccurrence> persisted =
+                new HashMap<>(overlay.getOrDefault(commitment.getId(), Map.of()));
         List<LocalDate> calculated = RecurrenceCalculator.occurrencesBetween(
                 commitment, today.plusDays(1), end);
         List<LocalDate> projected = new ArrayList<>();
@@ -372,6 +396,7 @@ public class ForecastService {
         LocalDate firstNegative = opening.signum() < 0 ? today : null;
 
         Map<YearMonth, BigDecimal[]> monthly = new LinkedHashMap<>();
+        List<ForecastDtos.ForecastEvent> sealed = new ArrayList<>(events.size());
         for (ForecastDtos.ForecastEvent event : events) {
             boolean invoiceLike = event.source() == ForecastDtos.ForecastSource.CARD_INVOICE
                     || event.source() == ForecastDtos.ForecastSource.PROJECTED_RECURRING_CARD_PURCHASE;
@@ -381,6 +406,7 @@ public class ForecastService {
                 } else {
                     unassignedOut = unassignedOut.add(event.amount().negate());
                 }
+                sealed.add(event);
                 continue;
             }
             if (event.amount().signum() >= 0) {
@@ -408,6 +434,7 @@ public class ForecastService {
                 month[1] = month[1].add(event.amount().negate());
             }
             month[2] = balance;
+            sealed.add(ForecastDtos.withBalance(event, MoneyRules.normalize(balance)));
         }
 
         List<ForecastDtos.ForecastMonth> months = monthly.entrySet().stream()
@@ -433,7 +460,7 @@ public class ForecastService {
                 firstNegative,
                 MoneyRules.normalize(unassignedIn),
                 MoneyRules.normalize(unassignedOut),
-                events,
+                sealed,
                 months);
     }
 }

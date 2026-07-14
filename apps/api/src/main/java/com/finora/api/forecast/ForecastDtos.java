@@ -38,7 +38,17 @@ public final class ForecastDtos {
             Long commitmentId,
             Long transactionId,
             Long invoiceId,
-            Long creditCardId) {
+            Long creditCardId,
+            /** Projected balance after this event; null for unassigned events. */
+            BigDecimal balanceAfter) {
+    }
+
+    /** Internal builder step: events are created without a balance, then sealed. */
+    public static ForecastEvent withBalance(ForecastEvent event, BigDecimal balance) {
+        return new ForecastEvent(event.date(), event.description(), event.amount(),
+                event.source(), event.accountId(), event.accountName(), event.unassigned(),
+                event.commitmentId(), event.transactionId(), event.invoiceId(),
+                event.creditCardId(), balance);
     }
 
     public record ForecastMonth(

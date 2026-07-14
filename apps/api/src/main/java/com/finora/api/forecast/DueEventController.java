@@ -8,6 +8,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Notification-ready due events, derived on demand for the authenticated
+ * user — nothing is persisted or delivered here.
+ */
 @RestController
 @RequestMapping("/api/events")
 public class DueEventController {

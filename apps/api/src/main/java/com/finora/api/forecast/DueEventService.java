@@ -86,12 +86,16 @@ public class DueEventService {
 
     private void collectRecurringEvents(Long userId, LocalDate today, LocalDate start,
                                         LocalDate end, List<DueEvent> events) {
+        // One window-bounded query covers every definition's overlay rows.
+        Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay = new HashMap<>();
+        for (CommitmentOccurrence occurrence : occurrences
+                .findAllByUserTouchingWindow(userId, start, end)) {
+            overlay.computeIfAbsent(occurrence.getCommitment().getId(), key -> new HashMap<>())
+                    .put(occurrence.getScheduledDate(), occurrence);
+        }
         for (Commitment commitment : commitments.findAllByUserIdAndActiveTrue(userId)) {
-            Map<LocalDate, CommitmentOccurrence> persisted = new HashMap<>();
-            for (CommitmentOccurrence occurrence : occurrences
-                    .findAllByCommitmentIdAndUserId(commitment.getId(), userId)) {
-                persisted.put(occurrence.getScheduledDate(), occurrence);
-            }
+            Map<LocalDate, CommitmentOccurrence> persisted =
+                    overlay.getOrDefault(commitment.getId(), Map.of());
             for (LocalDate date : RecurrenceCalculator.occurrencesBetween(commitment, start, end)) {
                 CommitmentOccurrence occurrence = persisted.get(date);
                 OccurrenceStatus status = occurrence != null
