@@ -4,6 +4,7 @@ import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -47,4 +48,9 @@ public interface CardInvoiceRepository extends JpaRepository<CardInvoice, Long> 
                                         @Param("to") LocalDate to);
 
     List<CardInvoice> findAllByUserIdAndReferenceMonth(Long userId, LocalDate referenceMonth);
+
+    /** Forecast scan: every invoice due through a date, with its card and payment account. */
+    @EntityGraph(attributePaths = {"card", "card.defaultPaymentAccount"})
+    List<CardInvoice> findAllByUserIdAndDueDateLessThanEqualOrderByDueDateAsc(
+            Long userId, LocalDate through);
 }

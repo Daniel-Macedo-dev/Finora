@@ -37,6 +37,16 @@ public interface InvoicePaymentRepository extends JpaRepository<InvoicePayment, 
             """)
     List<Object[]> sumCompletedGroupedByInvoice(@Param("cardId") Long cardId, @Param("userId") Long userId);
 
+    /** Per-invoice completed payment totals across every card of one user: [invoiceId, total]. */
+    @Query("""
+            select p.invoice.id, sum(p.amount)
+            from InvoicePayment p
+            where p.userId = :userId
+              and p.status = com.finora.api.creditcard.payment.PaymentStatus.COMPLETED
+            group by p.invoice.id
+            """)
+    List<Object[]> sumCompletedGroupedByInvoiceForUser(@Param("userId") Long userId);
+
     /** Everything already paid on one card (restores its available limit). */
     @Query("""
             select coalesce(sum(p.amount), 0)

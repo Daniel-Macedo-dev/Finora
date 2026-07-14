@@ -121,4 +121,14 @@ public interface CardInstallmentRepository extends JpaRepository<CardInstallment
                                           @Param("today") LocalDate today);
 
     int countByInvoiceIdAndUserIdAndStatus(Long invoiceId, Long userId, InstallmentStatus status);
+
+    /** Per-invoice active totals across every card of one user: [invoiceId, total]. */
+    @Query("""
+            select i.invoice.id, sum(i.amount)
+            from CardInstallment i
+            where i.userId = :userId
+              and i.status = com.finora.api.creditcard.installment.InstallmentStatus.ACTIVE
+            group by i.invoice.id
+            """)
+    List<Object[]> sumActiveGroupedByInvoiceForUser(@Param("userId") Long userId);
 }
