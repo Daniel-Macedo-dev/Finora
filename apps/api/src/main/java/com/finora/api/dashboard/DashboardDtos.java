@@ -72,6 +72,25 @@ public final class DashboardDtos {
             List<RecentCardPurchase> recentPurchases) {
     }
 
+    /** One upcoming projected cash event surfaced on the dashboard. */
+    public record FutureCashEvent(
+            LocalDate date,
+            String description,
+            BigDecimal amount) {
+    }
+
+    /**
+     * Compact future-cash view backed by the forecast service (30 days).
+     * The dashboard never computes projections on its own.
+     */
+    public record FutureCashOverview(
+            BigDecimal projectedBalance30d,
+            FutureCashEvent nextRecurringEvent,
+            FutureCashEvent nextInvoiceObligation,
+            LocalDate firstNegativeDate,
+            long failedOccurrences) {
+    }
+
     public record DashboardResponse(
             YearMonth month,
             BigDecimal totalBalance,
@@ -93,6 +112,7 @@ public final class DashboardDtos {
             List<GoalResponse> goals,
             List<TransactionResponse> recentTransactions,
             /** Null when the user has no credit cards. */
-            CardsOverview cards) {
+            CardsOverview cards,
+            FutureCashOverview futureCash) {
     }
 }

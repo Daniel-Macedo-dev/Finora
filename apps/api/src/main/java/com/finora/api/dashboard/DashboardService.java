@@ -20,9 +20,15 @@ import com.finora.api.dashboard.DashboardDtos.BudgetOverview;
 import com.finora.api.dashboard.DashboardDtos.CardInvoiceBrief;
 import com.finora.api.dashboard.DashboardDtos.CardsOverview;
 import com.finora.api.dashboard.DashboardDtos.CategoryShare;
+import com.finora.api.commitment.occurrence.CommitmentOccurrenceRepository;
+import com.finora.api.commitment.occurrence.OccurrenceStatus;
 import com.finora.api.dashboard.DashboardDtos.DashboardResponse;
+import com.finora.api.dashboard.DashboardDtos.FutureCashEvent;
+import com.finora.api.dashboard.DashboardDtos.FutureCashOverview;
 import com.finora.api.dashboard.DashboardDtos.MonthTrendPoint;
 import com.finora.api.dashboard.DashboardDtos.RecentCardPurchase;
+import com.finora.api.forecast.ForecastDtos;
+import com.finora.api.forecast.ForecastService;
 import com.finora.api.goal.GoalService;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
@@ -58,6 +64,8 @@ public class DashboardService {
     private final CardPurchaseRepository purchases;
     private final CardLimitService limits;
     private final InvoiceService invoices;
+    private final ForecastService forecast;
+    private final CommitmentOccurrenceRepository occurrences;
     private final CurrentUserProvider currentUser;
 
     public DashboardService(TransactionRepository transactions,
@@ -72,6 +80,8 @@ public class DashboardService {
                             CardPurchaseRepository purchases,
                             CardLimitService limits,
                             InvoiceService invoices,
+                            ForecastService forecast,
+                            CommitmentOccurrenceRepository occurrences,
                             CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.accounts = accounts;
@@ -85,6 +95,8 @@ public class DashboardService {
         this.purchases = purchases;
         this.limits = limits;
         this.invoices = invoices;
+        this.forecast = forecast;
+        this.occurrences = occurrences;
         this.currentUser = currentUser;
     }
 
@@ -145,7 +157,30 @@ public class DashboardService {
                 transactions.findTop10ByUserIdOrderByOccurredOnDescIdDesc(userId).stream()
                         .map(TransactionResponse::from)
                         .toList(),
-                cardsOverview(userId, month, today));
+                cardsOverview(userId, month, today),
+                futureCash(userId));
+    }
+
+    /** Compact 30-day future-cash view; the forecast service is the single source. */
+    private FutureCashOverview futureCash(Long userId) {
+        var result = forecast.forecastForUser(userId, 30, null);
+        FutureCashEvent nextRecurring = result.events().stream()
+                .filter(e -> e.source() == ForecastDtos.ForecastSource.RECURRING_ACCOUNT_OCCURRENCE
+                        || e.source() == ForecastDtos.ForecastSource.PROJECTED_RECURRING_CARD_PURCHASE)
+                .findFirst()
+                .map(e -> new FutureCashEvent(e.date(), e.description(), e.amount()))
+                .orElse(null);
+        FutureCashEvent nextInvoice = result.events().stream()
+                .filter(e -> e.source() == ForecastDtos.ForecastSource.CARD_INVOICE)
+                .findFirst()
+                .map(e -> new FutureCashEvent(e.date(), e.description(), e.amount()))
+                .orElse(null);
+        return new FutureCashOverview(
+                result.closingBalance(),
+                nextRecurring,
+                nextInvoice,
+                result.firstNegativeDate(),
+                occurrences.countByUserIdAndStatus(userId, OccurrenceStatus.FAILED));
     }
 
     /** Card expense recognized in a month: active installments + net adjustments. */
