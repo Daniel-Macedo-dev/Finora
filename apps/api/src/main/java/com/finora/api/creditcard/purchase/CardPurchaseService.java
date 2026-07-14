@@ -96,6 +96,21 @@ public class CardPurchaseService {
         return purchase;
     }
 
+    /**
+     * Owner-explicit creation for a recurring occurrence. Same rules as any
+     * purchase (card lock, limit check, category, atomic schedule); the
+     * commitment link marks the purchase as generated, so it can only be
+     * undone through the occurrence reversal flow.
+     */
+    public CardPurchase createForCommitment(Long userId, Long cardId, PurchaseRequest request,
+                                            Long commitmentId) {
+        CreditCard card = cards.findByIdAndUserIdForUpdate(cardId, userId)
+                .orElseThrow(() -> new NotFoundException("Cartão", cardId));
+        CardPurchase purchase = buildPurchase(userId, card, request, null, commitmentId);
+        generateInstallments(purchase);
+        return purchase;
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<PurchaseResponse> list(Long cardId, int page, int size) {
         Long userId = currentUser.currentUserId();
@@ -167,10 +182,24 @@ public class CardPurchaseService {
      */
     public PurchaseResponse cancel(Long cardId, Long purchaseId) {
         Long userId = currentUser.currentUserId();
+        CardPurchase purchase = find(cardId, purchaseId);
+        // Recurring-generated purchases are undone through their occurrence,
+        // keeping the recurring ledger and the card history in sync.
+        if (purchase.getCommitmentId() != null) {
+            throw new BusinessRuleException("PURCHASE_FROM_RECURRING",
+                    "Esta compra foi gerada por um recorrente. "
+                            + "Estorne a ocorrência na área de Recorrentes.");
+        }
+        return cancelGenerated(userId, cardId, purchaseId);
+    }
+
+    /** Owner-explicit cancellation core, also used by occurrence reversal. */
+    public PurchaseResponse cancelGenerated(Long userId, Long cardId, Long purchaseId) {
         // Lock keeps the released limit consistent with concurrent purchases.
         cards.findByIdAndUserIdForUpdate(cardId, userId)
                 .orElseThrow(() -> new NotFoundException("Cartão", cardId));
-        CardPurchase purchase = find(cardId, purchaseId);
+        CardPurchase purchase = purchases.findByIdAndCardIdAndUserId(purchaseId, cardId, userId)
+                .orElseThrow(() -> new NotFoundException("Compra", purchaseId));
         if (purchase.getStatus() != PurchaseStatus.ACTIVE) {
             throw new BusinessRuleException("PURCHASE_NOT_ACTIVE",
                     "Esta compra já foi cancelada.");
@@ -184,6 +213,11 @@ public class CardPurchaseService {
 
     private CardPurchase buildPurchase(Long userId, CreditCard card, PurchaseRequest request,
                                        Long wishlistItemId) {
+        return buildPurchase(userId, card, request, wishlistItemId, null);
+    }
+
+    private CardPurchase buildPurchase(Long userId, CreditCard card, PurchaseRequest request,
+                                       Long wishlistItemId, Long commitmentId) {
         if (card.isArchived()) {
             throw new BusinessRuleException("CARD_ARCHIVED",
                     "Um cartão arquivado não pode receber novas compras.");
@@ -201,6 +235,8 @@ public class CardPurchaseService {
         purchase.setMerchant(trimmedOrNull(request.merchant()));
         purchase.setNotes(trimmedOrNull(request.notes()));
         purchase.setWishlistItemId(wishlistItemId);
+        // Both origin links are insert-only columns: set before the save.
+        purchase.setCommitmentId(commitmentId);
         return purchases.save(purchase);
     }
 
@@ -295,6 +331,7 @@ public class CardPurchaseService {
                 purchase.getInstallmentCount(),
                 purchase.getStatus(),
                 purchase.getWishlistItemId(),
+                purchase.getCommitmentId(),
                 purchase.getNotes(),
                 schedule);
     }

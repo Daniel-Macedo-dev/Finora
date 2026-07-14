@@ -59,6 +59,7 @@ public final class TransactionDtos {
             PaymentMethod paymentMethod,
             boolean legacyCredit,
             Long wishlistItemId,
+            Long commitmentId,
             String notes) {
 
         public static TransactionResponse from(Transaction t) {
@@ -81,6 +82,7 @@ public final class TransactionDtos {
                     t.getPaymentMethod(),
                     t.isLegacyCredit(),
                     t.getWishlistItemId(),
+                    t.getCommitmentId(),
                     t.getNotes());
         }
     }

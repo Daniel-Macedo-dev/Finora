@@ -39,7 +39,11 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-@TestPropertySource(properties = "finora.security.bcrypt-strength=4")
+@TestPropertySource(properties = {
+        "finora.security.bcrypt-strength=4",
+        // Deterministic tests drive recurring processing explicitly.
+        "finora.recurring.auto-processing.enabled=false",
+})
 @Transactional
 public abstract class AbstractIntegrationTest {
 

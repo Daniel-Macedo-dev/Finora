@@ -112,7 +112,15 @@ public class TransactionService {
     }
 
     public void delete(Long id) {
-        transactions.delete(find(id));
+        Transaction transaction = find(id);
+        // Recurring-generated transactions are undone through their occurrence,
+        // keeping the recurring ledger and the account history in sync.
+        if (transaction.getCommitmentId() != null) {
+            throw new BusinessRuleException("TRANSACTION_FROM_RECURRING",
+                    "Esta transação foi gerada por um recorrente. "
+                            + "Estorne a ocorrência na área de Recorrentes.");
+        }
+        transactions.delete(transaction);
     }
 
     private void applyOptionalFields(Long userId, Transaction transaction, TransactionRequest request) {

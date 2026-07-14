@@ -101,6 +101,13 @@ public class CommitmentOccurrence extends AuditableEntity {
         this.status = OccurrenceStatus.SKIPPED;
     }
 
+    /** Returns a skipped occurrence to the schedule. */
+    public void markScheduled() {
+        this.status = OccurrenceStatus.SCHEDULED;
+        this.failureCode = null;
+        this.failureMessage = null;
+    }
+
     /**
      * Terminal reversal. Artifact links are managed by the caller: a deleted
      * transaction must be unlinked first, while a cancelled card purchase

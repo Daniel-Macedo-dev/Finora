@@ -54,6 +54,7 @@ public final class PurchaseDtos {
             int installmentCount,
             PurchaseStatus status,
             Long wishlistItemId,
+            Long commitmentId,
             String notes,
             List<PurchaseInstallmentResponse> installments) {
     }
