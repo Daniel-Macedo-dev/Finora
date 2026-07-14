@@ -3,6 +3,7 @@ package com.finora.api.creditcard.payment;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +12,8 @@ public interface InvoicePaymentRepository extends JpaRepository<InvoicePayment, 
 
     Optional<InvoicePayment> findByIdAndInvoiceIdAndUserId(Long id, Long invoiceId, Long userId);
 
+    /** Payment lines expose the paying account's name, so it is fetched upfront. */
+    @EntityGraph(attributePaths = {"account"})
     List<InvoicePayment> findAllByInvoiceIdAndUserIdOrderByPaidOnAscIdAsc(Long invoiceId, Long userId);
 
     /** Amount already settled on one invoice (reversed payments excluded). */

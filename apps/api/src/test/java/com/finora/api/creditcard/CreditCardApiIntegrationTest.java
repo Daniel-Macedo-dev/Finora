@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.finora.api.AbstractIntegrationTest;
+import com.finora.api.category.CategoryType;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -141,6 +142,29 @@ class CreditCardApiIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/credit-cards/%d/unarchive".formatted(cardId))
                         .cookie(user.session()).with(csrf()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(false));
+    }
+
+    @Test
+    void cardWithOutstandingBalanceCannotBeArchived() throws Exception {
+        long cardId = createCard("Cartão Devedor", "1000.00", 10, 17);
+        Long categoryId = categoryId(user, "Compras", CategoryType.EXPENSE);
+        mockMvc.perform(post("/api/credit-cards/%d/purchases".formatted(cardId))
+                        .cookie(user.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"description": "Compra pendente", "categoryId": %d,
+                                 "purchaseDate": "2031-03-05",
+                                 "totalAmount": 200.00, "installmentCount": 2}
+                                """.formatted(categoryId)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/credit-cards/%d/archive".formatted(cardId))
+                        .cookie(user.session()).with(csrf()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("CARD_HAS_OUTSTANDING_BALANCE"));
+
+        mockMvc.perform(get("/api/credit-cards/" + cardId).cookie(user.session()))
                 .andExpect(jsonPath("$.archived").value(false));
     }
 

@@ -3,6 +3,7 @@ package com.finora.api.creditcard.installment;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +13,8 @@ public interface CardInstallmentRepository extends JpaRepository<CardInstallment
     List<CardInstallment> findAllByPurchaseIdAndUserIdOrderBySequenceNumberAsc(
             Long purchaseId, Long userId);
 
+    /** Invoice lines expose purchase and category data, so both are fetched upfront. */
+    @EntityGraph(attributePaths = {"purchase", "purchase.category"})
     List<CardInstallment> findAllByInvoiceIdAndUserIdOrderByPurchasePurchaseDateAscIdAsc(
             Long invoiceId, Long userId);
 
