@@ -63,8 +63,8 @@ public class InvoiceService {
      * without any charge or payment is never PAID before it closes — it is
      * simply the (empty) open or upcoming cycle.
      */
-    static InvoiceStatus deriveStatus(LocalDate today, LocalDate closingDate, LocalDate dueDate,
-                                      BigDecimal invoiceTotal, BigDecimal amountPaid) {
+    public static InvoiceStatus deriveStatus(LocalDate today, LocalDate closingDate, LocalDate dueDate,
+                                             BigDecimal invoiceTotal, BigDecimal amountPaid) {
         boolean settled = invoiceTotal.subtract(amountPaid).signum() <= 0;
         if (settled && (amountPaid.signum() > 0 || today.isAfter(closingDate))) {
             return InvoiceStatus.PAID;
