@@ -34,11 +34,16 @@ public interface TransactionRepository
 
     boolean existsByCategoryId(Long categoryId);
 
+    // Every financial aggregate below excludes financially inactive rows: a
+    // transaction replaced by an active legacy-credit conversion is an audit
+    // record — the generated card installments carry its expense instead.
+
     @Query("""
             select coalesce(sum(t.amount), 0)
             from Transaction t
             where t.userId = :userId
               and t.type = :type
+              and t.financiallyActive = true
               and t.occurredOn >= :from
               and t.occurredOn <= :to
             """)
@@ -52,6 +57,7 @@ public interface TransactionRepository
             from Transaction t
             where t.userId = :userId
               and t.type = com.finora.api.transaction.TransactionType.EXPENSE
+              and t.financiallyActive = true
               and t.category.id = :categoryId
               and t.occurredOn >= :from
               and t.occurredOn <= :to
@@ -67,6 +73,7 @@ public interface TransactionRepository
             from Transaction t
             where t.userId = :userId
               and t.type = com.finora.api.transaction.TransactionType.EXPENSE
+              and t.financiallyActive = true
               and t.occurredOn >= :from
               and t.occurredOn <= :to
             group by t.category.id, t.category.name
@@ -78,8 +85,17 @@ public interface TransactionRepository
 
     List<Transaction> findTop10ByUserIdOrderByOccurredOnDescIdDesc(Long userId);
 
-    /** Future-dated real transactions inside the forecast window. */
+    /** Future-dated real transactions inside the forecast window (active cash only). */
     @EntityGraph(attributePaths = {"category", "account"})
-    List<Transaction> findAllByUserIdAndOccurredOnGreaterThanAndOccurredOnLessThanEqualOrderByOccurredOnAsc(
-            Long userId, LocalDate after, LocalDate through);
+    @Query("""
+            select t from Transaction t
+            where t.userId = :userId
+              and t.financiallyActive = true
+              and t.occurredOn > :after
+              and t.occurredOn <= :through
+            order by t.occurredOn asc
+            """)
+    List<Transaction> findActiveInForecastWindow(@Param("userId") Long userId,
+                                                 @Param("after") LocalDate after,
+                                                 @Param("through") LocalDate through);
 }

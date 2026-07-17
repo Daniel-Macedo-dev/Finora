@@ -20,6 +20,9 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
      * Net movement of one of the user's accounts: incomes minus expenses.
      * The user predicate is defense in depth — the account id is always
      * owner-verified before this runs. Returns null without transactions.
+     * Financially inactive rows (sources of an active legacy-credit
+     * conversion) no longer move cash: the generated invoices settle through
+     * payments instead, so counting both would move the money twice.
      */
     @Query("""
             select sum(case when t.type = com.finora.api.transaction.TransactionType.INCOME
@@ -27,6 +30,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             from Transaction t
             where t.account.id = :accountId
               and t.userId = :userId
+              and t.financiallyActive = true
             """)
     BigDecimal netMovement(@Param("accountId") Long accountId, @Param("userId") Long userId);
 
@@ -37,6 +41,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             from Transaction t
             where t.account.id = :accountId
               and t.userId = :userId
+              and t.financiallyActive = true
               and t.occurredOn <= :through
             """)
     BigDecimal netMovementThrough(@Param("accountId") Long accountId,

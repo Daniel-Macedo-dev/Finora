@@ -169,9 +169,7 @@ public class ForecastService {
     /** Already-recorded transactions dated after today: actual future cash. */
     private void collectFutureTransactions(Long userId, LocalDate today, LocalDate end,
                                            List<ForecastDtos.ForecastEvent> events) {
-        for (Transaction t : transactions
-                .findAllByUserIdAndOccurredOnGreaterThanAndOccurredOnLessThanEqualOrderByOccurredOnAsc(
-                        userId, today, end)) {
+        for (Transaction t : transactions.findActiveInForecastWindow(userId, today, end)) {
             BigDecimal amount = t.getType() == TransactionType.INCOME
                     ? t.getAmount()
                     : t.getAmount().negate();
