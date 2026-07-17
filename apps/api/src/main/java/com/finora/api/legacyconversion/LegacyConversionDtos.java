@@ -54,4 +54,31 @@ public final class LegacyConversionDtos {
             String reasonCode,
             String message) {
     }
+
+    /** Outcome of one batch item; items are always processed independently. */
+    public enum BatchItemStatus {
+        SUCCESS,
+        ALREADY_CONVERTED,
+        FAILED,
+        SKIPPED
+    }
+
+    /** One result per input item, in input order. */
+    public record BatchItemResult(
+            Long transactionId,
+            BatchItemStatus status,
+            Long conversionId,
+            Long generatedCardPurchaseId,
+            String errorCode,
+            String message) {
+    }
+
+    public record BatchConversionResponse(
+            int total,
+            int succeeded,
+            int alreadyConverted,
+            int failed,
+            int skipped,
+            java.util.List<BatchItemResult> results) {
+    }
 }
