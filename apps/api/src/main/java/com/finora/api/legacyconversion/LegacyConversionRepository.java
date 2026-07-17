@@ -39,6 +39,9 @@ public interface LegacyConversionRepository extends JpaRepository<LegacyCreditCo
 
     boolean existsBySourceTransactionIdAndStatus(Long sourceTransactionId, ConversionStatus status);
 
+    /** Any conversion history at all — such a source is a protected audit anchor. */
+    boolean existsBySourceTransactionId(Long sourceTransactionId);
+
     Optional<LegacyCreditConversion> findByCardPurchaseIdAndUserId(Long cardPurchaseId, Long userId);
 
     /** Latest conversion per source, for response metadata (one bulk query per page). */

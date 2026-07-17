@@ -9,9 +9,15 @@ import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.common.web.PageResponse;
 import com.finora.api.identity.CurrentUserProvider;
+import com.finora.api.legacyconversion.ConversionStatus;
+import com.finora.api.legacyconversion.LegacyConversionRepository;
+import com.finora.api.legacyconversion.LegacyCreditConversion;
 import com.finora.api.transaction.TransactionDtos.TransactionRequest;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
 import java.time.YearMonth;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -28,15 +34,18 @@ public class TransactionService {
     private final TransactionRepository transactions;
     private final CategoryRepository categories;
     private final AccountRepository accounts;
+    private final LegacyConversionRepository conversions;
     private final CurrentUserProvider currentUser;
 
     public TransactionService(TransactionRepository transactions,
                               CategoryRepository categories,
                               AccountRepository accounts,
+                              LegacyConversionRepository conversions,
                               CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.categories = categories;
         this.accounts = accounts;
+        this.conversions = conversions;
         this.currentUser = currentUser;
     }
 
@@ -76,12 +85,55 @@ public class TransactionService {
                 Math.max(page, 0),
                 Math.clamp(size, 1, MAX_PAGE_SIZE),
                 Sort.by(Sort.Direction.DESC, "occurredOn").and(Sort.by(Sort.Direction.DESC, "id")));
-        return PageResponse.from(transactions.findAll(spec, pageable).map(TransactionResponse::from));
+        var result = transactions.findAll(spec, pageable);
+        // Conversion audit metadata for the whole page in one bulk query.
+        Map<Long, LegacyCreditConversion> latest = latestConversionsBySource(
+                currentUser.currentUserId(), result.getContent());
+        return PageResponse.from(result.map(t -> withConversion(t, latest.get(t.getId()))));
     }
 
     @Transactional(readOnly = true)
     public TransactionResponse get(Long id) {
-        return TransactionResponse.from(find(id));
+        Transaction transaction = find(id);
+        Map<Long, LegacyCreditConversion> latest = latestConversionsBySource(
+                transaction.getUserId(), List.of(transaction));
+        return withConversion(transaction, latest.get(transaction.getId()));
+    }
+
+    /**
+     * Latest conversion per legacy source on the page. Only legacy-credit rows
+     * can have conversions, so the lookup is skipped entirely for pages
+     * without them.
+     */
+    private Map<Long, LegacyCreditConversion> latestConversionsBySource(
+            Long userId, List<Transaction> page) {
+        List<Long> legacyIds = page.stream()
+                .filter(Transaction::isLegacyCredit)
+                .map(Transaction::getId)
+                .toList();
+        if (legacyIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, LegacyCreditConversion> latest = new HashMap<>();
+        for (LegacyCreditConversion conversion
+                : conversions.findAllByUserIdAndSourceTransactionIdIn(userId, legacyIds)) {
+            // Ordered by conversion time: active/most recent wins.
+            latest.put(conversion.getSourceTransactionId(), conversion);
+        }
+        return latest;
+    }
+
+    private static TransactionResponse withConversion(Transaction transaction,
+                                                      LegacyCreditConversion conversion) {
+        if (conversion == null) {
+            return TransactionResponse.from(transaction);
+        }
+        return TransactionResponse.from(
+                transaction,
+                conversion.getStatus(),
+                conversion.getStatus() == ConversionStatus.ACTIVE
+                        ? conversion.getCardPurchaseId()
+                        : null);
     }
 
     public TransactionResponse create(TransactionRequest request) {
@@ -101,6 +153,13 @@ public class TransactionService {
     public TransactionResponse update(Long id, TransactionRequest request) {
         Long userId = currentUser.currentUserId();
         Transaction transaction = find(id);
+        // A converted source is the immutable audit record of its conversion:
+        // description, amount, category and date must stay as they were.
+        if (!transaction.isFinanciallyActive()) {
+            throw new BusinessRuleException("TRANSACTION_CONVERTED",
+                    "Esta transação foi convertida em compra de cartão e é um registro de "
+                            + "auditoria. Estorne a conversão para editá-la.");
+        }
         Category category = resolveCategory(userId, request);
         transaction.setType(request.type());
         transaction.setAmount(MoneyRules.normalize(request.amount()));
@@ -119,6 +178,13 @@ public class TransactionService {
             throw new BusinessRuleException("TRANSACTION_FROM_RECURRING",
                     "Esta transação foi gerada por um recorrente. "
                             + "Estorne a ocorrência na área de Recorrentes.");
+        }
+        // Sources with conversion history anchor the conversion audit trail
+        // (active or reversed) and can never be removed.
+        if (transaction.isLegacyCredit() && conversions.existsBySourceTransactionId(id)) {
+            throw new BusinessRuleException("TRANSACTION_HAS_CONVERSION_HISTORY",
+                    "Esta transação possui histórico de conversão de crédito legado "
+                            + "e não pode ser excluída.");
         }
         transactions.delete(transaction);
     }
