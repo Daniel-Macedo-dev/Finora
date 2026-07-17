@@ -80,6 +80,15 @@ public class Commitment extends AuditableEntity {
     @Column(name = "installment_count", nullable = false)
     private int installmentCount = 1;
 
+    /**
+     * Earliest date automatic processing may reach when catching up. Set when
+     * a legacy CREDIT definition is mapped to a real card so automation never
+     * backfills historical occurrences; NULL keeps the original behavior
+     * (catch-up from the start date).
+     */
+    @Column(name = "automation_from")
+    private LocalDate automationFrom;
+
     protected Commitment() {
     }
 
@@ -213,5 +222,13 @@ public class Commitment extends AuditableEntity {
 
     public void setInstallmentCount(int installmentCount) {
         this.installmentCount = installmentCount;
+    }
+
+    public LocalDate getAutomationFrom() {
+        return automationFrom;
+    }
+
+    public void setAutomationFrom(LocalDate automationFrom) {
+        this.automationFrom = automationFrom;
     }
 }

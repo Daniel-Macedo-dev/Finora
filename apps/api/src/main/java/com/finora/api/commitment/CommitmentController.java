@@ -42,6 +42,14 @@ public class CommitmentController {
         return service.upcoming(from, months);
     }
 
+    /** Maps a "Crédito legado" definition to a real card target (no backfill). */
+    @PostMapping("/{id}/legacy-card-mapping")
+    public CommitmentResponse mapLegacyCredit(
+            @PathVariable Long id,
+            @Valid @RequestBody CommitmentDtos.MapLegacyCreditRequest request) {
+        return service.mapLegacyCredit(id, request);
+    }
+
     @PostMapping("/{id}/pause")
     public CommitmentResponse pause(@PathVariable Long id) {
         return service.pause(id);

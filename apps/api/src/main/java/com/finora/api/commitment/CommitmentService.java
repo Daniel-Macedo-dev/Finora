@@ -190,6 +190,44 @@ public class CommitmentService {
                 failedCounts.getOrDefault(commitment.getId(), 0L));
     }
 
+    /**
+     * Maps a legacy CREDIT definition (projection-only since V9) to a real
+     * credit card. Only the target changes: description, amount, cadence and
+     * every past occurrence stay untouched, and the automation horizon is set
+     * to today so automatic processing never backfills historical occurrences.
+     */
+    public CommitmentResponse mapLegacyCredit(Long id,
+                                              CommitmentDtos.MapLegacyCreditRequest request) {
+        Long userId = currentUser.currentUserId();
+        Commitment commitment = find(id);
+        boolean legacyCredit = commitment.getPaymentMethod() == PaymentMethod.CREDIT
+                && commitment.getTargetKind() == RecurrenceTarget.PROJECTION_ONLY;
+        if (!legacyCredit) {
+            throw new BusinessRuleException("COMMITMENT_NOT_LEGACY_CREDIT",
+                    "Este recorrente não é um crédito legado aguardando migração.");
+        }
+        if (commitment.getCategory().getType() != CategoryType.EXPENSE) {
+            throw new BusinessRuleException("COMMITMENT_CARD_NEEDS_EXPENSE",
+                    "Recorrentes no cartão exigem uma categoria de despesa.");
+        }
+        // Owner-scoped: another user's card id behaves as absent.
+        CreditCard card = cards.findByIdAndUserId(request.creditCardId(), userId)
+                .orElseThrow(() -> new NotFoundException("Cartão", request.creditCardId()));
+        if (card.isArchived()) {
+            throw new BusinessRuleException("CARD_ARCHIVED",
+                    "Um cartão arquivado não pode receber compras recorrentes.");
+        }
+        commitment.setTargetKind(RecurrenceTarget.CREDIT_CARD_PURCHASE);
+        commitment.setCreditCard(card);
+        commitment.setAccount(null);
+        commitment.setInstallmentCount(request.installmentCount());
+        commitment.setExecutionMode(request.executionMode());
+        commitment.setAutomationFrom(LocalDate.now(clock));
+        Map<Long, Long> failedCounts = failedCountsByCommitment(userId);
+        return toResponse(commitment, LocalDate.now(clock),
+                failedCounts.getOrDefault(commitment.getId(), 0L));
+    }
+
     /** Pause: occurrences stop being projected and processed; history stays. */
     public CommitmentResponse pause(Long id) {
         return setActive(id, false);

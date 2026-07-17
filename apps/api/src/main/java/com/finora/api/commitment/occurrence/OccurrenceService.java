@@ -232,8 +232,14 @@ public class OccurrenceService {
         int failed = 0;
         int alreadyProcessed = 0;
         for (Commitment commitment : commitments.findAllAutomaticForUser(userId)) {
+            // Catch-up never reaches behind the automation horizon: a legacy
+            // definition mapped to a card must not backfill its history.
+            LocalDate catchUpFrom = commitment.getAutomationFrom() != null
+                    && commitment.getAutomationFrom().isAfter(commitment.getStartDate())
+                    ? commitment.getAutomationFrom()
+                    : commitment.getStartDate();
             List<LocalDate> due = RecurrenceCalculator.occurrencesBetween(
-                    commitment, commitment.getStartDate(), today);
+                    commitment, catchUpFrom, today);
             Map<LocalDate, CommitmentOccurrence> persisted = new HashMap<>();
             for (CommitmentOccurrence occurrence : occurrences
                     .findAllByCommitmentIdAndUserId(commitment.getId(), userId)) {

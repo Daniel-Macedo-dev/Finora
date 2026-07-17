@@ -25,6 +25,15 @@ ALTER TABLE transactions ADD CONSTRAINT ck_transactions_inactive_is_legacy
 CREATE INDEX ix_transactions_user_legacy_credit
     ON transactions (user_id, occurred_on) WHERE legacy_credit;
 
+-- ── Automation horizon for mapped legacy recurring definitions ──────────────
+
+-- When a legacy CREDIT definition is mapped to a real card, automatic
+-- processing must not backfill months of historical occurrences: catch-up
+-- only reaches back to this date. NULL keeps the pre-V10 behavior (catch-up
+-- from the definition's start date). Manual execution of a past occurrence
+-- remains a deliberate user action and is not affected.
+ALTER TABLE commitments ADD COLUMN automation_from DATE;
+
 -- ── Generated-purchase origin link ──────────────────────────────────────────
 
 -- Display-level origin on the purchase itself, following the wishlist_item_id

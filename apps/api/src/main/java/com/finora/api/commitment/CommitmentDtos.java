@@ -64,6 +64,20 @@ public final class CommitmentDtos {
             Integer installmentCount) {
     }
 
+    /** Maps a legacy CREDIT definition to a real card; only the target changes. */
+    public record MapLegacyCreditRequest(
+            @NotNull(message = "Escolha o cartão que receberá as compras deste recorrente.")
+            Long creditCardId,
+
+            @NotNull(message = "Informe o número de parcelas.")
+            @Min(value = 1, message = "O número de parcelas deve estar entre 1 e 120.")
+            @Max(value = 120, message = "O número de parcelas deve estar entre 1 e 120.")
+            Integer installmentCount,
+
+            @NotNull(message = "Escolha o modo de execução.")
+            ExecutionMode executionMode) {
+    }
+
     public record CommitmentCategory(Long id, String name, CategoryType type) {
     }
 
