@@ -137,7 +137,7 @@ public class LegacyConversionPreviewService {
                 card.getClosingDay(), card.getDueDay(), input.effectivePurchaseDate());
         List<PreviewInstallment> schedule =
                 buildSchedule(userId, card, first, amounts, today);
-        validateAllocation(input, first, schedule, source, blockers, warnings);
+        validateAllocation(input, first, schedule, source, today, blockers, warnings);
 
         CardLimitService.CardLimit limit = limits.limitOf(card);
         boolean sufficient = total.compareTo(limit.availableLimit()) <= 0;
@@ -263,6 +263,7 @@ public class LegacyConversionPreviewService {
      */
     private void validateAllocation(PreviewInput input, InvoiceCycle first,
                                     List<PreviewInstallment> schedule, Transaction source,
+                                    LocalDate today,
                                     List<PreviewMessage> blockers, List<PreviewMessage> warnings) {
         if (input.firstInvoiceMonth() != null
                 && !input.firstInvoiceMonth().equals(first.referenceMonth())) {
@@ -274,11 +275,14 @@ public class LegacyConversionPreviewService {
         boolean anyPaid = false;
         boolean anyClosed = false;
         for (PreviewInstallment installment : schedule) {
-            if (installment.invoiceStatus() == InvoiceStatus.PAID
-                    || installment.invoiceAmountPaid().signum() > 0) {
+            // Only real money blocks: the same rule the card domain applies to
+            // purchase cancellation. An empty past invoice may derive PAID
+            // without any completed payment — that is not settled history.
+            if (installment.invoiceAmountPaid().signum() > 0) {
                 anyPaid = true;
-            } else if (installment.invoiceStatus() == InvoiceStatus.CLOSED
-                    || installment.invoiceStatus() == InvoiceStatus.OVERDUE) {
+            } else if (installment.closingDate().isBefore(today)) {
+                // A past cycle — existing or created by this conversion — is
+                // closed history and gets charged retroactively.
                 anyClosed = true;
             }
         }
