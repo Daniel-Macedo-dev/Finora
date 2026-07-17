@@ -55,6 +55,28 @@ public final class LegacyConversionDtos {
             String message) {
     }
 
+    /** Full conversion record with its current reversal eligibility. */
+    public record ConversionResponse(
+            Long id,
+            Long sourceTransactionId,
+            String sourceDescription,
+            BigDecimal amount,
+            LocalDate originalTransactionDate,
+            Long cardPurchaseId,
+            Long cardId,
+            String cardName,
+            LocalDate effectivePurchaseDate,
+            int installmentCount,
+            java.time.YearMonth firstInvoiceMonth,
+            ConversionStatus status,
+            java.time.Instant convertedAt,
+            java.time.Instant reversedAt,
+            String reversalReason,
+            boolean reversible,
+            String reversalBlockedCode,
+            String reversalBlockedMessage) {
+    }
+
     /** Outcome of one batch item; items are always processed independently. */
     public enum BatchItemStatus {
         SUCCESS,
