@@ -53,4 +53,46 @@ public interface LegacyConversionRepository extends JpaRepository<LegacyCreditCo
             @Param("sourceIds") Collection<Long> sourceIds);
 
     long countByUserIdAndStatus(Long userId, ConversionStatus status);
+
+    // ── inventory summary ────────────────────────────────────────────────────
+    // These aggregate the user's legacy-credit *transactions*; they live here
+    // because the "convertible" shape is a conversion-domain concept.
+
+    /** Sources convertible right now (includes reversed-then-restorable ones). */
+    @Query("""
+            select count(t) from Transaction t
+            where t.userId = :userId
+              and t.legacyCredit = true
+              and t.financiallyActive = true
+              and t.type = com.finora.api.transaction.TransactionType.EXPENSE
+              and t.commitmentId is null
+              and t.wishlistItemId is null
+              and t.amount > 0
+            """)
+    long countConvertibleSources(@Param("userId") Long userId);
+
+    /** Historical amount still awaiting review (sum over convertible sources). */
+    @Query("""
+            select coalesce(sum(t.amount), 0) from Transaction t
+            where t.userId = :userId
+              and t.legacyCredit = true
+              and t.financiallyActive = true
+              and t.type = com.finora.api.transaction.TransactionType.EXPENSE
+              and t.commitmentId is null
+              and t.wishlistItemId is null
+              and t.amount > 0
+            """)
+    java.math.BigDecimal sumConvertibleSourceAmount(@Param("userId") Long userId);
+
+    /** Sources whose latest conversion was reversed and that have no active one. */
+    @Query("""
+            select count(distinct c.sourceTransactionId) from LegacyCreditConversion c
+            where c.userId = :userId
+              and c.status = com.finora.api.legacyconversion.ConversionStatus.REVERSED
+              and not exists (
+                  select 1 from LegacyCreditConversion a
+                  where a.sourceTransactionId = c.sourceTransactionId
+                    and a.status = com.finora.api.legacyconversion.ConversionStatus.ACTIVE)
+            """)
+    long countReversedSources(@Param("userId") Long userId);
 }
