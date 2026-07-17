@@ -62,6 +62,16 @@ public class Transaction extends AuditableEntity {
     @Column(name = "legacy_credit", nullable = false, insertable = false, updatable = false)
     private boolean legacyCredit;
 
+    /**
+     * FALSE only while an ACTIVE legacy-credit conversion replaces this
+     * transaction as the expense source (the generated card installments take
+     * over). The row stays visible as an audit record; every financial
+     * aggregate filters on this flag. Maintained exclusively by the
+     * conversion engine — reversal restores TRUE.
+     */
+    @Column(name = "financially_active", nullable = false)
+    private boolean financiallyActive = true;
+
     /** Set when this transaction executed a wishlist item (idempotency anchor). */
     @Column(name = "wishlist_item_id", updatable = false)
     private Long wishlistItemId;
@@ -160,6 +170,14 @@ public class Transaction extends AuditableEntity {
 
     public boolean isLegacyCredit() {
         return legacyCredit;
+    }
+
+    public boolean isFinanciallyActive() {
+        return financiallyActive;
+    }
+
+    public void setFinanciallyActive(boolean financiallyActive) {
+        this.financiallyActive = financiallyActive;
     }
 
     public Long getWishlistItemId() {
