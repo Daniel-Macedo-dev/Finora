@@ -15,6 +15,20 @@ public interface TransactionRepository
 
     Optional<Transaction> findByIdAndUserId(Long id, Long userId);
 
+    /**
+     * Owner-scoped lookup with a pessimistic write lock. The legacy-conversion
+     * engine claims the source row with this before re-checking eligibility,
+     * so two concurrent conversions (or a conversion racing a reversal)
+     * serialize instead of double-writing.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select t from Transaction t
+            where t.id = :id and t.userId = :userId
+            """)
+    Optional<Transaction> findByIdAndUserIdForUpdate(@Param("id") Long id,
+                                                     @Param("userId") Long userId);
+
     /** Guards for delete protection; the parent id is always owner-verified first. */
     boolean existsByAccountId(Long accountId);
 

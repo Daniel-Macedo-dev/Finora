@@ -111,6 +111,41 @@ public class CardPurchaseService {
         return purchase;
     }
 
+    /**
+     * Owner-explicit creation for a legacy-credit conversion. Same rules as
+     * any purchase; the legacy-transaction link marks the purchase as
+     * generated, so it can only be undone through the conversion reversal
+     * flow, and the partial unique index guarantees at most one ACTIVE
+     * generated purchase per converted source. The caller must already hold
+     * the card lock — this method acquires it itself, so it is safe from any
+     * entry point.
+     */
+    public CardPurchase createForLegacyConversion(Long userId, Long cardId, PurchaseRequest request,
+                                                  Long legacyTransactionId) {
+        CreditCard card = cards.findByIdAndUserIdForUpdate(cardId, userId)
+                .orElseThrow(() -> new NotFoundException("Cartão", cardId));
+        if (card.isArchived()) {
+            throw new BusinessRuleException("CARD_ARCHIVED",
+                    "Um cartão arquivado não pode receber novas compras.");
+        }
+        BigDecimal total = MoneyRules.normalize(request.totalAmount());
+        requireAvailableLimit(card, total);
+        CardPurchase purchase = new CardPurchase(
+                userId,
+                card,
+                resolveExpenseCategory(userId, request.categoryId()),
+                request.description().trim(),
+                request.purchaseDate(),
+                total,
+                request.installmentCount());
+        purchase.setMerchant(trimmedOrNull(request.merchant()));
+        purchase.setNotes(trimmedOrNull(request.notes()));
+        purchase.setLegacyTransactionId(legacyTransactionId);
+        purchase = purchases.save(purchase);
+        generateInstallments(purchase);
+        return purchase;
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<PurchaseResponse> list(Long cardId, int page, int size) {
         Long userId = currentUser.currentUserId();
@@ -153,6 +188,14 @@ public class CardPurchaseService {
                 || !purchase.getPurchaseDate().equals(request.purchaseDate())
                 || purchase.getInstallmentCount() != request.installmentCount();
         if (financialChange) {
+            // The conversion record snapshots the confirmed financial values;
+            // changing them here would desync the audit trail. Reverse and
+            // convert again instead.
+            if (purchase.getLegacyTransactionId() != null) {
+                throw new BusinessRuleException("PURCHASE_FROM_CONVERSION",
+                        "Os valores desta compra vieram da conversão de um crédito legado. "
+                                + "Estorne a conversão e converta novamente com os novos dados.");
+            }
             // Lock the card before touching the schedule or rechecking the limit.
             CreditCard card = cards.findByIdAndUserIdForUpdate(cardId, userId).orElseThrow();
             requireUnsettledSchedule(purchase, "alterada");
@@ -189,6 +232,13 @@ public class CardPurchaseService {
             throw new BusinessRuleException("PURCHASE_FROM_RECURRING",
                     "Esta compra foi gerada por um recorrente. "
                             + "Estorne a ocorrência na área de Recorrentes.");
+        }
+        // Conversion-generated purchases are undone through the conversion
+        // reversal, which also restores the original legacy transaction.
+        if (purchase.getLegacyTransactionId() != null) {
+            throw new BusinessRuleException("PURCHASE_FROM_CONVERSION",
+                    "Esta compra foi gerada pela conversão de um crédito legado. "
+                            + "Estorne a conversão na área de Crédito legado.");
         }
         return cancelGenerated(userId, cardId, purchaseId);
     }
