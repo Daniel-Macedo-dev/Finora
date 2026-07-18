@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
@@ -201,13 +202,21 @@ export default function TransactionsPage() {
                       <span className="badge badge-neutral">{transaction.category.name}</span>
                     </td>
                     <td className="tx-col-optional">
-                      {transaction.legacyCredit ? (
+                      {transaction.legacyCredit && !transaction.financiallyActive ? (
                         <span
+                          className="badge badge-positive"
+                          title="Este crédito legado foi convertido em uma compra de cartão real; o registro original permanece apenas como histórico."
+                        >
+                          Convertida em compra
+                        </span>
+                      ) : transaction.legacyCredit ? (
+                        <Link
+                          to="/legacy-credit"
                           className="badge badge-warning"
-                          title="Registro de crédito anterior à área de Cartões; não está vinculado a nenhuma fatura."
+                          title="Registro de crédito anterior à área de Cartões. Abra a página de crédito legado para convertê-lo em uma compra real."
                         >
                           Crédito legado
-                        </span>
+                        </Link>
                       ) : transaction.paymentMethod ? (
                         PAYMENT_METHOD_LABELS[transaction.paymentMethod]
                       ) : (
@@ -225,22 +234,33 @@ export default function TransactionsPage() {
                       />
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-icon"
-                        onClick={() => openEdit(transaction)}
-                        aria-label={`Editar ${transaction.description}`}
-                      >
-                        <Pencil size={16} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-icon"
-                        onClick={() => setDeleting(transaction)}
-                        aria-label={`Excluir ${transaction.description}`}
-                      >
-                        <Trash2 size={16} aria-hidden="true" />
-                      </button>
+                      {/* A converted source is a protected audit record: the
+                          backend rejects edits and deletion, so the actions
+                          are not offered. */}
+                      {transaction.financiallyActive ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => openEdit(transaction)}
+                            aria-label={`Editar ${transaction.description}`}
+                          >
+                            <Pencil size={16} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => setDeleting(transaction)}
+                            aria-label={`Excluir ${transaction.description}`}
+                          >
+                            <Trash2 size={16} aria-hidden="true" />
+                          </button>
+                        </>
+                      ) : (
+                        <Link className="btn btn-ghost" to="/legacy-credit">
+                          Ver conversão
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}
