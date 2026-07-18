@@ -5,6 +5,32 @@
   margin-bottom: var(--space-4);
 }
 
+/* stat-card styles live in the dashboard's code-split CSS chunk; restated
+   here (scoped) so /legacy-credit never depends on another route's chunk. */
+.lc-stats .stat-card,
+.lc-impact-grid .stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.lc-stats .stat-label,
+.lc-impact-grid .stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
+.lc-stats .stat-value,
+.lc-impact-grid .stat-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
 .lc-filters {
   display: flex;
   flex-wrap: wrap;

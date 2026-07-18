@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { expect, test, type Page } from '@playwright/test'
 import { registerViaUi } from './helpers.ts'
 
@@ -126,6 +127,59 @@ async function seedDemoData(page: Page) {
     { headers },
   )
 
+  // Legacy-credit inventory: eligible sources, one converted, one reversed —
+  // forged exactly like migration V7 (legacy rows cannot be created by API).
+  const forgeLegacy = (id: number) =>
+    execSync(
+      'docker exec finora-postgres psql -U finora -d finora -c ' +
+        `"UPDATE transactions SET payment_method = 'CREDIT', legacy_credit = TRUE WHERE id = ${id}"`,
+    )
+  const compras0 = await categoryId(page, 'Compras', 'EXPENSE')
+  const legacyTx = async (amount: number, date: string, description: string) => {
+    const created = await (
+      await page.request.post(`${API}/transactions`, {
+        headers,
+        data: { type: 'EXPENSE', amount, description, date, categoryId: compras0 },
+      })
+    ).json()
+    forgeLegacy(created.id)
+    return created.id as number
+  }
+  await legacyTx(890.5, '2025-09-14', 'Geladeira antiga no crédito')
+  await legacyTx(129.99, '2025-10-02', 'Tênis parcelado antigo')
+  const convertedLegacy = await legacyTx(300, '2025-11-20', 'Micro-ondas antigo')
+  const reversedLegacy = await legacyTx(150, '2025-08-05', 'Assinatura anual antiga')
+  const legacyCard = await (await page.request.post(`${API}/credit-cards`, {
+    headers,
+    data: { name: 'Cartão Migração', brand: 'VISA', creditLimit: 8000, closingDay: 10, dueDay: 17 },
+  })).json()
+  const convertLegacy = (transactionId: number, firstInvoiceMonth: string, date: string) =>
+    page.request.post(`${API}/legacy-conversions`, {
+      headers,
+      data: {
+        transactionId,
+        cardId: legacyCard.id,
+        effectivePurchaseDate: date,
+        installmentCount: 3,
+        firstInvoiceMonth,
+      },
+    })
+  await convertLegacy(convertedLegacy, '2025-12', '2025-11-20')
+  const toReverse = await (await convertLegacy(reversedLegacy, '2025-09', '2025-08-05')).json()
+  await page.request.post(`${API}/legacy-conversions/${toReverse.id}/reverse`, {
+    headers,
+    data: { reason: 'Cartão errado' },
+  })
+  // A legacy CREDIT recurring definition awaiting card mapping.
+  const assinaturas0 = await categoryId(page, 'Assinaturas', 'EXPENSE')
+  await page.request.post(`${API}/commitments`, {
+    headers,
+    data: {
+      description: 'TV a cabo antiga', amount: 89.9, categoryId: assinaturas0,
+      cadence: 'MONTHLY', dueDay: 3, startDate: '2025-02-03', paymentMethod: 'CREDIT',
+    },
+  })
+
   // Credit card with a mixed invoice history: paid, partially paid and open.
   const compras = await categoryId(page, 'Compras', 'EXPENSE')
   const card = await (await page.request.post(`${API}/credit-cards`, {
@@ -145,7 +199,12 @@ async function seedDemoData(page: Page) {
     headers,
     data: { accountId: accounts[0].id, amount: 200, paidOn: '2031-03-15' },
   })
-  return { itemId: item.id as number, cardId: card.id as number, invoiceId: invoices[0].id as number }
+  return {
+    itemId: item.id as number,
+    cardId: card.id as number,
+    invoiceId: invoices[0].id as number,
+    legacyCardId: legacyCard.id as number,
+  }
 }
 
 async function capture(page: Page, path: string, name: string, viewport: (typeof VIEWPORTS)[0]) {
@@ -158,11 +217,12 @@ async function capture(page: Page, path: string, name: string, viewport: (typeof
 test('captura estados principais em todos os viewports', async ({ page }) => {
   test.setTimeout(480_000)
   await registerViaUi(page)
-  const { itemId, cardId, invoiceId } = await seedDemoData(page)
+  const { itemId, cardId, invoiceId, legacyCardId } = await seedDemoData(page)
 
   const pages: Array<[string, string]> = [
     ['/dashboard', 'dashboard'],
     ['/transactions', 'transactions'],
+    ['/legacy-credit', 'legacy-credit'],
     ['/credit-cards', 'credit-cards'],
     [`/credit-cards/${cardId}`, 'credit-card-detail'],
     [`/credit-cards/${cardId}/invoices/${invoiceId}`, 'invoice-detail'],
@@ -206,11 +266,56 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
     await page.keyboard.press('Escape')
   }
 
+  // Legacy-conversion dialogs: wizard steps, conversion detail, batch and
+  // recurring mapping — desktop and mobile.
+  for (const viewport of [VIEWPORTS[0], VIEWPORTS[3]]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await page.goto('/legacy-credit')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByRole('button', { name: 'Converter', exact: true }).first().click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-wizard-source.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Avançar' }).click()
+    await page.getByLabel('Cartão que receberá a compra').selectOption(String(legacyCardId))
+    await page.getByLabel('Número de parcelas').fill('3')
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-wizard-card.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Avançar' }).click()
+    await page.getByText('Situação da fatura').first().waitFor({ state: 'attached' })
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-wizard-schedule.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Avançar' }).click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-wizard-impact.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Avançar' }).click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-wizard-confirm.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('button', { name: 'Ver conversão' }).first().click()
+    await page.waitForLoadState('networkidle')
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-detail.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+
+    await page.getByLabel(/Selecionar Geladeira antiga/).check()
+    await page.getByLabel(/Selecionar Tênis parcelado/).check()
+    await page.getByRole('button', { name: 'Converter selecionadas' }).click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-batch.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+
+    await page.goto('/commitments')
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('button', { name: /Crédito legado — migrar para cartão/ }).click()
+    await page.screenshot({ path: `${OUT}/${viewport.name}/legacy-mapping.png`, fullPage: true })
+    await page.keyboard.press('Escape')
+  }
+
   // Dark theme (while still authenticated): dashboard, cards, recurring and
   // forecast screens.
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.addInitScript(() => localStorage.setItem('finora.theme', 'dark'))
   await capture(page, '/dashboard', 'dashboard-dark', VIEWPORTS[0])
+  await capture(page, '/legacy-credit', 'legacy-credit-dark', VIEWPORTS[0])
+  await page.getByRole('button', { name: 'Ver conversão' }).first().click()
+  await page.waitForLoadState('networkidle')
+  await page.screenshot({ path: `${OUT}/${VIEWPORTS[0].name}/legacy-detail-dark.png`, fullPage: true })
+  await page.keyboard.press('Escape')
   await capture(page, `/credit-cards/${cardId}`, 'credit-card-detail-dark', VIEWPORTS[0])
   await capture(page, `/credit-cards/${cardId}/invoices/${invoiceId}`, 'invoice-detail-dark', VIEWPORTS[0])
   await capture(page, '/commitments', 'commitments-dark', VIEWPORTS[0])
