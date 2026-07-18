@@ -6,7 +6,12 @@ import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
 import { formatBRL, formatDate } from '../../lib/format'
 import { useCategories } from '../shared/api'
 import { useConversionInventory } from './api'
-import { INVENTORY_STATE_LABELS, type ConversionInventoryState } from './types'
+import LegacyConversionWizard from './LegacyConversionWizard'
+import {
+  INVENTORY_STATE_LABELS,
+  type ConversionInventoryItem,
+  type ConversionInventoryState,
+} from './types'
 import './legacy-conversions.css'
 
 const STATE_BADGES: Record<ConversionInventoryState, string> = {
@@ -14,6 +19,11 @@ const STATE_BADGES: Record<ConversionInventoryState, string> = {
   CONVERTED: 'badge-positive',
   REVERSED: 'badge-warning',
   BLOCKED: 'badge-neutral',
+}
+
+/** Sources the user may convert now: eligible or reversed-and-restorable. */
+function isConvertible(item: ConversionInventoryItem): boolean {
+  return item.state === 'ELIGIBLE' || item.state === 'REVERSED'
 }
 
 export default function LegacyConversionsPage() {
@@ -25,6 +35,7 @@ export default function LegacyConversionsPage() {
   const [maxAmount, setMaxAmount] = useState('')
   const [state, setState] = useState<ConversionInventoryState | ''>('')
   const [page, setPage] = useState(0)
+  const [converting, setConverting] = useState<ConversionInventoryItem | null>(null)
 
   const filters = useMemo(
     () => ({
@@ -210,6 +221,9 @@ export default function LegacyConversionsPage() {
                         Valor
                       </th>
                       <th scope="col">Estado</th>
+                      <th scope="col">
+                        <span className="visually-hidden">Ações</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -232,6 +246,17 @@ export default function LegacyConversionsPage() {
                           >
                             {INVENTORY_STATE_LABELS[item.state]}
                           </span>
+                        </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {isConvertible(item) && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => setConverting(item)}
+                            >
+                              Converter
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -266,6 +291,14 @@ export default function LegacyConversionsPage() {
           )}
         </>
       ) : null}
+
+      {converting && (
+        <LegacyConversionWizard
+          source={converting}
+          onClose={() => setConverting(null)}
+          onConverted={() => setConverting(null)}
+        />
+      )}
     </>
   )
 }
