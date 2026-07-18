@@ -4,8 +4,9 @@ import FormField from '../../components/FormField'
 import Money from '../../components/Money'
 import { errorMessage } from '../../components/states'
 import { api } from '../../lib/api'
-import { formatBRL, formatDate, formatMonth } from '../../lib/format'
+import { formatDate, formatMonth } from '../../lib/format'
 import { useCreditCards } from '../credit-cards/api'
+import CardSelect from '../credit-cards/CardSelect'
 import { useBatchConvert } from './api'
 import {
   BATCH_ITEM_STATUS_LABELS,
@@ -71,7 +72,6 @@ export default function LegacyBatchConversion({
 
   const cards = useCreditCards()
   const batch = useBatchConvert()
-  const activeCards = (cards.data ?? []).filter((card) => !card.archived)
 
   const allConfigured = items.every(
     (item) => item.cardId !== '' && item.effectiveDate !== '' && Number(item.installments) >= 1,
@@ -190,20 +190,11 @@ export default function LegacyBatchConversion({
                 </div>
                 <div className="lc-batch-item-controls">
                   <FormField label="Cartão">
-                    <select
-                      className="select"
+                    <CardSelect
+                      cards={cards.data ?? []}
                       value={item.cardId}
-                      onChange={(event) =>
-                        updateItem(item.source.transactionId, { cardId: event.target.value })
-                      }
-                    >
-                      <option value="">Escolha…</option>
-                      {activeCards.map((card) => (
-                        <option key={card.id} value={card.id}>
-                          {card.name} — {formatBRL(card.limit.availableLimit)} disponível
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(cardId) => updateItem(item.source.transactionId, { cardId })}
+                    />
                   </FormField>
                   <FormField label="Data efetiva">
                     <input

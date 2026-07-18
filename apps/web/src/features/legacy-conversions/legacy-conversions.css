@@ -169,7 +169,7 @@
 }
 
 .lc-message-warning {
-  background: color-mix(in srgb, var(--warning, #b45309) 12%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
 }
 
 .lc-message-blocker {

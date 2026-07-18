@@ -6,6 +6,7 @@ import { errorMessage } from '../../components/states'
 import { formatBRL, formatDate, formatMonth } from '../../lib/format'
 import { INVOICE_STATUS_LABELS } from '../credit-cards/types'
 import { useCreditCards } from '../credit-cards/api'
+import CardSelect from '../credit-cards/CardSelect'
 import { useConversionPreview, useConvertLegacy } from './api'
 import type { ConversionInventoryItem, ConversionPreview } from './types'
 
@@ -157,19 +158,7 @@ export default function LegacyConversionWizard({
           }}
         >
           <FormField label="Cartão que receberá a compra">
-            <select
-              className="select"
-              required
-              value={cardId}
-              onChange={(event) => setCardId(event.target.value)}
-            >
-              <option value="">Escolha um cartão…</option>
-              {activeCards.map((card) => (
-                <option key={card.id} value={card.id}>
-                  {card.name} — limite disponível {formatBRL(card.limit.availableLimit)}
-                </option>
-              ))}
-            </select>
+            <CardSelect cards={cards.data ?? []} value={cardId} onChange={setCardId} required />
           </FormField>
           <FormField
             label="Data efetiva da compra"

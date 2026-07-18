@@ -7,7 +7,6 @@ import type {
   ConversionInventoryResponse,
   ConversionPreview,
   ConvertRequest,
-  EligibilityResponse,
   InventoryFilters,
   PreviewRequest,
 } from './types'
@@ -31,15 +30,6 @@ export function useConversionInventory(filters: InventoryFilters) {
           size: PAGE_SIZE,
         })}`,
       ),
-  })
-}
-
-export function useConversionEligibility(transactionId: number | null) {
-  return useQuery({
-    queryKey: ['legacy-conversions', 'eligibility', transactionId],
-    queryFn: () =>
-      api.get<EligibilityResponse>(`/legacy-conversions/eligibility/${transactionId}`),
-    enabled: transactionId !== null,
   })
 }
 

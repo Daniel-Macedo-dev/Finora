@@ -3,8 +3,8 @@ import Dialog from '../../components/Dialog'
 import FormField from '../../components/FormField'
 import FormActions from '../../components/FormActions'
 import { errorMessage } from '../../components/states'
-import { formatBRL } from '../../lib/format'
 import { useCreditCards } from '../credit-cards/api'
+import CardSelect from '../credit-cards/CardSelect'
 import { useMapLegacyCredit } from './api'
 import type { Commitment } from './types'
 
@@ -29,7 +29,6 @@ export default function LegacyCardMappingDialog({
 
   const cards = useCreditCards()
   const mapping = useMapLegacyCredit()
-  const activeCards = (cards.data ?? []).filter((card) => !card.archived)
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -55,19 +54,7 @@ export default function LegacyCardMappingDialog({
         </p>
 
         <FormField label="Cartão de destino">
-          <select
-            className="select"
-            required
-            value={cardId}
-            onChange={(event) => setCardId(event.target.value)}
-          >
-            <option value="">Escolha um cartão…</option>
-            {activeCards.map((card) => (
-              <option key={card.id} value={card.id}>
-                {card.name} — limite disponível {formatBRL(card.limit.availableLimit)}
-              </option>
-            ))}
-          </select>
+          <CardSelect cards={cards.data ?? []} value={cardId} onChange={setCardId} required />
         </FormField>
 
         <FormField label="Número de parcelas por ocorrência">

@@ -336,6 +336,9 @@ export default function LegacyConversionsPage() {
                             title={item.stateMessage ?? undefined}
                           >
                             {INVENTORY_STATE_LABELS[item.state]}
+                            {item.stateMessage && (
+                              <span className="visually-hidden">. {item.stateMessage}</span>
+                            )}
                           </span>
                         </td>
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
