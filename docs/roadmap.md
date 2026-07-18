@@ -19,17 +19,20 @@ promessa de implementação — é direção.
 > catch-up, previsão determinística com caixa de fatura no vencimento e eventos
 > prontos para notificação. Ver [recurring-automation.md](recurring-automation.md)
 > e [forecast.md](forecast.md).
+>
+> Conversão assistida de crédito legado foi **concluída** — inventário com
+> resumo e filtros, assistente com pré-visualização determinística (parcelas
+> exatas, faturas, limite e redistribuição mensal), motor atômico idempotente
+> sem contagem dupla, estorno auditável com guarda de liquidação, lote
+> independente por item e migração de recorrentes legados sem retroativos. Ver
+> [legacy-credit-conversion.md](legacy-credit-conversion.md).
 
 ## Próxima grande etapa
 
-**Conversão assistida de crédito legado** — transformar transações `CREDIT`
-antigas em compras de cartão reais quando o usuário informar os dados do
-cartão, incluindo recorrentes legados marcados como "Crédito legado".
+**Importação de extratos** — CSV com pré-visualização, importação OFX e
+mapeamento de categorias assistido.
 
 ## Depois disso
-
-- **Importação de extratos** — CSV com pré-visualização e OFX; mapeamento de
-  categorias assistido por regras.
 
 - Entrega de notificações (o feed de eventos `GET /api/events/due` já fornece
   os dados: vencimentos próximos, fatura vencendo, falha de execução, caixa

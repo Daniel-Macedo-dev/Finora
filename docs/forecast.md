@@ -14,7 +14,11 @@ pagamento de fatura = redução de caixa bancário, nunca uma segunda despesa
 1. **Saldo de abertura** — saldos derivados das contas ativas até hoje
    (transações + pagamentos de fatura liquidados).
 2. **Transações futuras reais** — lançamentos já registrados com data após
-   hoje (`ACTUAL_TRANSACTION`).
+   hoje (`ACTUAL_TRANSACTION`). Transações **financeiramente inativas**
+   (crédito legado com conversão ativa) ficam de fora em todas as camadas —
+   saldo de abertura inclusive: a despesa vira caixa apenas pela fatura da
+   compra gerada, uma única vez
+   ([legacy-credit-conversion.md](legacy-credit-conversion.md)).
 3. **Ocorrências recorrentes de conta não materializadas**
    (`RECURRING_ACCOUNT_OCCURRENCE`) — janela `(hoje, fim]`:
    - materializada → aparece pelo artefato real, nunca pela projeção;

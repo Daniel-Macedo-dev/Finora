@@ -148,10 +148,14 @@ transação comum com `CREDIT` é rejeitado (`USE_CREDIT_CARD_PURCHASE`: "Para
 registrar uma nova compra no crédito, use a área de Cartões."); o formulário de
 transações direciona para o fluxo de cartões.
 
+Quando o usuário informa os dados reais do cartão, a **conversão assistida**
+transforma o registro legado em compra de cartão verdadeira — com fatura,
+parcelas e limite — mantendo o original como auditoria financeiramente
+inativa, sem nunca contar a despesa duas vezes. Ver
+[legacy-credit-conversion.md](legacy-credit-conversion.md).
+
 ## Limitações conhecidas
 
-- Sem conversão automática de crédito legado em faturas (dados originais do
-  cartão são desconhecidos; conversão manual deliberada fica para o futuro).
 - Recorrentes não geram compras de cartão automaticamente (aguarda a
   materialização idempotente do roadmap).
 - Sem crédito rotativo, refinanciamento ou saldo credor de fatura

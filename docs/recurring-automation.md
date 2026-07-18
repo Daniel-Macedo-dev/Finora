@@ -157,6 +157,9 @@ dados.
 
 - Sem fim de recorrência por "número de ocorrências" (apenas por data).
 - Preview limitado a 24 meses; feed de eventos a 92 dias.
-- Compromissos legados `CREDIT` exigem conversão manual (etapa futura do
-  roadmap: conversão assistida).
+- Compromissos legados `CREDIT` migram por
+  `POST /api/commitments/{id}/legacy-card-mapping`: o alvo passa a ser um
+  cartão real e `automation_from` impede qualquer retroativo — ocorrências
+  históricas ficam intocadas. Ver
+  [legacy-credit-conversion.md](legacy-credit-conversion.md).
 - O valor da definição é único — sem valores variáveis por ocorrência.

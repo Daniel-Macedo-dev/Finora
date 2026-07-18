@@ -54,7 +54,11 @@ Busca paginada (máx. 100/página) com filtros combinados por AND.
 **`CREDIT` é somente legado**: transações antigas com essa forma de pagamento
 são preservadas e marcadas `legacyCredit` (sem ligação com faturas); criar uma
 nova é rejeitado (`USE_CREDIT_CARD_PURCHASE`) — compras no crédito vivem no
-domínio de cartões ([credit-cards.md](credit-cards.md)).
+domínio de cartões ([credit-cards.md](credit-cards.md)). Um registro legado
+pode ser **convertido** em compra real: a conversão ativa o desativa
+financeiramente (`financiallyActive = false`) e ele permanece apenas como
+auditoria, protegido contra edição e exclusão
+([legacy-credit-conversion.md](legacy-credit-conversion.md)).
 
 ### Cartão de crédito (`credit_cards` e satélites)
 Cartões, faturas, compras, parcelas, pagamentos e ajustes têm documento

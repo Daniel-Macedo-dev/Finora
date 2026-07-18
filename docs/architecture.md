@@ -54,6 +54,9 @@ com.finora.api
 ├── commitment/    # definições recorrentes + RecurrenceCalculator determinístico
 │   ├── occurrence/  # ledger de ocorrências, materializador idempotente,
 │   │                # scheduler de vencidos com catch-up
+├── legacyconversion/  # conversão assistida de crédito legado: elegibilidade,
+│                      # inventário, preview determinístico, motor atômico,
+│                      # estorno auditável e lote independente
 ├── forecast/      # previsão de caixa determinística + eventos de vencimento
 ├── goal/          # metas de poupança e aportes
 ├── wishlist/      # itens + opções de compra validadas
@@ -94,7 +97,11 @@ usa `SettingsService`; `InsightService` usa `FinancialContextService`).
   execução nos commitments, ledger `commitment_occurrences` com identidade
   única e índices únicos parciais nos artefatos, rastreabilidade
   `commitment_id` em transações e compras) — com teste de migração a partir de
-  um banco V8 populado.
+  um banco V8 populado, `V10` conversão de crédito legado (flag
+  `financially_active`, ledger `legacy_credit_conversions` com índices únicos
+  parciais, vínculo `legacy_transaction_id` em compras e horizonte
+  `automation_from` em commitments) — com teste de migração a partir de um
+  banco V9 populado.
 - Invariantes críticas duplicadas como constraints: unicidade orçamento
   (mês, categoria), checks de positividade, consistência à vista × parcelado
   (`ck_options_kind_consistency`), enum checks e FKs. Índices apenas nos padrões

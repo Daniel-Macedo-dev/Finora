@@ -71,6 +71,11 @@ resolvem para **404 Not Found** (nunca 403), evitando confirmar sua existência.
 - Uniqueness passou a ser por usuário: nome de conta por usuário, (nome, tipo) de
   categoria por usuário, (mês, categoria) de orçamento por usuário, uma linha de
   settings por usuário.
+- A superfície de conversão de crédito legado segue o mesmo modelo: inventário,
+  elegibilidade, preview, conversão, detalhe, estorno, lote e mapeamento de
+  recorrente são owner-scoped ponta a ponta (ids alheios respondem 404), e o
+  ledger `legacy_credit_conversions` amarra origem, compra e cartão ao dono por
+  FKs compostas — provado em `LegacyConversionOwnershipTest`.
 
 ## Migração de dados v1 (claim legado)
 

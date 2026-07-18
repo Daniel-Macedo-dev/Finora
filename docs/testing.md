@@ -82,6 +82,39 @@
 - **Wishlist → compra real** (`WishlistPurchaseExecutionTest`): execução à vista
   e parcelada, retry não duplica, opção/cartão de outro dono inacessíveis.
 
+### Conversão de crédito legado
+
+- **Ciclo de vida pela API** (`LegacyConversionApiIntegrationTest`): inventário
+  com resumo e filtros; elegibilidade estruturada (fonte incompatível, gerada
+  por recorrente, id alheio como 404); preview determinístico (cronograma,
+  centavos exatos, limite, redistribuição mensal, primeira fatura divergente,
+  limite insuficiente, data futura); conversão move a despesa sem nunca dobrar
+  (dashboard e saldo); falha não deixa rastro; cartão arquivado/alheio;
+  estorno restaura exatamente uma vez e reconversão cria registros novos;
+  pagamento concluído bloqueia estorno (`CONVERSION_SETTLED`); cancelamento
+  direto da compra gerada bloqueado; lote independente e idempotente com
+  limite de 50.
+- **Posse** (`LegacyConversionOwnershipTest`): inventário nunca vaza fontes de
+  outro usuário (mesmo com filtros que casariam); preview/conversão/detalhe/
+  estorno de recursos alheios respondem 404 e deixam a vítima intocada.
+- **Concorrência real** (`LegacyConversionConcurrencyTest`): threads contra o
+  PostgreSQL de verdade — conversões simultâneas produzem exatamente uma
+  conversão e uma compra; estornos simultâneos elegem um vencedor (200 + 422)
+  e restauram a origem uma vez; conversão × estorno termina num único estado
+  consistente (invariantes: no máximo uma conversão ativa, origem ativa ⇔ sem
+  conversão ativa, nenhuma compra/parcela órfã); lotes idênticos concorrentes
+  nunca duplicam.
+- **Contabilidade** (`LegacyConversionAccountingTest`): orçamentos deslocam o
+  consumo do mês de origem para os meses das faturas e voltam no estorno —
+  sempre uma vez; a previsão troca o efeito de caixa da origem por uma única
+  saída de fatura (`CARD_INVOICE`) com o mesmo fecho.
+- **Mapeamento de recorrente** (`LegacyCardMappingIntegrationTest`): definição
+  legada ganha alvo real sem retroativos (process-due materializa zero
+  ocorrências históricas); não-legado e cartão arquivado rejeitados;
+  recursos alheios como 404.
+- **Migração** (`MigrationFromPopulatedV9Test`): V9 populado → V10 preservando
+  linhas, crédito legado financeiramente ativo e constraints da conversão.
+
 ### Recorrentes e previsão
 
 - **Calculadora** (`RecurrenceCalculatorTest`): sequência semanal ancorada;
@@ -176,7 +209,16 @@ visível e re-executável após corrigir a causa; isolamento entre usuários);
 vencimento da fatura — provado que todo evento projetado de cartão cai no dia
 de vencimento, nunca na data da compra; alerta de saldo negativo; fluxos sem
 conta; ocorrência materializada substitui a projeção sem contagem dupla;
-seção de caixa futuro no dashboard; jornada mobile de recorrentes e previsão).
+seção de caixa futuro no dashboard; jornada mobile de recorrentes e previsão);
+**conversão de crédito legado** (inventário com filtros; assistente completo com
+cronograma determinístico e conversão sem contagem dupla — verificado no
+dashboard antes/depois; retentativa idempotente devolvendo a mesma conversão;
+parcelamento em três faturas com alocação conferida; limite insuficiente
+bloqueando a confirmação; estorno com motivo restaurando a origem e bloqueio
+após pagamento concluído; lote com sucesso e falha convivendo e retentativa só
+das falhas; mapeamento de recorrente legado sem retroativos; isolamento entre
+usuários; e o fluxo principal completo a 390px — fontes legadas são forjadas
+via SQL no contêiner, exatamente como a migração V7 as criou).
 As datas dos cenários recorrentes são calculadas por offset a partir de hoje —
 as asserções derivam dos mesmos offsets, então o resultado independe do dia de
 execução. Localizadores acessíveis (roles e labels), sem seletores CSS frágeis.

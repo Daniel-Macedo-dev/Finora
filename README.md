@@ -170,8 +170,11 @@ Segunda release: multiusuário com autenticação por sessão. Ainda de uso loca
 - **Sem integração bancária, com emissor de cartão ou coleta de preços** —
   transações, compras de cartão e ofertas são registradas manualmente.
 - **Transações antigas com forma de pagamento `CREDIT` são preservadas como
-  "crédito legado"** — visíveis e contadas como sempre, mas sem ligação com
-  faturas; novas compras no crédito passam pela área de Cartões.
+  "crédito legado"** e podem ser **convertidas de forma assistida** em compras
+  de cartão reais (fatura, parcelas e limite), mantendo o registro original
+  como auditoria — ver
+  [`docs/legacy-credit-conversion.md`](docs/legacy-credit-conversion.md);
+  novas compras no crédito passam pela área de Cartões.
 - **Sem rate limiting distribuído de login** (adequado a um app pessoal same-origin).
 - As recomendações são **projeções baseadas nos seus dados e em premissas
   configuráveis** — não são aconselhamento financeiro profissional.
