@@ -13,6 +13,19 @@ public interface LegacyConversionRepository extends JpaRepository<LegacyCreditCo
 
     Optional<LegacyCreditConversion> findByIdAndUserId(Long id, Long userId);
 
+    /**
+     * Scalar lookup of the conversion's source transaction, used before taking
+     * locks. Loading the entity here and re-reading it under lock in the same
+     * persistence context would blow up with an optimistic-locking conflict
+     * when a concurrent reversal bumps the version in between.
+     */
+    @Query("""
+            select c.sourceTransactionId from LegacyCreditConversion c
+            where c.id = :id and c.userId = :userId
+            """)
+    Optional<Long> findSourceTransactionIdByIdAndUserId(@Param("id") Long id,
+                                                        @Param("userId") Long userId);
+
     /** Locked load for reversal: serializes racing lifecycle changes. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

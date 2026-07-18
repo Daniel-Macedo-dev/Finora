@@ -55,11 +55,12 @@ public class LegacyConversionReversalService {
 
     /** Owner-explicit reversal core. */
     public LegacyCreditConversion reverseForUser(Long userId, Long conversionId, String reason) {
-        // Unlocked read to discover the source, then the same lock order as
-        // the conversion engine: source row first.
-        LegacyCreditConversion unlocked = conversions.findByIdAndUserId(conversionId, userId)
+        // Scalar read to discover the source (never the managed entity — a
+        // concurrent reversal bumping the version would make the locked
+        // re-read below fail with an optimistic-locking conflict), then the
+        // same lock order as the conversion engine: source row first.
+        Long sourceId = conversions.findSourceTransactionIdByIdAndUserId(conversionId, userId)
                 .orElseThrow(() -> new NotFoundException("Conversão", conversionId));
-        Long sourceId = unlocked.getSourceTransactionId();
         Transaction source = transactions.findByIdAndUserIdForUpdate(sourceId, userId)
                 .orElseThrow(() -> new NotFoundException("Transação", sourceId));
 
