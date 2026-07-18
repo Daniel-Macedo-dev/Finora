@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowRightLeft, CheckCircle2, CircleDollarSign, Undo2 } from 'lucide-react'
+import { ArrowRightLeft, CheckCircle2, CircleDollarSign, Layers, Undo2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
 import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
@@ -7,8 +7,11 @@ import { formatBRL, formatDate } from '../../lib/format'
 import { useCategories } from '../shared/api'
 import { useConversionInventory } from './api'
 import LegacyConversionWizard from './LegacyConversionWizard'
+import LegacyConversionDetail from './LegacyConversionDetail'
+import LegacyBatchConversion from './LegacyBatchConversion'
 import {
   INVENTORY_STATE_LABELS,
+  MAX_BATCH_SIZE,
   type ConversionInventoryItem,
   type ConversionInventoryState,
 } from './types'
@@ -36,6 +39,9 @@ export default function LegacyConversionsPage() {
   const [state, setState] = useState<ConversionInventoryState | ''>('')
   const [page, setPage] = useState(0)
   const [converting, setConverting] = useState<ConversionInventoryItem | null>(null)
+  const [inspectingId, setInspectingId] = useState<number | null>(null)
+  const [selected, setSelected] = useState<Map<number, ConversionInventoryItem>>(new Map())
+  const [batchOpen, setBatchOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -59,6 +65,41 @@ export default function LegacyConversionsPage() {
 
   const data = inventory.data
   const pageItems = data?.page.content ?? []
+  const convertibleOnPage = pageItems.filter(isConvertible)
+  const allOnPageSelected =
+    convertibleOnPage.length > 0 &&
+    convertibleOnPage.every((item) => selected.has(item.transactionId))
+
+  function toggleSelected(item: ConversionInventoryItem) {
+    setSelected((current) => {
+      const next = new Map(current)
+      if (next.has(item.transactionId)) {
+        next.delete(item.transactionId)
+      } else if (next.size < MAX_BATCH_SIZE) {
+        next.set(item.transactionId, item)
+      }
+      return next
+    })
+  }
+
+  function toggleAllOnPage() {
+    setSelected((current) => {
+      const next = new Map(current)
+      if (allOnPageSelected) {
+        for (const item of convertibleOnPage) {
+          next.delete(item.transactionId)
+        }
+      } else {
+        for (const item of convertibleOnPage) {
+          if (next.size >= MAX_BATCH_SIZE) {
+            break
+          }
+          next.set(item.transactionId, item)
+        }
+      }
+      return next
+    })
+  }
 
   const hasFilters = Boolean(month || from || to || categoryId || minAmount || maxAmount || state)
 
@@ -197,6 +238,34 @@ export default function LegacyConversionsPage() {
             </select>
           </div>
 
+          {selected.size > 0 && (
+            <div className="lc-selection-bar" role="status">
+              <span>
+                {selected.size === 1
+                  ? '1 transação selecionada'
+                  : `${selected.size} transações selecionadas`}
+                {selected.size >= MAX_BATCH_SIZE && ` (máximo de ${MAX_BATCH_SIZE} por lote)`}
+              </span>
+              <span style={{ display: 'inline-flex', gap: 'var(--space-2)' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setSelected(new Map())}
+                >
+                  Limpar seleção
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setBatchOpen(true)}
+                >
+                  <Layers size={16} aria-hidden="true" />
+                  Converter selecionadas
+                </button>
+              </span>
+            </div>
+          )}
+
           {pageItems.length === 0 ? (
             <EmptyState
               title="Nenhum crédito legado encontrado"
@@ -212,6 +281,15 @@ export default function LegacyConversionsPage() {
                 <table className="data">
                   <thead>
                     <tr>
+                      <th scope="col">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar todas as elegíveis da página"
+                          checked={allOnPageSelected}
+                          disabled={convertibleOnPage.length === 0}
+                          onChange={toggleAllOnPage}
+                        />
+                      </th>
                       <th scope="col">Data</th>
                       <th scope="col">Descrição</th>
                       <th scope="col" className="lc-col-optional">
@@ -229,6 +307,19 @@ export default function LegacyConversionsPage() {
                   <tbody>
                     {pageItems.map((item) => (
                       <tr key={item.transactionId}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Selecionar ${item.description}`}
+                            checked={selected.has(item.transactionId)}
+                            disabled={
+                              !isConvertible(item) ||
+                              (!selected.has(item.transactionId) &&
+                                selected.size >= MAX_BATCH_SIZE)
+                            }
+                            onChange={() => toggleSelected(item)}
+                          />
+                        </td>
                         <td>{formatDate(item.date)}</td>
                         <td className="lc-description" title={item.description}>
                           {item.description}
@@ -255,6 +346,15 @@ export default function LegacyConversionsPage() {
                               onClick={() => setConverting(item)}
                             >
                               Converter
+                            </button>
+                          )}
+                          {item.conversionId !== null && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => setInspectingId(item.conversionId)}
+                            >
+                              Ver conversão
                             </button>
                           )}
                         </td>
@@ -296,7 +396,26 @@ export default function LegacyConversionsPage() {
         <LegacyConversionWizard
           source={converting}
           onClose={() => setConverting(null)}
-          onConverted={() => setConverting(null)}
+          onConverted={(conversionId) => {
+            setConverting(null)
+            setSelected(new Map())
+            setInspectingId(conversionId)
+          }}
+        />
+      )}
+
+      {inspectingId !== null && (
+        <LegacyConversionDetail
+          conversionId={inspectingId}
+          onClose={() => setInspectingId(null)}
+        />
+      )}
+
+      {batchOpen && (
+        <LegacyBatchConversion
+          sources={[...selected.values()]}
+          onClose={() => setBatchOpen(false)}
+          onFinished={() => setSelected(new Map())}
         />
       )}
     </>
