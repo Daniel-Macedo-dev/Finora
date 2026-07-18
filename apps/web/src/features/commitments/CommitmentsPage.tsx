@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../compon
 import { formatBRL, formatDate } from '../../lib/format'
 import CommitmentForm from './CommitmentForm'
 import OccurrencesDialog from './OccurrencesDialog'
+import LegacyCardMappingDialog from './LegacyCardMappingDialog'
 import {
   useCommitments,
   useCreateCommitment,
@@ -30,6 +31,7 @@ export default function CommitmentsPage() {
   const [editing, setEditing] = useState<Commitment | null>(null)
   const [deleting, setDeleting] = useState<Commitment | null>(null)
   const [inspecting, setInspecting] = useState<Commitment | null>(null)
+  const [mapping, setMapping] = useState<Commitment | null>(null)
 
   const commitments = useCommitments()
   const upcoming = useUpcomingCommitments(2)
@@ -173,12 +175,14 @@ export default function CommitmentsPage() {
                           <span className={`badge ${status.className}`}>{status.label}</span>
                         )}
                         {commitment.legacyProjectionOnly && (
-                          <span
-                            className="badge badge-neutral"
+                          <button
+                            type="button"
+                            className="badge badge-warning commitment-legacy-action"
                             title="Criado antes da automação com pagamento no crédito: continua apenas como planejamento até você escolher um cartão de destino."
+                            onClick={() => setMapping(commitment)}
                           >
-                            Crédito legado
-                          </span>
+                            Crédito legado — migrar para cartão
+                          </button>
                         )}
                         {commitment.failedOccurrences > 0 && (
                           <span className="badge badge-negative">
@@ -302,6 +306,10 @@ export default function CommitmentsPage() {
 
       {inspecting && (
         <OccurrencesDialog commitment={inspecting} onClose={() => setInspecting(null)} />
+      )}
+
+      {mapping && (
+        <LegacyCardMappingDialog commitment={mapping} onClose={() => setMapping(null)} />
       )}
 
       <ConfirmDialog

@@ -111,6 +111,18 @@
   padding: 0 var(--space-1);
 }
 
+/* The legacy badge is a real action: keep badge looks, restore affordance. */
+.commitment-legacy-action {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-xs);
+}
+
+.commitment-legacy-action:hover {
+  text-decoration: underline;
+}
+
 .commitment-form-note {
   font-size: var(--text-sm);
   color: var(--ink-secondary);

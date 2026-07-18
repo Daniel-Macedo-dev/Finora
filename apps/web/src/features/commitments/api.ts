@@ -88,6 +88,27 @@ export function useSetCommitmentActive() {
   })
 }
 
+export interface MapLegacyCreditRequest {
+  creditCardId: number
+  installmentCount: number
+  executionMode: 'MANUAL' | 'AUTOMATIC'
+}
+
+/**
+ * Maps a "Crédito legado" definition to a real card target. Only future,
+ * still-unmaterialized occurrences use the card — the backend records an
+ * automation horizon so historical occurrences are never backfilled. Card
+ * projections and the forecast change, hence the financial-records set.
+ */
+export function useMapLegacyCredit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: number; request: MapLegacyCreditRequest }) =>
+      api.post<Commitment>(`/commitments/${id}/legacy-card-mapping`, request),
+    onSuccess: () => invalidateFinancialRecords(queryClient),
+  })
+}
+
 type OccurrenceAction = 'materialize' | 'retry' | 'skip' | 'unskip' | 'reverse'
 
 export function useOccurrenceAction(commitmentId: number | null) {
