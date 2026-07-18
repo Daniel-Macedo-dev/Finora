@@ -15,9 +15,38 @@ import { apiSession, categoryId, pageGet, pagePost, registerViaUi } from './help
  * 10 → first invoice December 2025) never depend on the calendar.
  */
 
+let pgContainer: string | null = null
+
+/**
+ * Resolves the PostgreSQL container: the docker-compose name locally, or the
+ * generated service-container id on CI (discovered by image ancestry;
+ * FINORA_PG_CONTAINER overrides both).
+ */
+function resolvePgContainer(): string {
+  if (pgContainer) {
+    return pgContainer
+  }
+  if (process.env.FINORA_PG_CONTAINER) {
+    return (pgContainer = process.env.FINORA_PG_CONTAINER)
+  }
+  try {
+    execSync('docker inspect finora-postgres', { stdio: 'ignore' })
+    return (pgContainer = 'finora-postgres')
+  } catch {
+    const id = execSync('docker ps -q --filter "ancestor=postgres:16.6-alpine"')
+      .toString()
+      .trim()
+      .split('\n')[0]
+    if (!id) {
+      throw new Error('Contêiner PostgreSQL não encontrado para forjar crédito legado')
+    }
+    return (pgContainer = id)
+  }
+}
+
 function forgeLegacyCredit(transactionId: number) {
   execSync(
-    'docker exec finora-postgres psql -U finora -d finora -c ' +
+    `docker exec ${resolvePgContainer()} psql -U finora -d finora -c ` +
       `"UPDATE transactions SET payment_method = 'CREDIT', legacy_credit = TRUE WHERE id = ${transactionId}"`,
   )
 }

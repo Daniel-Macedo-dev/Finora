@@ -129,9 +129,24 @@ async function seedDemoData(page: Page) {
 
   // Legacy-credit inventory: eligible sources, one converted, one reversed —
   // forged exactly like migration V7 (legacy rows cannot be created by API).
+  // The container is the compose one locally or a service container on CI.
+  const pgContainer = (() => {
+    if (process.env.FINORA_PG_CONTAINER) {
+      return process.env.FINORA_PG_CONTAINER
+    }
+    try {
+      execSync('docker inspect finora-postgres', { stdio: 'ignore' })
+      return 'finora-postgres'
+    } catch {
+      return execSync('docker ps -q --filter "ancestor=postgres:16.6-alpine"')
+        .toString()
+        .trim()
+        .split('\n')[0]
+    }
+  })()
   const forgeLegacy = (id: number) =>
     execSync(
-      'docker exec finora-postgres psql -U finora -d finora -c ' +
+      `docker exec ${pgContainer} psql -U finora -d finora -c ` +
         `"UPDATE transactions SET payment_method = 'CREDIT', legacy_credit = TRUE WHERE id = ${id}"`,
     )
   const compras0 = await categoryId(page, 'Compras', 'EXPENSE')
