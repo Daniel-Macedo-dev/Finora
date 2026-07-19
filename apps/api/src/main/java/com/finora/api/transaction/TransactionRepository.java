@@ -116,4 +116,7 @@ public interface TransactionRepository
     /** Bulk lookup of generated transactions for batch detail responses. */
     List<Transaction> findAllByUserIdAndStatementImportItemIdIn(
             Long userId, java.util.Collection<Long> statementImportItemIds);
+
+    /** Bulk owner-scoped lookup (duplicate-match summaries in batch detail). */
+    List<Transaction> findAllByUserIdAndIdIn(Long userId, java.util.Collection<Long> ids);
 }
