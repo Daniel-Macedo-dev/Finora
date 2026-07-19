@@ -26,7 +26,7 @@ CREATE TABLE statement_import_batches (
     account_id          BIGINT        NOT NULL,
     original_filename   VARCHAR(255)  NOT NULL,
     format              VARCHAR(10)   NOT NULL,
-    file_sha256         CHAR(64)      NOT NULL,
+    file_sha256         VARCHAR(64)   NOT NULL,
     file_size_bytes     BIGINT        NOT NULL,
     parser_version      INTEGER       NOT NULL,
     fingerprint_version INTEGER       NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE statement_import_items (
     memo                   VARCHAR(500),
     -- Versioned SHA-256 content fingerprint (owner, account, date, type,
     -- amount, normalized description).
-    fingerprint            CHAR(64),
+    fingerprint            VARCHAR(64),
     suggested_category_id  BIGINT,
     -- Rule that produced the suggestion. Informational snapshot — no FK, so
     -- deleting a rule never blocks on (or cascades into) the import ledger.

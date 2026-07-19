@@ -80,6 +80,14 @@ public class Transaction extends AuditableEntity {
     @Column(name = "commitment_id", updatable = false)
     private Long commitmentId;
 
+    /**
+     * Set when this transaction was materialized from a statement-import
+     * item. A partial unique index guarantees at most one live transaction
+     * per item — the idempotency backstop of import confirmation.
+     */
+    @Column(name = "statement_import_item_id", updatable = false)
+    private Long statementImportItemId;
+
     @Column(columnDefinition = "text")
     private String notes;
 
@@ -194,5 +202,13 @@ public class Transaction extends AuditableEntity {
 
     public void setWishlistItemId(Long wishlistItemId) {
         this.wishlistItemId = wishlistItemId;
+    }
+
+    public Long getStatementImportItemId() {
+        return statementImportItemId;
+    }
+
+    public void setStatementImportItemId(Long statementImportItemId) {
+        this.statementImportItemId = statementImportItemId;
     }
 }
