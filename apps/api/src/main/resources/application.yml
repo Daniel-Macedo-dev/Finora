@@ -11,6 +11,12 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      # Statement uploads are hard-bounded (see StatementLimits): the request
+      # is rejected by the container before the application buffers more.
+      max-file-size: 5MB
+      max-request-size: 6MB
   session:
     jdbc:
       # Flyway owns the SPRING_SESSION schema (V5); never auto-initialize.

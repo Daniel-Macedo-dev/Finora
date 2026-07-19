@@ -66,16 +66,30 @@ public final class TransactionDtos {
             Long generatedCardPurchaseId,
             Long wishlistItemId,
             Long commitmentId,
+            /** True when this transaction was materialized from a statement import. */
+            boolean imported,
+            /** The import item that generated this transaction, when imported. */
+            Long statementImportItemId,
+            /** The import batch of that item — resolved in bulk by the service. */
+            Long statementImportBatchId,
             String notes) {
 
         public static TransactionResponse from(Transaction t) {
-            return from(t, null, null);
+            return from(t, null, null, null);
         }
 
         /** Variant carrying conversion metadata resolved in bulk by the service. */
         public static TransactionResponse from(Transaction t,
                                                com.finora.api.legacyconversion.ConversionStatus conversionStatus,
                                                Long generatedCardPurchaseId) {
+            return from(t, conversionStatus, generatedCardPurchaseId, null);
+        }
+
+        /** Variant also carrying import audit metadata resolved in bulk. */
+        public static TransactionResponse from(Transaction t,
+                                               com.finora.api.legacyconversion.ConversionStatus conversionStatus,
+                                               Long generatedCardPurchaseId,
+                                               Long statementImportBatchId) {
             return new TransactionResponse(
                     t.getId(),
                     t.getType(),
@@ -99,6 +113,9 @@ public final class TransactionDtos {
                     generatedCardPurchaseId,
                     t.getWishlistItemId(),
                     t.getCommitmentId(),
+                    t.getStatementImportItemId() != null,
+                    t.getStatementImportItemId(),
+                    statementImportBatchId,
                     t.getNotes());
         }
     }

@@ -12,6 +12,8 @@ import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.legacyconversion.ConversionStatus;
 import com.finora.api.legacyconversion.LegacyConversionRepository;
 import com.finora.api.legacyconversion.LegacyCreditConversion;
+import com.finora.api.statementimport.StatementImportItem;
+import com.finora.api.statementimport.StatementImportItemRepository;
 import com.finora.api.transaction.TransactionDtos.TransactionRequest;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
 import java.time.YearMonth;
@@ -35,17 +37,20 @@ public class TransactionService {
     private final CategoryRepository categories;
     private final AccountRepository accounts;
     private final LegacyConversionRepository conversions;
+    private final StatementImportItemRepository importItems;
     private final CurrentUserProvider currentUser;
 
     public TransactionService(TransactionRepository transactions,
                               CategoryRepository categories,
                               AccountRepository accounts,
                               LegacyConversionRepository conversions,
+                              StatementImportItemRepository importItems,
                               CurrentUserProvider currentUser) {
         this.transactions = transactions;
         this.categories = categories;
         this.accounts = accounts;
         this.conversions = conversions;
+        this.importItems = importItems;
         this.currentUser = currentUser;
     }
 
@@ -86,10 +91,14 @@ public class TransactionService {
                 Math.clamp(size, 1, MAX_PAGE_SIZE),
                 Sort.by(Sort.Direction.DESC, "occurredOn").and(Sort.by(Sort.Direction.DESC, "id")));
         var result = transactions.findAll(spec, pageable);
-        // Conversion audit metadata for the whole page in one bulk query.
+        // Conversion and import audit metadata for the whole page in bulk.
         Map<Long, LegacyCreditConversion> latest = latestConversionsBySource(
                 currentUser.currentUserId(), result.getContent());
-        return PageResponse.from(result.map(t -> withConversion(t, latest.get(t.getId()))));
+        Map<Long, Long> importBatches = importBatchesByItem(
+                currentUser.currentUserId(), result.getContent());
+        return PageResponse.from(result.map(t -> withMetadata(t, latest.get(t.getId()),
+                t.getStatementImportItemId() == null ? null
+                        : importBatches.get(t.getStatementImportItemId()))));
     }
 
     @Transactional(readOnly = true)
@@ -97,7 +106,27 @@ public class TransactionService {
         Transaction transaction = find(id);
         Map<Long, LegacyCreditConversion> latest = latestConversionsBySource(
                 transaction.getUserId(), List.of(transaction));
-        return withConversion(transaction, latest.get(transaction.getId()));
+        Map<Long, Long> importBatches = importBatchesByItem(
+                transaction.getUserId(), List.of(transaction));
+        return withMetadata(transaction, latest.get(transaction.getId()),
+                transaction.getStatementImportItemId() == null ? null
+                        : importBatches.get(transaction.getStatementImportItemId()));
+    }
+
+    /** Import batch per generated item on the page, in one bulk query. */
+    private Map<Long, Long> importBatchesByItem(Long userId, List<Transaction> page) {
+        List<Long> itemIds = page.stream()
+                .map(Transaction::getStatementImportItemId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> batches = new HashMap<>();
+        for (StatementImportItem item : importItems.findAllByUserIdAndIdIn(userId, itemIds)) {
+            batches.put(item.getId(), item.getBatchId());
+        }
+        return batches;
     }
 
     /**
@@ -123,17 +152,16 @@ public class TransactionService {
         return latest;
     }
 
-    private static TransactionResponse withConversion(Transaction transaction,
-                                                      LegacyCreditConversion conversion) {
-        if (conversion == null) {
-            return TransactionResponse.from(transaction);
-        }
+    private static TransactionResponse withMetadata(Transaction transaction,
+                                                    LegacyCreditConversion conversion,
+                                                    Long statementImportBatchId) {
         return TransactionResponse.from(
                 transaction,
-                conversion.getStatus(),
-                conversion.getStatus() == ConversionStatus.ACTIVE
+                conversion == null ? null : conversion.getStatus(),
+                conversion != null && conversion.getStatus() == ConversionStatus.ACTIVE
                         ? conversion.getCardPurchaseId()
-                        : null);
+                        : null,
+                statementImportBatchId);
     }
 
     public TransactionResponse create(TransactionRequest request) {
@@ -178,6 +206,13 @@ public class TransactionService {
             throw new BusinessRuleException("TRANSACTION_FROM_RECURRING",
                     "Esta transação foi gerada por um recorrente. "
                             + "Estorne a ocorrência na área de Recorrentes.");
+        }
+        // Imported transactions are undone through the import ledger, keeping
+        // the audit trail and the financial effect consistent.
+        if (transaction.getStatementImportItemId() != null) {
+            throw new BusinessRuleException("TRANSACTION_FROM_IMPORT",
+                    "Esta transação foi importada de um extrato. "
+                            + "Desfaça a importação na área Importar extrato.");
         }
         // Sources with conversion history anchor the conversion audit trail
         // (active or reversed) and can never be removed.

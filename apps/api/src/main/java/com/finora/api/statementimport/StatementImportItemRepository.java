@@ -56,6 +56,9 @@ public interface StatementImportItemRepository extends JpaRepository<StatementIm
 
     long countByBatchIdAndStatus(Long batchId, StatementImportItemStatus status);
 
+    /** Bulk lookup for transaction responses' import audit metadata. */
+    List<StatementImportItem> findAllByUserIdAndIdIn(Long userId, Collection<Long> ids);
+
     /** Item state histogram of one batch, for status recomputation and totals. */
     @Query("""
             select i.status as status, count(i) as total from StatementImportItem i

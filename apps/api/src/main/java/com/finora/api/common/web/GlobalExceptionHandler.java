@@ -59,6 +59,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.badRequest().headers(headers).body(problem);
     }
 
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.PAYLOAD_TOO_LARGE, "O arquivo excede o limite de 5 MB.");
+        problem.setTitle("Arquivo grande demais");
+        problem.setType(URI.create("https://finora.app/errors/upload-too-large"));
+        problem.setProperty("code", "STATEMENT_FILE_TOO_LARGE");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).headers(headers).body(problem);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ProblemDetail handleIntegrity(DataIntegrityViolationException ex) {
         log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
