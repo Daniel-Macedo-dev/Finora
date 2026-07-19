@@ -98,4 +98,22 @@ public interface TransactionRepository
     List<Transaction> findActiveInForecastWindow(@Param("userId") Long userId,
                                                  @Param("after") LocalDate after,
                                                  @Param("through") LocalDate through);
+
+    // ── Statement import ────────────────────────────────────────────────────
+
+    /**
+     * Candidate pool for possible-duplicate detection: the account's live
+     * transactions inside the statement's (padded) date window, loaded once
+     * per batch — never one query per row.
+     */
+    List<Transaction> findAllByUserIdAndAccountIdAndFinanciallyActiveTrueAndOccurredOnBetween(
+            Long userId, Long accountId, LocalDate from, LocalDate to);
+
+    /** The live transaction materialized from one import item, if any. */
+    Optional<Transaction> findByUserIdAndStatementImportItemId(Long userId,
+                                                               Long statementImportItemId);
+
+    /** Bulk lookup of generated transactions for batch detail responses. */
+    List<Transaction> findAllByUserIdAndStatementImportItemIdIn(
+            Long userId, java.util.Collection<Long> statementImportItemIds);
 }
