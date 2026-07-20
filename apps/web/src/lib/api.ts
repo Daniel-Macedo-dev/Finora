@@ -142,6 +142,10 @@ export const api = {
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, body !== undefined ? jsonInit('POST', body) : { method: 'POST' }),
   put: <T>(path: string, body: unknown) => request<T>(path, jsonInit('PUT', body)),
+  patch: <T>(path: string, body: unknown) => request<T>(path, jsonInit('PATCH', body)),
+  /** Multipart upload; the browser supplies the Content-Type boundary. */
+  postMultipart: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: 'POST', body: form }),
   delete: (path: string) => request<void>(path, { method: 'DELETE' }),
 }
 
