@@ -17,6 +17,9 @@ User 1──n WishlistItem 1──n PurchaseOption, 0..1 Category
 User 1──1 AppSettings
 User 1──n CreditCard 1──n CardInvoice 1──n {CardInstallment, InvoicePayment, InvoiceAdjustment}
 CreditCard 1──n CardPurchase 1──n CardInstallment
+User 1──n StatementImportBatch n──1 Account
+StatementImportBatch 1──n StatementImportItem ──0..1 Transaction (statement_import_item_id)
+User 1──n CategoryMappingRule n──1 Category, 0..1 Account
 ```
 
 Uniqueness é por usuário e, onde a aplicação compara sem distinção de caixa, o
@@ -59,6 +62,13 @@ pode ser **convertido** em compra real: a conversão ativa o desativa
 financeiramente (`financiallyActive = false`) e ele permanece apenas como
 auditoria, protegido contra edição e exclusão
 ([legacy-credit-conversion.md](legacy-credit-conversion.md)).
+
+### Importação de extrato (`statement_import_batches`, `statement_import_items`, `category_mapping_rules`)
+Upload de CSV/OFX de conta corrente/poupança tem documento dedicado:
+[statement-import.md](statement-import.md). Invariante central: linhas
+parseadas são só pré-visualização até a confirmação; um item incluído gera no
+máximo uma transação real (`statement_import_item_id` único e parcial), e
+desfazer remove o efeito financeiro sem apagar o ledger de importação.
 
 ### Cartão de crédito (`credit_cards` e satélites)
 Cartões, faturas, compras, parcelas, pagamentos e ajustes têm documento

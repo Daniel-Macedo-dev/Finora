@@ -57,6 +57,10 @@ com.finora.api
 ├── legacyconversion/  # conversão assistida de crédito legado: elegibilidade,
 │                      # inventário, preview determinístico, motor atômico,
 │                      # estorno auditável e lote independente
+├── statementimport/   # upload de extrato CSV/OFX, parser seguro, fingerprints,
+│   ├── parser/        # deduplicação, regras de categoria, materialização
+│   │   ├── csv/       # e desfazer auditável
+│   │   └── ofx/
 ├── forecast/      # previsão de caixa determinística + eventos de vencimento
 ├── goal/          # metas de poupança e aportes
 ├── wishlist/      # itens + opções de compra validadas
@@ -101,7 +105,10 @@ usa `SettingsService`; `InsightService` usa `FinancialContextService`).
   `financially_active`, ledger `legacy_credit_conversions` com índices únicos
   parciais, vínculo `legacy_transaction_id` em compras e horizonte
   `automation_from` em commitments) — com teste de migração a partir de um
-  banco V9 populado.
+  banco V9 populado, `V11` importação de extratos (`statement_import_batches`,
+  `statement_import_items`, `category_mapping_rules`, com índices únicos
+  parciais contra duplicata exata e dupla materialização) — com teste de
+  migração a partir de um banco V10 populado.
 - Invariantes críticas duplicadas como constraints: unicidade orçamento
   (mês, categoria), checks de positividade, consistência à vista × parcelado
   (`ck_options_kind_consistency`), enum checks e FKs. Índices apenas nos padrões

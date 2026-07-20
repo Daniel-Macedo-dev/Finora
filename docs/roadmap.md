@@ -26,17 +26,22 @@ promessa de implementação — é direção.
 > sem contagem dupla, estorno auditável com guarda de liquidação, lote
 > independente por item e migração de recorrentes legados sem retroativos. Ver
 > [legacy-credit-conversion.md](legacy-credit-conversion.md).
+>
+> Importação de extratos foi **concluída** — upload de CSV/OFX com
+> pré-visualização determinística, parser OFX seguro sem XML/XXE, mapeamento
+> de colunas assistido para formatos brasileiros, deduplicação em três níveis
+> (arquivo, identidade forte, conteúdo), categorização por regras
+> determinísticas, confirmação idempotente por item e desfazer auditável. Ver
+> [statement-import.md](statement-import.md).
 
 ## Próxima grande etapa
 
-**Importação de extratos** — CSV com pré-visualização, importação OFX e
-mapeamento de categorias assistido.
+**Entrega de notificações** — o feed de eventos `GET /api/events/due` já
+fornece os dados (vencimentos próximos, fatura vencendo, falha de execução,
+caixa projetado insuficiente); falta a entrega em si.
 
 ## Depois disso
 
-- Entrega de notificações (o feed de eventos `GET /api/events/due` já fornece
-  os dados: vencimentos próximos, fatura vencendo, falha de execução, caixa
-  projetado insuficiente).
 - Histórico de preços dos itens de desejo (registros manuais ao longo do tempo;
   integrações reais de preço só com fonte confiável).
 - PWA / offline com sincronização.

@@ -115,6 +115,41 @@
 - **Migração** (`MigrationFromPopulatedV9Test`): V9 populado → V10 preservando
   linhas, crédito legado financeiramente ativo e constraints da conversão.
 
+### Importação de extratos
+
+- **Parsers** (`CsvStatementParserTest`, `OfxStatementParserTest`): UTF-8 com e
+  sem BOM, Windows-1252, vírgula e ponto e vírgula, aspas e aspas escapadas,
+  CRLF/LF, cabeçalho presente/ausente, decimal com vírgula e com ponto, colunas
+  separadas de débito/crédito, linhas em branco, colunas obrigatórias
+  ausentes, aspas malformadas, linha e valor acima do limite, excesso de
+  linhas, valor zero, data/valor inválidos; OFX 1.x (SGML) e 2.x (XML),
+  múltiplos `STMTTRN`, `FITID` presente e ausente, fallback `NAME`/`MEMO`,
+  sufixo de fuso não move a data, aninhamento malformado, tipo de conta não
+  suportado, fatura de cartão detectada e bloqueada, `<!DOCTYPE`/`<!ENTITY`
+  rejeitados, limites de entrada/campo — todos com fixtures sintéticas, nunca
+  dados reais.
+- **Ciclo de vida pela API** (`StatementImportApiIntegrationTest`): upload CSV
+  aguardando mapeamento e OFX direto para pré-visualização; mapeamento
+  contraditório rejeitado; prévia e parse autoritativo; edição de item antes
+  da confirmação; troca de conta de destino reclassificando duplicatas;
+  confirmação com resultado por item; retentativa após correção; desfazer
+  item e lote; fatura de cartão bloqueada com mensagem apontando para Cartões.
+- **Posse** (`StatementImportOwnershipTest`): lote, item e regra de outro
+  usuário respondem 404; contagem única de saldo/orçamento/categoria mesmo
+  com múltiplos usuários importando extratos parecidos.
+- **Concorrência real** (`StatementImportConcurrencyTest`): confirmações
+  simultâneas do mesmo item produzem uma única transação; reenvio do mesmo
+  arquivo e uploads concorrentes permanecem consistentes — threads contra o
+  PostgreSQL de verdade.
+- **Contabilidade** (`StatementImportAccountingTest`): saldo de conta,
+  dashboard, orçamento e categoria contam a transação importada exatamente
+  uma vez; itens excluídos, com falha ou pulados por duplicidade nunca
+  contam; desfazer remove o efeito uma única vez.
+- **Migração** (`MigrationFromPopulatedV10Test`): banco V10 populado (com
+  conversões de crédito legado) → V11 preservando todos os dados; tabelas
+  novas nascem vazias; nenhuma transação antiga nasce marcada como
+  importada; constraints e índices únicos parciais válidos.
+
 ### Recorrentes e previsão
 
 - **Calculadora** (`RecurrenceCalculatorTest`): sequência semanal ancorada;
@@ -178,7 +213,15 @@ associação label/erro do `FormField`, navegação do `MonthPicker`, retry do
 destino, sem `CREDIT` genérico, validação de destino, submit completo),
 rótulos pt-BR de status de ocorrência, invalidação de queries após
 materialização; página de previsão (KPIs, alerta de saldo negativo, fluxos sem
-conta, rótulos de fonte por evento, link para fatura, estado vazio).
+conta, rótulos de fonte por evento, link para fatura, estado vazio); a
+experiência de importação de extratos (`statement-imports.test.tsx`) — texto
+de privacidade no upload, mapeamento CSV com débito/crédito e delimitador,
+renderização da prévia e de linhas inválidas, sugestão e correção de
+categoria com salvar-como-regra, revisão de duplicata lado a lado com
+duplicata exata bloqueada e possível duplicata com override explícito,
+inclusão/exclusão em lote, bloqueio de confirmação, resultado parcial,
+retentativa, histórico, confirmação de desfazer e bloqueio, invalidação de
+queries, nomes acessíveis.
 
 ## E2E (`apps/web/e2e`)
 
@@ -218,7 +261,17 @@ bloqueando a confirmação; estorno com motivo restaurando a origem e bloqueio
 após pagamento concluído; lote com sucesso e falha convivendo e retentativa só
 das falhas; mapeamento de recorrente legado sem retroativos; isolamento entre
 usuários; e o fluxo principal completo a 390px — fontes legadas são forjadas
-via SQL no contêiner, exatamente como a migração V7 as criou).
+via SQL no contêiner, exatamente como a migração V7 as criou);
+**importação de extratos** (`statement-imports.spec.ts`: jornada CSV completa
+com mapeamento, categorização, efeito contábil e reenvio idempotente
+detectando duplicatas; colunas separadas de débito/crédito; possível
+duplicata contra transação manual exigindo override explícito; correção de
+categoria salva como regra e reaproveitada em outra conta; OFX XML, OFX
+malformado bloqueado com mensagem segura e fatura de cartão redirecionada
+para Cartões; falha parcial retentável até tudo importar; desfazer item e
+lote preservando o ledger de auditoria; isolamento entre usuários; e o fluxo
+CSV principal completo a 390px — arquivos sintéticos em memória, datas
+fixas em 2026-06, sem dados bancários reais).
 As datas dos cenários recorrentes são calculadas por offset a partir de hoje —
 as asserções derivam dos mesmos offsets, então o resultado independe do dia de
 execução. Localizadores acessíveis (roles e labels), sem seletores CSS frágeis.

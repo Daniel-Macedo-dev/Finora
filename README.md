@@ -16,6 +16,13 @@ Interface em português do Brasil; código, banco e API em inglês.
   configurações e dados, totalmente isolados de outros usuários.
 - **Transações** — registro de receitas e despesas com categoria, conta, forma de
   pagamento, busca, filtros por mês/tipo/categoria e paginação.
+- **Importação de extratos** — upload de CSV ou OFX de contas correntes/poupança
+  com pré-visualização determinística, parser OFX seguro (sem XML/XXE),
+  mapeamento de colunas para formatos brasileiros, deduplicação em três níveis
+  (arquivo, identidade forte, conteúdo), categorização por regras
+  determinísticas e confirmação idempotente com desfazer auditável — o arquivo
+  bruto nunca é retido além do necessário para o parse. Ver
+  [docs/statement-import.md](docs/statement-import.md).
 - **Contas** — contas correntes, poupança e dinheiro físico com saldo derivado do
   histórico (nunca armazenado).
 - **Cartões de crédito** — cartões com limite, fechamento e vencimento; compras à
@@ -131,6 +138,8 @@ Endpoints principais (JSON, erros em RFC 9457 Problem Details):
 | Contas | `GET/POST /api/accounts`, `GET/PUT/DELETE /api/accounts/{id}` |
 | Categorias | `GET/POST /api/categories`, `GET/PUT/DELETE /api/categories/{id}` |
 | Transações | `GET /api/transactions?month=YYYY-MM&type=&categoryId=&search=&page=`, `POST`, `PUT/DELETE /{id}` |
+| Importação de extratos | `POST/GET /api/statement-imports`, `GET/PATCH /{id}`, `PUT /{id}/csv-mapping`, `POST /{id}/reparse`, `PATCH /{id}/items/{itemId}`, `POST /{id}/confirm`, `POST /{id}/undo`, `POST /{id}/items/{itemId}/undo` |
+| Regras de categoria | `GET/POST /api/category-mapping-rules`, `PUT/DELETE /{id}` |
 | Cartões | `GET/POST /api/credit-cards`, `GET/PUT/DELETE /{id}`, `POST /{id}/archive`, `POST /{id}/unarchive` |
 | Compras no cartão | `GET/POST /api/credit-cards/{id}/purchases`, `GET/PUT /{purchaseId}`, `POST /{purchaseId}/cancel` |
 | Faturas | `GET /api/credit-cards/{id}/invoices`, `GET /{invoiceId}`, `POST /{invoiceId}/payments`, `POST /{invoiceId}/payments/{payId}/reverse`, `POST /{invoiceId}/adjustments[/{adjId}/reverse]` |
@@ -167,8 +176,12 @@ modelo de segurança e posse em [`docs/security.md`](docs/security.md).
 Segunda release: multiusuário com autenticação por sessão. Ainda de uso local:
 
 - **Sem verificação de e-mail, recuperação de senha, MFA ou OAuth.**
-- **Sem integração bancária, com emissor de cartão ou coleta de preços** —
-  transações, compras de cartão e ofertas são registradas manualmente.
+- **Sem integração bancária ao vivo (Open Finance), com emissor de cartão ou
+  coleta de preços** — compras de cartão e ofertas são registradas
+  manualmente; transações podem ser digitadas ou importadas de um arquivo
+  CSV/OFX exportado do próprio banco (ver
+  [`docs/statement-import.md`](docs/statement-import.md)), nunca por conexão
+  direta com a instituição financeira.
 - **Transações antigas com forma de pagamento `CREDIT` são preservadas como
   "crédito legado"** e podem ser **convertidas de forma assistida** em compras
   de cartão reais (fatura, parcelas e limite), mantendo o registro original

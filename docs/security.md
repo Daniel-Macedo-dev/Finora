@@ -56,7 +56,8 @@ resolvem para **404 Not Found** (nunca 403), evitando confirmar sua existência.
 
 - Cada entidade financeira tem `user_id` obrigatório (`accounts`, `categories`,
   `transactions`, `budgets`, `commitments`, `goals`, `wishlist_items`,
-  `app_settings`). `purchase_options` herda a posse pelo item pai.
+  `app_settings`, `statement_import_batches`, `statement_import_items`,
+  `category_mapping_rules`). `purchase_options` herda a posse pelo item pai.
 - A posse vem **sempre** da identidade autenticada (`CurrentUserProvider`),
   nunca de parâmetros ou corpo da requisição — `?userId=` é ignorado.
 - Repositórios usam acesso owner-scoped (`findByIdAndUserId`, `findAllByUserId…`).
@@ -76,6 +77,13 @@ resolvem para **404 Not Found** (nunca 403), evitando confirmar sua existência.
   recorrente são owner-scoped ponta a ponta (ids alheios respondem 404), e o
   ledger `legacy_credit_conversions` amarra origem, compra e cartão ao dono por
   FKs compostas — provado em `LegacyConversionOwnershipTest`.
+- A importação de extratos também segue o mesmo modelo: lote, item e regra de
+  categoria respondem 404 para outro dono; o arquivo bruto de um upload CSV
+  fica em armazenamento temporário fora do banco, referenciado por um token
+  aleatório validado por regex antes de qualquer leitura em disco; o parser
+  OFX não usa nenhum parser XML (sem XXE possível) e rejeita `<!DOCTYPE`/
+  `<!ENTITY` mesmo assim, por defesa em profundidade — provado em
+  `StatementImportOwnershipTest`. Ver [statement-import.md](statement-import.md).
 
 ## Migração de dados v1 (claim legado)
 
