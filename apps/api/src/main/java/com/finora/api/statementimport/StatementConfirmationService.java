@@ -34,18 +34,18 @@ public class StatementConfirmationService {
     private final StatementImportBatchRepository batches;
     private final StatementImportItemRepository items;
     private final StatementMaterializationService materialization;
-    private final StatementImportAssembler assembler;
+    private final StatementBatchStatusService batchStatus;
     private final com.finora.api.identity.CurrentUserProvider currentUser;
 
     public StatementConfirmationService(StatementImportBatchRepository batches,
                                         StatementImportItemRepository items,
                                         StatementMaterializationService materialization,
-                                        StatementImportAssembler assembler,
+                                        StatementBatchStatusService batchStatus,
                                         com.finora.api.identity.CurrentUserProvider currentUser) {
         this.batches = batches;
         this.items = items;
         this.materialization = materialization;
-        this.assembler = assembler;
+        this.batchStatus = batchStatus;
         this.currentUser = currentUser;
     }
 
@@ -80,8 +80,14 @@ public class StatementConfirmationService {
                         "Um ou mais lançamentos não foram encontrados neste lote.");
             }
         } else {
+            // Every included pending item is targeted — duplicates and other
+            // non-importable rows get structured results instead of being
+            // silently omitted.
             targetIds = all.stream()
-                    .filter(StatementImportAssembler::importable)
+                    .filter(item -> item.isIncluded()
+                            && (item.getStatus() == StatementImportItemStatus.READY
+                                    || item.getStatus() == StatementImportItemStatus.FAILED
+                                    || item.getStatus() == StatementImportItemStatus.SKIPPED))
                     .map(StatementImportItem::getId)
                     .toList();
         }
@@ -95,7 +101,7 @@ public class StatementConfirmationService {
         for (Long itemId : targetIds) {
             results.add(materializeSafely(userId, batch.getId(), itemId));
         }
-        return finish(batch.getId(), userId, results);
+        return batchStatus.confirmOutcome(batch.getId(), userId, results);
     }
 
     private ItemResult materializeSafely(Long userId, Long batchId, Long itemId) {
@@ -120,26 +126,4 @@ public class StatementConfirmationService {
         }
     }
 
-    /** Recomputes the batch lifecycle truthfully from its items. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    protected ConfirmResponse finish(Long batchId, Long userId, List<ItemResult> results) {
-        StatementImportBatch batch = batches.findByIdAndUserId(batchId, userId).orElseThrow();
-        List<StatementImportItem> all =
-                items.findAllByBatchIdAndUserIdOrderBySourceIndexAsc(batchId, userId);
-        long imported = all.stream()
-                .filter(item -> item.getStatus() == StatementImportItemStatus.IMPORTED)
-                .count();
-        boolean pendingWork = all.stream().anyMatch(item ->
-                item.getStatus() == StatementImportItemStatus.FAILED
-                        || (StatementImportAssembler.importable(item)));
-        if (imported > 0) {
-            batch.setStatus(pendingWork ? StatementImportStatus.PARTIALLY_COMPLETED
-                    : StatementImportStatus.COMPLETED);
-            if (batch.getConfirmedAt() == null) {
-                batch.setConfirmedAt(Instant.now());
-            }
-        }
-        return new ConfirmResponse(batch.getId(), batch.getStatus(), List.copyOf(results),
-                assembler.totals(batch, all));
-    }
 }

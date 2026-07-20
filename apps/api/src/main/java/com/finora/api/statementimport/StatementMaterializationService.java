@@ -144,6 +144,49 @@ public class StatementMaterializationService {
     }
 
     /**
+     * Claims and undoes one imported item in its own transaction: the
+     * generated transaction is removed (the financial effect disappears
+     * exactly once) and the item is preserved as the UNDONE audit record.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ItemResult undo(Long userId, Long batchId, Long itemId) {
+        StatementImportItem item = items.lockByIdAndUserId(itemId, userId).orElse(null);
+        if (item == null || !Objects.equals(item.getBatchId(), batchId)) {
+            return new ItemResult(itemId, ItemResultCode.FAILED, null,
+                    "STATEMENT_ITEM_NOT_FOUND", "Lançamento não encontrado neste lote.");
+        }
+        if (item.getStatus() == StatementImportItemStatus.UNDONE) {
+            return new ItemResult(item.getId(), ItemResultCode.ALREADY_UNDONE, null,
+                    "STATEMENT_ALREADY_UNDONE", "Este lançamento já havia sido desfeito.");
+        }
+        if (item.getStatus() != StatementImportItemStatus.IMPORTED) {
+            return new ItemResult(item.getId(), ItemResultCode.SKIPPED, null,
+                    "STATEMENT_ITEM_NOT_IMPORTED",
+                    "Apenas lançamentos importados podem ser desfeitos.");
+        }
+        Transaction transaction = transactions
+                .findByUserIdAndStatementImportItemId(userId, item.getId())
+                .orElse(null);
+        if (transaction != null) {
+            // Defensive: a generated transaction that became an anchor for
+            // another domain would corrupt that domain if removed here.
+            if (transaction.getCommitmentId() != null || transaction.getWishlistItemId() != null
+                    || !transaction.isFinanciallyActive()) {
+                return new ItemResult(item.getId(), ItemResultCode.BLOCKED, transaction.getId(),
+                        "STATEMENT_UNDO_BLOCKED",
+                        "Esta transação está vinculada a outra área do Finora e não pode ser "
+                                + "desfeita pela importação.");
+            }
+            transactions.delete(transaction);
+        }
+        item.setStatus(StatementImportItemStatus.UNDONE);
+        item.setUndoneAt(Instant.now());
+        item.setResult("STATEMENT_UNDONE", "Importação desfeita.");
+        return new ItemResult(item.getId(), ItemResultCode.UNDONE, null,
+                "STATEMENT_UNDONE", "Importação desfeita.");
+    }
+
+    /**
      * Marks one item FAILED in its own transaction — used by the
      * confirmation orchestrator after a materialization rollback.
      */
