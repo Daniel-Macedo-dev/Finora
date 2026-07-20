@@ -1,8 +1,9 @@
 import { ArrowLeft, FileText } from 'lucide-react'
 import { ErrorState, LoadingCards } from '../../components/states'
-import { formatBRL, formatDate } from '../../lib/format'
+import { formatDate } from '../../lib/format'
 import { useImportBatch } from './api'
 import CsvMappingStep from './CsvMappingStep'
+import ImportPreview from './ImportPreview'
 import { BATCH_STATUS_LABELS, type BatchDetail, type StatementImportStatus } from './types'
 
 interface ImportDetailProps {
@@ -79,26 +80,7 @@ export default function ImportDetail({ batchId, onBack }: ImportDetailProps) {
           {batch.data.status === 'NEEDS_MAPPING' ? (
             <CsvMappingStep batch={batch.data} />
           ) : (
-            <div className="si-stats">
-              <div className="card stat-card">
-                <span className="stat-label">Lançamentos no arquivo</span>
-                <span className="stat-value">{batch.data.totals.totalRows}</span>
-              </div>
-              <div className="card stat-card">
-                <span className="stat-label">Prontos para importar</span>
-                <span className="stat-value">{batch.data.totals.includedPendingCount}</span>
-              </div>
-              <div className="card stat-card">
-                <span className="stat-label">Importados</span>
-                <span className="stat-value">{batch.data.totals.importedCount}</span>
-              </div>
-              <div className="card stat-card">
-                <span className="stat-label">Efeito pendente na conta</span>
-                <span className="stat-value">
-                  {formatBRL(batch.data.totals.pendingNetEffect)}
-                </span>
-              </div>
-            </div>
+            <ImportPreview batch={batch.data} />
           )}
         </>
       ) : null}

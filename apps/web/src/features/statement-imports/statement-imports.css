@@ -189,6 +189,154 @@
   overflow-wrap: anywhere;
 }
 
+/* ── Preview workbench ────────────────────────────────────────────────── */
+
+.si-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.si-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.si-items {
+  margin-bottom: var(--space-4);
+}
+
+.si-row-excluded td {
+  opacity: 0.55;
+}
+
+.si-memo {
+  display: block;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.si-category-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 180px;
+}
+
+.si-category-select {
+  min-height: 34px;
+  padding: 0.25rem 0.5rem;
+  font-size: var(--text-sm);
+}
+
+.si-rule-hint {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.si-badge-button {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.si-badge-button:hover {
+  filter: brightness(0.95);
+}
+
+.si-status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 220px;
+}
+
+.si-status-message {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.si-empty-row {
+  text-align: center;
+  color: var(--ink-muted);
+  padding: var(--space-5);
+}
+
+/* ── Item editor ──────────────────────────────────────────────────────── */
+
+.si-original-values {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* ── Duplicate review ─────────────────────────────────────────────────── */
+
+.si-duplicate-reason {
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.si-duplicate-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.si-duplicate-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.si-duplicate-facts dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.si-duplicate-facts dd {
+  margin: 0;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+/* ── Category rules ───────────────────────────────────────────────────── */
+
+.si-rule-pattern {
+  display: block;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.si-rule-type {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 720px) {
+  .si-col-optional {
+    display: none;
+  }
+
+  .si-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 @media (max-width: 480px) {
   .si-filter {
     max-width: none;
