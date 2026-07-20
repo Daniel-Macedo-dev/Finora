@@ -102,6 +102,18 @@ export async function pagePost(page: Page, path: string, data: unknown) {
   })
 }
 
+export async function pagePut(page: Page, path: string, data: unknown) {
+  const cookies = await page.context().cookies()
+  const token = cookies.find((cookie) => cookie.name === 'XSRF-TOKEN')?.value
+  if (!token) {
+    throw new Error('sessão do navegador sem cookie XSRF-TOKEN')
+  }
+  return page.request.put(`${API}${path}`, {
+    headers: { 'X-XSRF-TOKEN': decodeURIComponent(token) },
+    data,
+  })
+}
+
 export async function pageGet(page: Page, path: string) {
   return page.request.get(`${API}${path}`)
 }

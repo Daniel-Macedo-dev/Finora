@@ -2,6 +2,7 @@ package com.finora.api.statementimport.parser.csv;
 
 import com.finora.api.statementimport.parser.StatementParseException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -34,9 +35,15 @@ public record CsvMappingConfig(
 
     public enum Separator { COMMA, DOT, NONE }
 
-    /** Accepted date patterns (user-facing form). */
-    public static final Set<String> DATE_PATTERNS = Set.of(
+    /**
+     * Accepted date patterns in suggestion order — the Brazilian default
+     * first, so clients that pre-select the first option stay deterministic.
+     */
+    public static final List<String> DATE_PATTERN_OPTIONS = List.of(
             "dd/MM/yyyy", "dd/MM/yy", "yyyy-MM-dd", "dd-MM-yyyy", "dd.MM.yyyy", "MM/dd/yyyy");
+
+    /** Accepted date patterns (validation form). */
+    public static final Set<String> DATE_PATTERNS = Set.copyOf(DATE_PATTERN_OPTIONS);
 
     /** Validates internal coherence; throws a safe error when contradictory. */
     public CsvMappingConfig {

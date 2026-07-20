@@ -376,7 +376,7 @@ public class StatementImportService {
                         MAPPING_PREVIEW_ROWS);
                 suggestion = new CsvMappingSuggestion(encoding, delimiter,
                         guessHeader(rawPreview),
-                        List.copyOf(CsvMappingConfig.DATE_PATTERNS));
+                        CsvMappingConfig.DATE_PATTERN_OPTIONS);
             }
         }
         return assembler.detail(batch, accountName, batchItems, accountHint, reupload,
