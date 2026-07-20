@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Settings2 } from 'lucide-react'
+import { Pencil, Settings2, Undo2 } from 'lucide-react'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import Money from '../../components/Money'
 import { errorMessage } from '../../components/states'
 import { formatBRL, formatDate } from '../../lib/format'
 import { useCategories } from '../shared/api'
-import { usePatchItem } from './api'
+import { usePatchItem, useUndoItem } from './api'
 import CategoryRuleManager from './CategoryRuleManager'
+import ConfirmImportSection from './ConfirmImportSection'
 import DuplicateReview from './DuplicateReview'
 import ImportItemEditor from './ImportItemEditor'
 import {
@@ -90,7 +92,9 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
   const [editingItem, setEditingItem] = useState<StatementItem | null>(null)
   const [reviewingItem, setReviewingItem] = useState<StatementItem | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [undoingItem, setUndoingItem] = useState<StatementItem | null>(null)
   const patchItem = usePatchItem()
+  const undoItem = useUndoItem()
   const incomeCategories = useCategories('INCOME')
   const expenseCategories = useCategories('EXPENSE')
 
@@ -344,7 +348,7 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
                 <td>{renderCategoryCell(item)}</td>
                 <td>{renderDuplicateCell(item)}</td>
                 <td>{renderStatusCell(item)}</td>
-                <td style={{ textAlign: 'right' }}>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {editable(batch, item) && (
                     <button
                       type="button"
@@ -353,6 +357,17 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
                       aria-label={`Editar ${item.description ?? `linha ${item.sourceIndex}`}`}
                     >
                       <Pencil size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                  {item.status === 'IMPORTED' && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-icon"
+                      onClick={() => setUndoingItem(item)}
+                      disabled={undoItem.isPending}
+                      aria-label={`Desfazer importação de ${item.description ?? `linha ${item.sourceIndex}`}`}
+                    >
+                      <Undo2 size={16} aria-hidden="true" />
                     </button>
                   )}
                 </td>
@@ -369,11 +384,36 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
         </table>
       </div>
 
+      <ConfirmImportSection batch={batch} />
+
+      {undoItem.isError && (
+        <p className="field-error" role="alert">
+          {errorMessage(undoItem.error)}
+        </p>
+      )}
+
       {editingItem && (
         <ImportItemEditor
           batchId={batch.id}
           item={editingItem}
           onClose={() => setEditingItem(null)}
+        />
+      )}
+      {undoingItem && (
+        <ConfirmDialog
+          open
+          title="Desfazer este lançamento"
+          message={`A transação criada para “${undoingItem.description ?? `linha ${undoingItem.sourceIndex}`}” será removida da conta e o efeito financeiro desaparece. O registro da importação permanece para auditoria.`}
+          confirmLabel="Desfazer lançamento"
+          danger
+          busy={undoItem.isPending}
+          onConfirm={() =>
+            undoItem.mutate(
+              { batchId: batch.id, itemId: undoingItem.id },
+              { onSettled: () => setUndoingItem(null) },
+            )
+          }
+          onCancel={() => setUndoingItem(null)}
         />
       )}
       {reviewingItem && (
