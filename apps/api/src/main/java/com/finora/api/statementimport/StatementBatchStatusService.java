@@ -31,7 +31,7 @@ public class StatementBatchStatusService {
     /** COMPLETED when nothing importable or failed remains; else partial. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ConfirmResponse confirmOutcome(Long batchId, Long userId, List<ItemResult> results) {
-        StatementImportBatch batch = batches.findByIdAndUserId(batchId, userId).orElseThrow();
+        StatementImportBatch batch = batches.lockByIdAndUserId(batchId, userId).orElseThrow();
         List<StatementImportItem> all =
                 items.findAllByBatchIdAndUserIdOrderBySourceIndexAsc(batchId, userId);
         long imported = all.stream()
@@ -67,7 +67,7 @@ public class StatementBatchStatusService {
     /** UNDONE only when a confirmed batch keeps no imported item. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ConfirmResponse undoOutcome(Long batchId, Long userId, List<ItemResult> results) {
-        StatementImportBatch batch = batches.findByIdAndUserId(batchId, userId).orElseThrow();
+        StatementImportBatch batch = batches.lockByIdAndUserId(batchId, userId).orElseThrow();
         List<StatementImportItem> all =
                 items.findAllByBatchIdAndUserIdOrderBySourceIndexAsc(batchId, userId);
         boolean anyImported = all.stream()
