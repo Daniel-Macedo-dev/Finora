@@ -150,6 +150,7 @@ export default function CsvMappingStep({ batch }: CsvMappingStepProps) {
 
   return (
     <section aria-label="Mapeamento das colunas do CSV">
+      <h2 className="visually-hidden">Mapeamento das colunas do CSV</h2>
       <p className="si-step-intro">
         Confirme como o arquivo deve ser interpretado. As primeiras linhas abaixo ajudam a
         identificar cada coluna — nada é importado até a confirmação final.

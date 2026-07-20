@@ -22,6 +22,7 @@ const STATUS_BADGES: Record<StatementImportStatus, string> = {
 function BatchHeader({ batch }: { batch: BatchDetail }) {
   return (
     <div className="si-batch-header card">
+      <h1 className="visually-hidden">Importação de extrato: {batch.originalFilename}</h1>
       <div className="si-batch-title">
         <FileText size={18} aria-hidden="true" />
         <span className="si-filename">{batch.originalFilename}</span>

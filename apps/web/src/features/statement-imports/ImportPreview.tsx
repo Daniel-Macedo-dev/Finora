@@ -206,6 +206,7 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
 
   return (
     <>
+      <h2 className="visually-hidden">Pré-visualização e revisão dos lançamentos</h2>
       <div className="si-stats">
         <div className="card stat-card">
           <span className="stat-label">Lançamentos no arquivo</span>
