@@ -27,9 +27,17 @@ interface ColumnSelectProps {
   onChange: (value: number | null) => void
 }
 
-function ColumnSelect({ value, columnCount, optional = false, onChange }: ColumnSelectProps) {
+/** Forwards FormField's injected id/aria props so the label stays wired. */
+function ColumnSelect({
+  value,
+  columnCount,
+  optional = false,
+  onChange,
+  ...labelling
+}: ColumnSelectProps & Record<string, unknown>) {
   return (
     <select
+      {...labelling}
       className="select"
       value={value === null ? '' : String(value)}
       onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))}
