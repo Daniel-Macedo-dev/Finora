@@ -7,6 +7,9 @@ const LoginPage = lazy(() => import('./features/auth/LoginPage'))
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'))
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'))
 const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage'))
+const StatementImportsPage = lazy(
+  () => import('./features/statement-imports/StatementImportsPage'),
+)
 const CreditCardsPage = lazy(() => import('./features/credit-cards/CreditCardsPage'))
 const LegacyConversionsPage = lazy(
   () => import('./features/legacy-conversions/LegacyConversionsPage'),
@@ -39,6 +42,7 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/statement-imports" element={<StatementImportsPage />} />
         <Route path="/credit-cards" element={<CreditCardsPage />} />
         <Route path="/credit-cards/:cardId" element={<CreditCardDetailPage />} />
         <Route path="/credit-cards/:cardId/invoices/:invoiceId" element={<InvoiceDetailPage />} />

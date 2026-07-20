@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, FileUp } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
 import Money from '../../components/Money'
@@ -97,10 +97,16 @@ export default function TransactionsPage() {
         title="Transações"
         description="Registre e acompanhe suas receitas e despesas."
         actions={
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            <Plus size={16} aria-hidden="true" />
-            Nova transação
-          </button>
+          <>
+            <Link to="/statement-imports" className="btn btn-secondary">
+              <FileUp size={16} aria-hidden="true" />
+              Importar extrato
+            </Link>
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              <Plus size={16} aria-hidden="true" />
+              Nova transação
+            </button>
+          </>
         }
       />
 

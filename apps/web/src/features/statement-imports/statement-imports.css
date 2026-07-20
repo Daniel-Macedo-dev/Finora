@@ -1,0 +1,201 @@
+/* Statement-import feature styles. Route-scoped chunk: shared tokens come
+   from the global stylesheet; everything here is prefixed si-. */
+
+.si-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.si-filter {
+  max-width: 260px;
+}
+
+.si-filename {
+  overflow-wrap: anywhere;
+}
+
+.si-failed-note {
+  color: var(--negative);
+  font-size: var(--text-sm);
+}
+
+.si-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.si-pagination-info {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+/* ── Batch detail ─────────────────────────────────────────────────────── */
+
+.si-back {
+  margin-bottom: var(--space-3);
+}
+
+.si-batch-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.si-batch-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 650;
+}
+
+.si-batch-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.si-batch-meta dt {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.si-batch-meta dd {
+  margin: 0;
+  font-weight: 550;
+}
+
+.si-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.si-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.si-stats .stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.si-stats .stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
+.si-stats .stat-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+/* ── Upload dialog ────────────────────────────────────────────────────── */
+
+.si-file-meta {
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
+
+.si-privacy-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* ── CSV mapping step ─────────────────────────────────────────────────── */
+
+.si-step-intro {
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.si-raw-preview {
+  margin-bottom: var(--space-4);
+}
+
+.si-raw-cell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+  font-size: var(--text-sm);
+}
+
+.si-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.si-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.si-amount-mode {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.si-amount-mode legend {
+  font-size: var(--text-sm);
+  font-weight: 550;
+  margin-bottom: var(--space-1);
+}
+
+.si-mapping-preview {
+  margin-top: var(--space-4);
+}
+
+.si-subtitle {
+  font-size: var(--text-md);
+  font-weight: 650;
+  margin-bottom: var(--space-3);
+}
+
+.si-description {
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .si-filter {
+    max-width: none;
+    width: 100%;
+  }
+
+  .si-raw-cell {
+    max-width: 140px;
+  }
+}

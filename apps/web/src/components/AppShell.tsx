@@ -4,6 +4,7 @@ import { LoadingCards } from './states'
 import {
   LayoutDashboard,
   ArrowLeftRight,
+  FileUp,
   CreditCard,
   PiggyBank,
   CalendarClock,
@@ -23,6 +24,7 @@ import './AppShell.css'
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
   { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
+  { to: '/statement-imports', label: 'Importar extrato', icon: FileUp },
   { to: '/credit-cards', label: 'Cartões', icon: CreditCard },
   { to: '/legacy-credit', label: 'Crédito legado', icon: History },
   { to: '/budgets', label: 'Orçamentos', icon: PiggyBank },
