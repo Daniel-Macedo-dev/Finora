@@ -32,7 +32,10 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-@TestPropertySource(properties = "finora.security.bcrypt-strength=4")
+@TestPropertySource(properties = {
+        "finora.security.bcrypt-strength=4",
+        "finora.notifications.auto-sync.enabled=false"
+})
 class RegistrationTransactionalityTest {
 
     private static final String EMAIL = "rollback@email.com";

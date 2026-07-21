@@ -43,3 +43,9 @@ finora:
   legacy-claim:
     # One-time secret that enables claiming pre-multiuser data. Empty = disabled.
     token: ${FINORA_LEGACY_CLAIM_TOKEN:}
+  notifications:
+    auto-sync:
+      enabled: ${FINORA_NOTIFICATIONS_AUTO_SYNC_ENABLED:true}
+    initial-delay: ${FINORA_NOTIFICATIONS_INITIAL_DELAY:PT1M}
+    sync-interval: ${FINORA_NOTIFICATIONS_SYNC_INTERVAL:PT15M}
+    user-batch-size: ${FINORA_NOTIFICATIONS_USER_BATCH_SIZE:100}

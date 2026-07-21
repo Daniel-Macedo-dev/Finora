@@ -43,6 +43,7 @@ import tools.jackson.databind.ObjectMapper;
         "finora.security.bcrypt-strength=4",
         // Deterministic tests drive recurring processing explicitly.
         "finora.recurring.auto-processing.enabled=false",
+        "finora.notifications.auto-sync.enabled=false",
 })
 @Transactional
 public abstract class AbstractIntegrationTest {
