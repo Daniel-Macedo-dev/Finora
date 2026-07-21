@@ -96,6 +96,76 @@ public class Notification extends AuditableEntity {
     protected Notification() {
     }
 
+    public Notification(Long userId, String sourceKey, String sourceEventId,
+                        DueEventType type, DueEventSeverity severity, LocalDate eventDate,
+                        String title, BigDecimal amount, String resourceType, Long resourceId,
+                        String route, Instant now) {
+        this.userId = userId;
+        this.sourceKey = sourceKey;
+        this.revision = 1;
+        this.firstSeenAt = now;
+        applyEvent(sourceEventId, type, severity, eventDate, title, amount,
+                resourceType, resourceId, route, now);
+        this.revisionChangedAt = now;
+    }
+
+    public boolean refresh(String sourceEventId, DueEventType type, DueEventSeverity severity,
+                           LocalDate eventDate, String title, BigDecimal amount,
+                           String resourceType, Long resourceId, String route, Instant now) {
+        boolean revisionChange = resolvedAt != null
+                || severity.ordinal() > this.severity.ordinal()
+                || lifecycleRank(type) > lifecycleRank(this.type)
+                || !eventDate.equals(this.eventDate);
+        if (revisionChange) {
+            revision++;
+            revisionChangedAt = now;
+            resolvedAt = null;
+            snoozedRevision = null;
+            snoozedUntil = null;
+        }
+        applyEvent(sourceEventId, type, severity, eventDate, title, amount,
+                resourceType, resourceId, route, now);
+        return revisionChange;
+    }
+
+    private void applyEvent(String sourceEventId, DueEventType type, DueEventSeverity severity,
+                            LocalDate eventDate, String title, BigDecimal amount,
+                            String resourceType, Long resourceId, String route, Instant now) {
+        this.sourceEventId = sourceEventId;
+        this.type = type;
+        this.severity = severity;
+        this.eventDate = eventDate;
+        this.title = title;
+        this.amount = amount;
+        this.resourceType = resourceType;
+        this.resourceId = resourceId;
+        this.route = route;
+        this.lastSeenAt = now;
+    }
+
+    private static int lifecycleRank(DueEventType type) {
+        return switch (type) {
+            case RECURRING_DUE_SOON, INVOICE_DUE_SOON -> 1;
+            case RECURRING_DUE_TODAY, INVOICE_DUE_TODAY -> 2;
+            case RECURRING_OVERDUE, INVOICE_OVERDUE -> 3;
+            case RECURRING_FAILED -> 4;
+            case INSUFFICIENT_CASH_PROJECTED -> 3;
+        };
+    }
+
+    public void resolve(Instant now) { if (resolvedAt == null) resolvedAt = now; }
+    public void markRead() { readRevision = revision; }
+    public void markUnread() { if (readRevision != null && readRevision == revision) readRevision = null; }
+    public void dismiss() { dismissedRevision = revision; }
+    public void restore() { if (dismissedRevision != null && dismissedRevision == revision) dismissedRevision = null; }
+    public void snooze(Instant until) { snoozedRevision = revision; snoozedUntil = until; }
+    public void claimBrowserDelivery() { browserDeliveredRevision = revision; }
+    public boolean isUnread() { return readRevision == null || readRevision < revision; }
+    public boolean isDismissed() { return dismissedRevision != null && dismissedRevision == revision; }
+    public boolean isSnoozed(Instant now) {
+        return snoozedRevision != null && snoozedRevision == revision && snoozedUntil.isAfter(now);
+    }
+
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public String getSourceKey() { return sourceKey; }

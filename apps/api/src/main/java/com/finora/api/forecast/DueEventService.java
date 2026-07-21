@@ -66,11 +66,16 @@ public class DueEventService {
     }
 
     public DueEventsResponse events(LocalDate from, LocalDate to) {
-        return eventsForUser(currentUser.currentUserId(), from, to);
+        return eventsForUser(currentUser.currentUserId(), from, to, DUE_SOON_DAYS);
     }
 
     /** Trusted internal entry point used by owner-by-owner background delivery. */
     public DueEventsResponse eventsForUser(Long userId, LocalDate from, LocalDate to) {
+        return eventsForUser(userId, from, to, DUE_SOON_DAYS);
+    }
+
+    public DueEventsResponse eventsForUser(Long userId, LocalDate from, LocalDate to,
+                                           int upcomingLeadDays) {
         LocalDate today = LocalDate.now(clock);
         LocalDate start = from != null ? from : today.minusDays(DUE_SOON_DAYS);
         LocalDate end = to != null ? to : today.plusDays(DUE_SOON_DAYS);
@@ -80,15 +85,15 @@ public class DueEventService {
         }
 
         List<DueEvent> events = new ArrayList<>();
-        collectRecurringEvents(userId, today, start, end, events);
-        collectInvoiceEvents(userId, today, start, end, events);
+        collectRecurringEvents(userId, today, start, end, upcomingLeadDays, events);
+        collectInvoiceEvents(userId, today, start, end, upcomingLeadDays, events);
         collectInsufficientCash(userId, today, end, events);
         events.sort(Comparator.comparing(DueEvent::date).thenComparing(DueEvent::id));
         return new DueEventsResponse(start, end, events);
     }
 
     private void collectRecurringEvents(Long userId, LocalDate today, LocalDate start,
-                                        LocalDate end, List<DueEvent> events) {
+                                        LocalDate end, int leadDays, List<DueEvent> events) {
         // One window-bounded query covers every definition's overlay rows.
         Map<Long, Map<LocalDate, CommitmentOccurrence>> overlay = new HashMap<>();
         for (CommitmentOccurrence occurrence : occurrences
@@ -127,7 +132,7 @@ public class DueEventService {
                     events.add(recurringEvent(commitment, date, effective,
                             DueEventType.RECURRING_DUE_TODAY, DueEventSeverity.WARNING,
                             "\"%s\" vence hoje".formatted(commitment.getDescription())));
-                } else if (!effective.isAfter(today.plusDays(DUE_SOON_DAYS))) {
+                } else if (!effective.isAfter(today.plusDays(leadDays))) {
                     events.add(recurringEvent(commitment, date, effective,
                             DueEventType.RECURRING_DUE_SOON, DueEventSeverity.INFO,
                             "\"%s\" vence em breve".formatted(commitment.getDescription())));
@@ -153,7 +158,7 @@ public class DueEventService {
     }
 
     private void collectInvoiceEvents(Long userId, LocalDate today, LocalDate start,
-                                      LocalDate end, List<DueEvent> events) {
+                                      LocalDate end, int leadDays, List<DueEvent> events) {
         for (var card : cards.findAllByUserIdOrderByArchivedAscNameAsc(userId)) {
             if (card.isArchived()) {
                 continue;
@@ -175,7 +180,7 @@ public class DueEventService {
                     type = DueEventType.INVOICE_DUE_TODAY;
                     severity = DueEventSeverity.WARNING;
                     title = "Fatura %s vence hoje".formatted(card.getName());
-                } else if (!invoice.dueDate().isAfter(today.plusDays(DUE_SOON_DAYS))) {
+                } else if (!invoice.dueDate().isAfter(today.plusDays(leadDays))) {
                     type = DueEventType.INVOICE_DUE_SOON;
                     severity = DueEventSeverity.INFO;
                     title = "Fatura %s vence em breve".formatted(card.getName());
