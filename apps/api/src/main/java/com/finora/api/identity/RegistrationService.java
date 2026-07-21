@@ -3,6 +3,8 @@ package com.finora.api.identity;
 import com.finora.api.category.Category;
 import com.finora.api.category.CategoryRepository;
 import com.finora.api.common.error.BusinessRuleException;
+import com.finora.api.notification.NotificationPreferences;
+import com.finora.api.notification.NotificationPreferencesRepository;
 import com.finora.api.settings.AppSettings;
 import com.finora.api.settings.SettingsRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,15 +22,18 @@ public class RegistrationService {
     private final UserRepository users;
     private final CategoryRepository categories;
     private final SettingsRepository settings;
+    private final NotificationPreferencesRepository notificationPreferences;
     private final PasswordEncoder passwordEncoder;
 
     public RegistrationService(UserRepository users,
                                CategoryRepository categories,
                                SettingsRepository settings,
+                               NotificationPreferencesRepository notificationPreferences,
                                PasswordEncoder passwordEncoder) {
         this.users = users;
         this.categories = categories;
         this.settings = settings;
+        this.notificationPreferences = notificationPreferences;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -54,5 +59,6 @@ public class RegistrationService {
             categories.save(new Category(userId, definition.name(), definition.type(), true));
         }
         settings.save(AppSettings.withDefaults(userId));
+        notificationPreferences.save(NotificationPreferences.withDefaults(userId));
     }
 }
