@@ -80,4 +80,23 @@ public class NotificationPreferences extends AuditableEntity {
     public DueEventSeverity getBrowserMinimumSeverity() { return browserMinimumSeverity; }
     public boolean isBrowserShowAmounts() { return browserShowAmounts; }
     public Instant getBrowserEnabledAt() { return browserEnabledAt; }
+
+    public void update(boolean enabled, int upcomingLeadDays,
+                       boolean recurringDueEnabled, boolean invoiceDueEnabled,
+                       boolean executionFailureEnabled, boolean cashRiskEnabled,
+                       boolean browserEnabled, DueEventSeverity browserMinimumSeverity,
+                       boolean browserShowAmounts, Instant now) {
+        this.enabled = enabled;
+        this.upcomingLeadDays = upcomingLeadDays;
+        this.recurringDueEnabled = recurringDueEnabled;
+        this.invoiceDueEnabled = invoiceDueEnabled;
+        this.executionFailureEnabled = executionFailureEnabled;
+        this.cashRiskEnabled = cashRiskEnabled;
+        if (browserEnabled && !this.browserEnabled) {
+            this.browserEnabledAt = now;
+        }
+        this.browserEnabled = browserEnabled;
+        this.browserMinimumSeverity = browserMinimumSeverity;
+        this.browserShowAmounts = browserShowAmounts;
+    }
 }
