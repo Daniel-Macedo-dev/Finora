@@ -29,9 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Notification-ready due events, derived on demand — this application does
- * not send notifications, it prepares stable, deduplicable event data for a
- * future delivery mechanism. Sources: recurring occurrences (due, overdue,
+ * Authoritative due events, derived on demand for the public feed and the
+ * persistent notification synchronizer. Sources: recurring occurrences (due, overdue,
  * failed), card invoices (due, overdue) and the forecast's first projected
  * negative-cash date.
  */
@@ -67,7 +66,11 @@ public class DueEventService {
     }
 
     public DueEventsResponse events(LocalDate from, LocalDate to) {
-        Long userId = currentUser.currentUserId();
+        return eventsForUser(currentUser.currentUserId(), from, to);
+    }
+
+    /** Trusted internal entry point used by owner-by-owner background delivery. */
+    public DueEventsResponse eventsForUser(Long userId, LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now(clock);
         LocalDate start = from != null ? from : today.minusDays(DUE_SOON_DAYS);
         LocalDate end = to != null ? to : today.plusDays(DUE_SOON_DAYS);
@@ -138,6 +141,7 @@ public class DueEventService {
                                     DueEventSeverity severity, String title) {
         return new DueEvent(
                 "%s:COMMITMENT:%d:%s".formatted(type, commitment.getId(), scheduledDate),
+                "COMMITMENT:%d:%s".formatted(commitment.getId(), scheduledDate),
                 type,
                 severity,
                 effectiveDate,
@@ -180,6 +184,7 @@ public class DueEventService {
                 }
                 events.add(new DueEvent(
                         "%s:INVOICE:%d".formatted(type, invoice.id()),
+                        "CARD_INVOICE:%d".formatted(invoice.id()),
                         type,
                         severity,
                         invoice.dueDate(),
@@ -199,6 +204,7 @@ public class DueEventService {
         if (forecast.firstNegativeDate() != null) {
             events.add(new DueEvent(
                     "INSUFFICIENT_CASH_PROJECTED:%s".formatted(forecast.firstNegativeDate()),
+                    "FORECAST:INSUFFICIENT_CASH",
                     DueEventType.INSUFFICIENT_CASH_PROJECTED,
                     DueEventSeverity.CRITICAL,
                     forecast.firstNegativeDate(),

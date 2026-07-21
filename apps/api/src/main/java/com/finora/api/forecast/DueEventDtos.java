@@ -28,11 +28,13 @@ public final class DueEventDtos {
 
     /**
      * One notification-ready event. Events are derived deterministically from
-     * current data — nothing is persisted — so the id is a stable composition
-     * of type and resource identity, safe for future delivery deduplication.
+     * current data. The legacy id remains type-specific for compatibility;
+     * sourceKey is the stable lifecycle identity used for delivery.
      */
     public record DueEvent(
             String id,
+            /** Stable delivery identity independent of lifecycle type/severity. */
+            String sourceKey,
             DueEventType type,
             DueEventSeverity severity,
             LocalDate date,
