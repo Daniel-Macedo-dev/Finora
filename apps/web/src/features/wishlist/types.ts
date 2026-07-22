@@ -29,6 +29,11 @@ export interface WishlistItemSummary {
   status: WishlistStatus
   optionCount: number
   bestNominalCost: number | null
+  priceObservationCount: number
+  latestObservedPrice: number | null
+  latestObservedOn: string | null
+  historicalMinimum: number | null
+  targetReached: boolean | null
 }
 
 export interface PurchaseOption {
@@ -94,6 +99,86 @@ export interface ExecutePurchaseResponse {
   status: WishlistStatus
   transactionId: number | null
   cardPurchaseId: number | null
+}
+
+export interface PriceSnapshot {
+  id: number
+  purchaseOptionId: number | null
+  linkedOptionAvailable: boolean
+  seriesKey: string
+  merchant: string
+  paymentKind: PurchaseOptionKind
+  basePrice: number
+  shipping: number
+  fees: number
+  nominalCost: number
+  installmentCount: number | null
+  installmentAmount: number | null
+  observedOn: string
+  offerUrl: string | null
+  notes: string | null
+}
+
+export interface PriceSnapshotRequest {
+  clientRequestId: string
+  purchaseOptionId?: number | null
+  merchant: string
+  paymentKind: PurchaseOptionKind
+  basePrice: number
+  shipping?: number
+  fees?: number
+  installmentCount?: number | null
+  installmentAmount?: number | null
+  observedOn: string
+  offerUrl?: string | null
+  notes?: string | null
+  updateLinkedOption: boolean
+}
+
+export type PriceSnapshotUpdateRequest = Omit<PriceSnapshotRequest, 'clientRequestId' | 'updateLinkedOption'>
+
+export interface PriceHistorySummary {
+  observationCount: number
+  seriesCount: number
+  firstObservedOn: string | null
+  lastObservedOn: string | null
+  bestCurrentOptionCost: number | null
+  latestObservedBestCost: number | null
+  previousComparableCost: number | null
+  absoluteChange: number | null
+  percentageChange: number | null
+  historicalMinimum: number | null
+  historicalMaximum: number | null
+  historicalAverage: number | null
+  targetPrice: number | null
+  distanceToTarget: number | null
+  distanceToTargetPercentage: number | null
+  targetReached: boolean | null
+  latestMerchant: string | null
+  latestPaymentKind: PurchaseOptionKind | null
+  latestSeriesKey: string | null
+  daysSinceLatestObservation: number | null
+}
+
+export interface PriceChartPoint {
+  observedOn: string
+  nominalCost: number
+  observationCount: number
+  snapshotId: number
+}
+
+export interface PriceChartResponse {
+  from: string
+  to: string
+  points: PriceChartPoint[]
+}
+
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
 }
 
 /* ---- analysis ---- */

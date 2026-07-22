@@ -6,6 +6,12 @@ import type {
   PurchaseAnalysis,
   PurchaseOption,
   PurchaseOptionRequest,
+  PageResponse,
+  PriceChartResponse,
+  PriceHistorySummary,
+  PriceSnapshot,
+  PriceSnapshotRequest,
+  PriceSnapshotUpdateRequest,
   WishlistItemDetail,
   WishlistItemRequest,
   WishlistItemSummary,
@@ -15,6 +21,74 @@ export function useWishlist() {
   return useQuery({
     queryKey: ['wishlist'],
     queryFn: () => api.get<WishlistItemSummary[]>('/wishlist'),
+  })
+}
+
+export function usePriceHistory(itemId: number, page = 0, merchant = '') {
+  const params = new URLSearchParams({ page: String(page), size: '20', sort: 'NEWEST' })
+  if (merchant.trim()) params.set('merchant', merchant.trim())
+  return useQuery({
+    queryKey: ['wishlist', itemId, 'price-history', page, merchant],
+    queryFn: () => api.get<PageResponse<PriceSnapshot>>(`/wishlist/${itemId}/price-snapshots?${params}`),
+  })
+}
+
+export function usePriceHistorySummary(itemId: number) {
+  return useQuery({
+    queryKey: ['wishlist', itemId, 'price-history-summary'],
+    queryFn: () => api.get<PriceHistorySummary>(`/wishlist/${itemId}/price-history-summary`),
+  })
+}
+
+export function usePriceHistoryChart(itemId: number) {
+  return useQuery({
+    queryKey: ['wishlist', itemId, 'price-history-chart'],
+    queryFn: () => api.get<PriceChartResponse>(`/wishlist/${itemId}/price-history-series`),
+  })
+}
+
+function invalidatePriceHistory(client: ReturnType<typeof useQueryClient>, itemId: number,
+                                analysis: boolean) {
+  client.invalidateQueries({ queryKey: ['wishlist'] })
+  client.invalidateQueries({ queryKey: ['wishlist', itemId] })
+  client.invalidateQueries({ queryKey: ['wishlist', itemId, 'price-history'] })
+  client.invalidateQueries({ queryKey: ['wishlist', itemId, 'price-history-summary'] })
+  client.invalidateQueries({ queryKey: ['wishlist', itemId, 'price-history-chart'] })
+  if (analysis) client.invalidateQueries({ queryKey: ['wishlist', itemId, 'analysis'] })
+}
+
+export function useCreatePriceSnapshot(itemId: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (request: PriceSnapshotRequest) =>
+      api.post<PriceSnapshot>(`/wishlist/${itemId}/price-snapshots`, request),
+    onSuccess: (_data, request) => invalidatePriceHistory(client, itemId, request.updateLinkedOption),
+  })
+}
+
+export function useCaptureOptionPrice(itemId: number, optionId: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (request: Pick<PriceSnapshotRequest, 'clientRequestId' | 'observedOn' | 'offerUrl' | 'notes'>) =>
+      api.post<PriceSnapshot>(`/wishlist/${itemId}/options/${optionId}/price-snapshots`, request),
+    onSuccess: () => invalidatePriceHistory(client, itemId, false),
+  })
+}
+
+export function useUpdatePriceSnapshot(itemId: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: number; request: PriceSnapshotUpdateRequest }) =>
+      api.put<PriceSnapshot>(`/wishlist/${itemId}/price-snapshots/${id}`, request),
+    onSuccess: () => invalidatePriceHistory(client, itemId, false),
+  })
+}
+
+export function useDeletePriceSnapshot(itemId: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/wishlist/${itemId}/price-snapshots/${id}`),
+    onSuccess: () => invalidatePriceHistory(client, itemId, false),
   })
 }
 
