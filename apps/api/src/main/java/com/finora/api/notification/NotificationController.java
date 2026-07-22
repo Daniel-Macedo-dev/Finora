@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/notifications")
@@ -42,7 +44,8 @@ public class NotificationController {
     @GetMapping("/unread-count") public UnreadCountResponse unreadCount() { return service.unreadCount(); }
     @PostMapping("/{id}/read") public NotificationResponse read(@PathVariable Long id) { return service.read(id); }
     @PostMapping("/{id}/unread") public NotificationResponse unread(@PathVariable Long id) { return service.unread(id); }
-    @PostMapping("/read-all") public void readAll() { service.readAll(); }
+    @PostMapping("/read-all") @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void readAll() { service.readAll(); }
     @PostMapping("/{id}/dismiss") public NotificationResponse dismiss(@PathVariable Long id) { return service.dismiss(id); }
     @PostMapping("/{id}/restore") public NotificationResponse restore(@PathVariable Long id) { return service.restore(id); }
     @PostMapping("/{id}/snooze") public NotificationResponse snooze(

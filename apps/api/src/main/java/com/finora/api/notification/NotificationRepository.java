@@ -7,6 +7,7 @@ import java.time.Instant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -48,6 +49,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             + "and (n.dismissedRevision is null or n.dismissedRevision < n.revision) "
             + "and (n.snoozedUntil is null or n.snoozedUntil <= :now or n.snoozedRevision < n.revision)")
     long countUnread(@Param("userId") Long userId, @Param("now") Instant now);
+
+    @Modifying(clearAutomatically = true)
+    @Query("update Notification n set n.readRevision = n.revision where n.userId = :userId "
+            + "and n.resolvedAt is null and (n.readRevision is null or n.readRevision < n.revision)")
+    int markAllRead(@Param("userId") Long userId);
 
     @Query(value = """
             SELECT n.* FROM notifications n

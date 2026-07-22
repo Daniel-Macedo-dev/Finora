@@ -75,10 +75,7 @@ public class NotificationService {
     }
 
     public void readAll() {
-        Long userId = currentUser.currentUserId();
-        for (Notification notification : repository.findAllByUserIdAndResolvedAtIsNull(userId)) {
-            notification.markRead();
-        }
+        repository.markAllRead(currentUser.currentUserId());
     }
 
     public List<BrowserClaimResponse> claimBrowser() {
