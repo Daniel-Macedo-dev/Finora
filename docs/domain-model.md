@@ -144,3 +144,12 @@ padrão e settings são criadas por usuário no registro (fonte única:
 Defaults conservadores, criados no registro, visíveis na tela de configurações e
 usados de forma explícita na resposta da análise (`assumptions`). A análise e os
 alertas de orçamento usam sempre as settings do usuário autenticado.
+
+### Preferências e notificações (`notification_preferences`, `notifications`)
+
+Cada usuário possui exatamente uma preferência. Cada fonte possui no máximo uma
+notificação por usuário; `revision` separa ciclos de leitura, dispensa, snooze e
+entrega no navegador. `resolved_at` encerra a apresentação sem apagar histórico,
+e o reaparecimento reativa a mesma linha. `resource_type/resource_id` são apenas
+metadados de navegação, nunca FKs polimórficas nem autoridade financeira. Ver
+[notifications.md](notifications.md).

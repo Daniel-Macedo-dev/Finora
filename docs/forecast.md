@@ -87,3 +87,10 @@ filtro opcional por conta ativa do usuário):
   determinística baseada nos dados atuais.
 - Compras avulsas futuras de cartão ainda não registradas obviamente não
   aparecem; apenas faturas existentes e recorrentes projetados.
+
+## Uso pela central de notificações
+
+O feed `GET /api/events/due` mantém seu `id` compatível e expõe também
+`sourceKey`, estável entre próximo/hoje/vencido. O sincronizador reutiliza o
+mesmo `DueEventService` para um usuário confiável, sem duplicar cálculos
+financeiros. Consulte [notifications.md](notifications.md).

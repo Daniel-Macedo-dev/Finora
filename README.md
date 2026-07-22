@@ -44,10 +44,11 @@ Interface em português do Brasil; código, banco e API em inglês.
   de saldo negativo e fluxos sem conta divulgados separadamente. Página
   dedicada com gráfico e linha do tempo + resumo no dashboard. Ver
   [docs/forecast.md](docs/forecast.md).
-- **Eventos prontos para notificação** — feed derivado de vencimentos
-  (recorrentes e faturas: em breve / hoje / vencidos), falhas de execução e
-  caixa projetado insuficiente — dados estáveis para entrega futura, sem
-  envio de notificações.
+- **Central de notificações** — caixa persistente com leitura, dispensa,
+  adiamento, resolução e reativação; preferências por fonte, sincronização
+  automática e alertas opcionais do navegador enquanto o Finora está aberto,
+  com valores ocultos por padrão. Ver
+  [docs/notifications.md](docs/notifications.md).
 - **Metas de poupança** — progresso, aportes e sugestão de contribuição mensal
   para alcançar a data alvo.
 - **Lista de desejos + opções de compra** — cada item aceita múltiplas ofertas

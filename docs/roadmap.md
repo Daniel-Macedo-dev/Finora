@@ -33,17 +33,20 @@ promessa de implementação — é direção.
 > (arquivo, identidade forte, conteúdo), categorização por regras
 > determinísticas, confirmação idempotente por item e desfazer auditável. Ver
 > [statement-import.md](statement-import.md).
+>
+> Entrega de notificações foi **concluída** — caixa persistente owner-scoped,
+> revisões de ciclo de vida, preferências, sincronização automática/manual e
+> alertas foreground do navegador com privacidade segura por padrão. Ver
+> [notifications.md](notifications.md).
 
 ## Próxima grande etapa
 
-**Entrega de notificações** — o feed de eventos `GET /api/events/due` já
-fornece os dados (vencimentos próximos, fatura vencendo, falha de execução,
-caixa projetado insuficiente); falta a entrega em si.
+**Histórico de preços dos itens de desejo** — registros manuais de snapshots de
+preço ao longo do tempo, sem scraping ou integrações externas nesta primeira
+entrega.
 
 ## Depois disso
 
-- Histórico de preços dos itens de desejo (registros manuais ao longo do tempo;
-  integrações reais de preço só com fonte confiável).
 - PWA / offline com sincronização.
 - Multi-moeda.
 - Relatórios anuais e exportação.

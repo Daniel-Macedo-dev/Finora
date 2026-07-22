@@ -134,6 +134,18 @@ src/
 - Formatação de moeda/data/percentual é exclusiva de `lib/format.ts` (Intl pt-BR).
 - Tema claro/escuro/sistema via `data-theme` + tokens CSS; preferência no
   localStorage (nunca dados financeiros).
+- `features/notifications/` concentra sino, painel, histórico, preferências e
+  integração foreground com a API nativa; conteúdo financeiro nunca vai para
+  `localStorage`.
+
+## Entrega de notificações
+
+O domínio `notification/` persiste artefatos derivados do `DueEventService`.
+Sincronização manual e scheduler usam o mesmo serviço transacional por usuário,
+com advisory lock e locks de linha. V12 separa preferências da caixa e aplica
+unicidade `(user_id, source_key)`. O scheduler de notificações é independente
+do processamento automático de recorrentes. Detalhes em
+[notifications.md](notifications.md).
 
 ## Dados de demonstração e testes
 

@@ -283,11 +283,18 @@ VISUAL_QA=1 npx playwright test e2e/visual-qa.spec.ts
 ```
 
 Semeia dados demo determinísticos e captura os estados principais em
-1440/1024/768/390px + tema escuro + estado vazio, em `qa-screenshots/`
+1440/1280/768/390px, claro e escuro, em `qa-screenshots/`
 (ignorado pelo Git). Inclui a área recorrente e a previsão: lista de
 recorrentes, formulário, histórico de ocorrências, ocorrência com falha,
 diálogo de reagendamento, previsão com saldo negativo e seção de caixa futuro
 do dashboard — desktop e mobile, claro e escuro.
+
+A entrega de notificações acrescenta migração PostgreSQL populada V11→V12,
+identidade estável de eventos, API/ownership/lifecycle, quatro testes reais de
+corrência com threads e Testcontainers, scheduler em lotes, testes Vitest do
+sino/painel/preferências/browser e 20 jornadas Playwright em
+`notifications.spec.ts`. O QA visual inclui sino, painel, histórico e settings
+nos quatro viewports e dois temas.
 
 ## CI
 

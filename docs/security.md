@@ -117,3 +117,13 @@ Implantação same-origin é a direção preferida.
 - Sem OAuth/login social.
 - Sem rate limiting distribuído de login (adequado a um app pessoal same-origin;
   seria o próximo passo de endurecimento numa implantação exposta).
+
+## Notificações
+
+Preferências, listagens, contagens, ações, sync e claims derivam o proprietário
+da sessão; não aceitam `userId`, e ids alheios respondem 404. Toda mutação exige
+CSRF. Claims concorrentes são deduplicados no PostgreSQL. Valores ficam fora do
+alerta nativo por padrão, nenhum conteúdo é salvo no `localStorage` e rotas de
+clique são internas. A permissão do navegador depende de gesto explícito. Não há
+SMTP, Web Push, Service Worker ou segredo de provedor. Ver
+[notifications.md](notifications.md).
