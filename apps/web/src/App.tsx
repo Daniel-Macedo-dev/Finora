@@ -24,6 +24,7 @@ const WishlistPage = lazy(() => import('./features/wishlist/WishlistPage'))
 const WishlistItemPage = lazy(() => import('./features/wishlist/WishlistItemPage'))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
 const ProfilePage = lazy(() => import('./features/profile/ProfilePage'))
+const NotificationsPage = lazy(() => import('./features/notifications/NotificationsPage'))
 
 export default function App() {
   return (
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/wishlist/:id" element={<WishlistItemPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

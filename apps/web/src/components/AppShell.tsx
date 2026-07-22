@@ -19,6 +19,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '../features/auth/api'
+import NotificationBell from '../features/notifications/NotificationBell'
 import './AppShell.css'
 
 const NAV_ITEMS = [
@@ -121,10 +122,11 @@ export default function AppShell() {
       <a className="skip-link" href="#main-content">
         Pular para o conteúdo
       </a>
+      <div className="shell-notification-bell"><NotificationBell /></div>
 
       <header className="mobile-topbar">
         <BrandMark />
-        <button
+        <div className="mobile-topbar-actions"><button
           type="button"
           className="btn btn-ghost btn-icon"
           aria-expanded={menuOpen}
@@ -133,7 +135,7 @@ export default function AppShell() {
         >
           {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
           <span className="visually-hidden">{menuOpen ? 'Fechar menu' : 'Abrir menu'}</span>
-        </button>
+        </button></div>
       </header>
 
       {menuOpen && (
