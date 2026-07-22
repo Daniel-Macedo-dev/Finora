@@ -49,7 +49,7 @@ public class NotificationSynchronizationService {
         int created = 0, updated = 0, escalated = 0, reactivated = 0, unchanged = 0;
         for (DueEvent event : events) {
             seen.add(event.sourceKey());
-            Notification existing = notifications.findByUserIdAndSourceKey(userId, event.sourceKey())
+            Notification existing = notifications.lockByUserIdAndSourceKey(userId, event.sourceKey())
                     .orElse(null);
             if (existing == null) {
                 notifications.save(new Notification(userId, event.sourceKey(), event.id(), event.type(),
@@ -72,7 +72,7 @@ public class NotificationSynchronizationService {
             else unchanged++;
         }
         int resolved = 0;
-        for (Notification notification : notifications.findAllByUserIdAndResolvedAtIsNull(userId)) {
+        for (Notification notification : notifications.lockAllActiveByUserId(userId)) {
             if (!seen.contains(notification.getSourceKey())) {
                 notification.resolve(now);
                 resolved++;

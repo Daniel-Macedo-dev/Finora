@@ -17,11 +17,16 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     Optional<Notification> findByIdAndUserId(Long id, Long userId);
 
-    Optional<Notification> findByUserIdAndSourceKey(Long userId, String sourceKey);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n from Notification n where n.userId = :userId and n.sourceKey = :sourceKey")
+    Optional<Notification> lockByUserIdAndSourceKey(@Param("userId") Long userId,
+                                                     @Param("sourceKey") String sourceKey);
 
     List<Notification> findAllByUserIdAndSourceKeyIn(Long userId, Collection<String> sourceKeys);
 
-    List<Notification> findAllByUserIdAndResolvedAtIsNull(Long userId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n from Notification n where n.userId = :userId and n.resolvedAt is null")
+    List<Notification> lockAllActiveByUserId(@Param("userId") Long userId);
 
     Page<Notification> findAllByUserId(Long userId, Pageable pageable);
 
