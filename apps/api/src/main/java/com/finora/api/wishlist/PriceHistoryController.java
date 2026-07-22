@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Exposes owner-scoped manual price observations, aggregates and bounded chart series. */
 @RestController
 @RequestMapping("/api/wishlist/{itemId}")
 public class PriceHistoryController {
@@ -31,6 +32,7 @@ public class PriceHistoryController {
         this.service = service;
     }
 
+    /** Records a manual observation and optionally updates its owned current option atomically. */
     @PostMapping("/price-snapshots")
     @ResponseStatus(HttpStatus.CREATED)
     public SnapshotResponse create(@PathVariable Long itemId,
@@ -38,6 +40,7 @@ public class PriceHistoryController {
         return service.create(itemId, request);
     }
 
+    /** Captures authoritative current values from an owned purchase option. */
     @PostMapping("/options/{optionId}/price-snapshots")
     @ResponseStatus(HttpStatus.CREATED)
     public SnapshotResponse capture(@PathVariable Long itemId, @PathVariable Long optionId,
@@ -45,18 +48,21 @@ public class PriceHistoryController {
         return service.capture(itemId, optionId, request);
     }
 
+    /** Corrects one historical observation without changing a current option. */
     @PutMapping("/price-snapshots/{snapshotId}")
     public SnapshotResponse update(@PathVariable Long itemId, @PathVariable Long snapshotId,
                                    @Valid @RequestBody SnapshotUpdateRequest request) {
         return service.update(itemId, snapshotId, request);
     }
 
+    /** Deletes one owned historical observation. */
     @DeleteMapping("/price-snapshots/{snapshotId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long itemId, @PathVariable Long snapshotId) {
         service.delete(itemId, snapshotId);
     }
 
+    /** Returns stable, filtered pagination without exposing Spring Data serialization. */
     @GetMapping("/price-snapshots")
     public PageResponse<SnapshotResponse> history(@PathVariable Long itemId,
             @RequestParam(defaultValue = "0") int page,
@@ -71,11 +77,13 @@ public class PriceHistoryController {
                 purchaseOptionId, paymentKind, sort);
     }
 
+    /** Calculates the deterministic historical benchmark, comparison and target context. */
     @GetMapping("/price-history-summary")
     public SummaryResponse summary(@PathVariable Long itemId) {
         return service.summary(itemId);
     }
 
+    /** Returns a bounded daily-minimum chart series for the requested filters. */
     @GetMapping("/price-history-series")
     public ChartResponse chart(@PathVariable Long itemId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

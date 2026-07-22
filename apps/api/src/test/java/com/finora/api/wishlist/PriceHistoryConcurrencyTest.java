@@ -9,7 +9,9 @@ import com.finora.api.AbstractIntegrationTest;
 import com.finora.api.identity.AuthenticatedUser;
 import com.finora.api.identity.User;
 import com.finora.api.identity.UserRepository;
+import com.finora.api.wishlist.PriceHistoryDtos.ObservationMetadataRequest;
 import com.finora.api.wishlist.PriceHistoryDtos.SnapshotRequest;
+import com.finora.api.wishlist.PriceHistoryDtos.SnapshotUpdateRequest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -34,6 +36,8 @@ class PriceHistoryConcurrencyTest extends AbstractIntegrationTest {
     @Autowired PriceSnapshotRepository snapshots;
     @Autowired UserRepository users;
     @Autowired PurchaseOptionRepository options;
+    @Autowired WishlistService wishlist;
+    @Autowired WishlistItemRepository items;
 
     @BeforeEach
     void clearSnapshots() {
@@ -99,6 +103,57 @@ class PriceHistoryConcurrencyTest extends AbstractIntegrationTest {
                 .containsExactlyInAnyOrder(owner.id(), other.id());
     }
 
+    @Test
+    void captureRacingOptionDeletionNeverLeavesADanglingOptionLink() throws Exception {
+        TestUser user = registerUser("Exclusão de opção");
+        long item = createItem(user);
+        long option = createOption(user, item, 1200);
+        ObservationMetadataRequest request = new ObservationMetadataRequest(
+                UUID.randomUUID(), LocalDate.of(2026, 7, 1), null, null);
+
+        raceOutcomes(
+                () -> asUser(user.id(), () -> service.capture(item, option, request).id()),
+                () -> asUser(user.id(), () -> { wishlist.deleteOption(item, option); return null; }));
+
+        assertThat(options.findById(option)).isEmpty();
+        assertThat(snapshots.findAll()).allMatch(snapshot -> snapshot.getPurchaseOptionId() == null);
+    }
+
+    @Test
+    void creationRacingItemDeletionNeverLeavesAnOrphan() throws Exception {
+        TestUser user = registerUser("Exclusão de item");
+        long item = createItem(user);
+
+        raceOutcomes(
+                () -> asUser(user.id(), () -> service.create(item,
+                        request(UUID.randomUUID(), null, 1000, false)).id()),
+                () -> asUser(user.id(), () -> { wishlist.delete(item); return null; }));
+
+        assertThat(items.findById(item)).isEmpty();
+        assertThat(snapshots.findAll()).noneMatch(snapshot -> snapshot.getItem().getId().equals(item));
+    }
+
+    @Test
+    void editRacingDeleteHasAValidDeterministicFinalStateAndRepeatedDeleteIsSafe() throws Exception {
+        TestUser user = registerUser("Edição e exclusão");
+        long item = createItem(user);
+        long snapshot = asUser(user.id(), () -> service.create(item,
+                request(UUID.randomUUID(), null, 1000, false)).id());
+        SnapshotUpdateRequest update = new SnapshotUpdateRequest(null, "Loja corrigida",
+                PurchaseOptionKind.CASH, BigDecimal.valueOf(900), BigDecimal.ZERO,
+                BigDecimal.ZERO, null, null, LocalDate.of(2026, 7, 2), null, null);
+
+        raceOutcomes(
+                () -> asUser(user.id(), () -> service.update(item, snapshot, update).id()),
+                () -> asUser(user.id(), () -> { service.delete(item, snapshot); return null; }));
+
+        assertThat(snapshots.findById(snapshot)).isEmpty();
+        assertThatThrownBy(() -> asUser(user.id(), () -> {
+            service.delete(item, snapshot);
+            return null;
+        })).hasMessageContaining("não encontrado");
+    }
+
     private PriceHistoryDtos.SummaryResponse serviceSummary(long userId, long itemId)
             throws Exception {
         return asUser(userId, () -> service.summary(itemId));
@@ -142,6 +197,28 @@ class PriceHistoryConcurrencyTest extends AbstractIntegrationTest {
             Future<T> right = executor.submit(() -> { gate.call(); return second.call(); });
             ready.await(); start.countDown();
             return List.of(left.get(), right.get());
+        }
+    }
+
+    private void raceOutcomes(Callable<?> first, Callable<?> second) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Callable<Void> leftAction = () -> {
+                ready.countDown();
+                start.await();
+                try { first.call(); } catch (Exception ignored) { }
+                return null;
+            };
+            Callable<Void> rightAction = () -> {
+                ready.countDown();
+                start.await();
+                try { second.call(); } catch (Exception ignored) { }
+                return null;
+            };
+            Future<Void> left = executor.submit(leftAction);
+            Future<Void> right = executor.submit(rightAction);
+            ready.await(); start.countDown(); left.get(); right.get();
         }
     }
 

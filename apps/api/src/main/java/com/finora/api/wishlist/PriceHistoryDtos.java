@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+/** Validated API contracts for manual wishlist price history. */
 public final class PriceHistoryDtos {
     private PriceHistoryDtos() { }
 
