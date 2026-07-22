@@ -195,6 +195,44 @@ Segunda release: multiusuário com autenticação por sessão. Ainda de uso loca
 
 Direções futuras em [`docs/roadmap.md`](docs/roadmap.md).
 
+## Endpoints de notificações
+
+Todos exigem sessão; mutações também exigem CSRF. O usuário é sempre derivado
+da sessão, nunca do corpo ou query string.
+
+### GET /api/notification-preferences
+
+Retorna preferências de caixa, fontes e navegador do proprietário atual.
+
+### PUT /api/notification-preferences
+
+Valida e atualiza antecedência (1–14 dias), fontes, severidade mínima,
+habilitação do navegador e privacidade de valores.
+
+### POST /api/notifications/sync
+
+Executa catch-up imediato e retorna contagens `created`, `updated`, `escalated`,
+`resolved`, `reactivated` e `unchanged`.
+
+### GET /api/notifications
+
+Retorna envelope paginado estável. Aceita `filter`, `page` e `size` (máx. 100).
+
+### GET /api/notifications/unread-count
+
+Conta revisões ativas, visíveis e não lidas sem carregar a caixa.
+
+### POST /api/notifications/{id}/{action}
+
+Ações idempotentes `read`, `unread`, `dismiss`, `restore` e `snooze`; ids de
+outro proprietário respondem 404. `snooze` recebe `{ until: instant }` dentro
+dos próximos 30 dias. `POST /api/notifications/read-all` cobre a caixa ativa.
+
+### POST /api/notifications/browser-claims
+
+Reivindica atomicamente até dez revisões elegíveis para alertas foreground,
+sem marcá-las como lidas. Valores só aparecem quando autorizados.
+
 ## Licença
 
 [MIT](LICENSE)

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+/** Synchronizes one owner's durable inbox from the authoritative due-event feed. */
 public class NotificationSynchronizationService {
     static final int OVERDUE_LOOKBACK_DAYS = 30;
 
@@ -31,7 +32,12 @@ public class NotificationSynchronizationService {
         this.clock = clock;
     }
 
-    /** One owner per transaction; the advisory lock collapses scheduler/manual races. */
+    /**
+     * Reconciles one owner's complete bounded source set in a single transaction.
+     *
+     * @param userId trusted owner selected from authentication or the scheduler
+     * @return aggregate lifecycle counts for this reconciliation
+     */
     @Transactional
     public SyncResponse synchronize(Long userId) {
         notifications.lockSynchronization(userId);

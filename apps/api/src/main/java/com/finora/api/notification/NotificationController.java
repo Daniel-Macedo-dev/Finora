@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/notifications")
+/** Authenticated HTTP surface for synchronization and inbox lifecycle actions. */
 public class NotificationController {
     private final NotificationService service;
     private final NotificationSynchronizationService synchronization;

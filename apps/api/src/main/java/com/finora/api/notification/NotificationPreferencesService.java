@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+/** Maintains the single notification-preference row owned by each user. */
 public class NotificationPreferencesService {
     private final NotificationPreferencesRepository repository;
     private final CurrentUserProvider currentUser;
@@ -23,6 +24,7 @@ public class NotificationPreferencesService {
     }
 
     @Transactional(readOnly = true)
+    /** Returns preferences for a trusted scheduler or synchronization owner id. */
     public NotificationPreferences forUser(Long userId) {
         return repository.findByUserId(userId).orElseThrow(() ->
                 new IllegalStateException("notification preferences missing for user " + userId));

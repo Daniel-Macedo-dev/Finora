@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "finora.notifications.auto-sync.enabled",
         havingValue = "true", matchIfMissing = true)
+/** Runs bounded owner-by-owner catch-up without coupling to recurring execution. */
 public class NotificationScheduler {
     private static final Logger log = LoggerFactory.getLogger(NotificationScheduler.class);
     private final UserRepository users;
@@ -29,6 +30,7 @@ public class NotificationScheduler {
 
     @Scheduled(initialDelayString = "${finora.notifications.initial-delay:PT1M}",
             fixedDelayString = "${finora.notifications.sync-interval:PT15M}")
+    /** Synchronizes active owners in bounded pages and isolates per-owner failures. */
     public void synchronizeActiveUsers() {
         int page = 0;
         org.springframework.data.domain.Page<com.finora.api.identity.User> batch;

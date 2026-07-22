@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional
+/** Owner-scoped inbox queries, lifecycle actions and foreground browser claims. */
 public class NotificationService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final Duration MAX_SNOOZE = Duration.ofDays(30);
@@ -41,6 +42,7 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
+    /** Returns a bounded, deterministically ordered inbox page for the current owner. */
     public PageResponse<NotificationResponse> list(String requestedFilter, int page, int size) {
         String filter = requestedFilter == null ? "ACTIVE" : requestedFilter.toUpperCase();
         if (!FILTERS.contains(filter)) {
@@ -78,6 +80,7 @@ public class NotificationService {
         repository.markAllRead(currentUser.currentUserId());
     }
 
+    /** Atomically claims at most ten browser-eligible revisions for the current owner. */
     public List<BrowserClaimResponse> claimBrowser() {
         Long userId = currentUser.currentUserId();
         NotificationPreferences preferences = preferencesService.forUser(userId);

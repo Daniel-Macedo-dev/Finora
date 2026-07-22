@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/notification-preferences")
+/** Authenticated owner-scoped notification preference endpoints. */
 public class NotificationPreferencesController {
     private final NotificationPreferencesService service;
     public NotificationPreferencesController(NotificationPreferencesService service) { this.service = service; }
