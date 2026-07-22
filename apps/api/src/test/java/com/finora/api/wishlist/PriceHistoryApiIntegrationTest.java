@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.finora.api.AbstractIntegrationTest;
 import java.nio.charset.StandardCharsets;
@@ -136,6 +137,26 @@ class PriceHistoryApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/wishlist/{id}/price-snapshots", item).cookie(user.session()))
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void historyOnlySnapshotDoesNotChangePurchaseAnalysis() throws Exception {
+        long item = createItem(user, "Análise estável", 1000);
+        long option = createCashOption(user, item, "Loja", 1200);
+        String before = mockMvc.perform(get("/api/wishlist/{id}/analysis", item)
+                        .cookie(user.session())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        linked(user, item, option, 700, false).andExpect(status().isCreated());
+        String afterHistory = mockMvc.perform(get("/api/wishlist/{id}/analysis", item)
+                        .cookie(user.session())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(objectMapper.readTree(afterHistory)).isEqualTo(objectMapper.readTree(before));
+
+        linked(user, item, option, 900, true).andExpect(status().isCreated());
+        mockMvc.perform(get("/api/wishlist/{id}/analysis", item).cookie(user.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.options[0].nominalCost").value(900.00));
     }
 
     private long createItem(TestUser owner, String name, int target) throws Exception {
