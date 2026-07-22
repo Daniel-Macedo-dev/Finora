@@ -17,6 +17,9 @@ import com.finora.api.wishlist.WishlistDtos.WishlistItemResponse;
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,25 +38,32 @@ public class WishlistService {
     private final PurchaseOptionRepository options;
     private final CategoryRepository categories;
     private final CreditCardRepository creditCards;
+    private final PriceSnapshotRepository priceSnapshots;
     private final CurrentUserProvider currentUser;
 
     public WishlistService(WishlistItemRepository items,
                            PurchaseOptionRepository options,
                            CategoryRepository categories,
                            CreditCardRepository creditCards,
+                           PriceSnapshotRepository priceSnapshots,
                            CurrentUserProvider currentUser) {
         this.items = items;
         this.options = options;
         this.categories = categories;
         this.creditCards = creditCards;
+        this.priceSnapshots = priceSnapshots;
         this.currentUser = currentUser;
     }
 
     @Transactional(readOnly = true)
     public List<WishlistItemResponse> list() {
-        return items.findAllByUserIdOrderByStatusAscPriorityDescNameAsc(currentUser.currentUserId())
+        Long userId = currentUser.currentUserId();
+        Map<Long, PriceSnapshotRepository.ItemHistoryView> history = priceSnapshots.itemHistory(userId)
+                .stream().collect(Collectors.toMap(
+                        PriceSnapshotRepository.ItemHistoryView::getItemId, Function.identity()));
+        return items.findAllByUserIdOrderByStatusAscPriorityDescNameAsc(userId)
                 .stream()
-                .map(this::toSummary)
+                .map(item -> toSummary(item, history.get(item.getId())))
                 .toList();
     }
 
@@ -117,7 +127,9 @@ public class WishlistService {
         PurchaseOption option = options
                 .findByIdAndItemIdAndItemUserId(optionId, itemId, currentUser.currentUserId())
                 .orElseThrow(() -> new NotFoundException("Opção de compra", optionId));
-        option.getItem().getOptions().remove(option);
+        priceSnapshots.clearOptionLink(optionId);
+        options.delete(option);
+        options.flush();
     }
 
     /**
@@ -199,7 +211,8 @@ public class WishlistService {
                 .orElseThrow(() -> new NotFoundException("Item da lista de desejos", id));
     }
 
-    private WishlistItemResponse toSummary(WishlistItem item) {
+    private WishlistItemResponse toSummary(WishlistItem item,
+                                            PriceSnapshotRepository.ItemHistoryView history) {
         BigDecimal bestNominal = item.getOptions().stream()
                 .map(PurchaseOption::nominalCost)
                 .min(Comparator.naturalOrder())
@@ -214,8 +227,13 @@ public class WishlistService {
                 item.getPriority(),
                 item.getDesiredDate(),
                 item.getStatus(),
-                item.getOptions().size(),
-                bestNominal);
+                item.getOptions().size(), bestNominal,
+                history == null ? 0 : history.getObservationCount(),
+                history == null ? null : history.getLatestObservedPrice(),
+                history == null ? null : history.getLatestObservedOn(),
+                history == null ? null : history.getHistoricalMinimum(),
+                history == null || item.getTargetPrice() == null ? null
+                        : history.getLatestObservedPrice().compareTo(item.getTargetPrice()) <= 0);
     }
 
     private WishlistItemDetailResponse toDetail(WishlistItem item) {

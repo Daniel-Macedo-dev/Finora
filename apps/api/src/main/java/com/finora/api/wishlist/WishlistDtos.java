@@ -125,7 +125,12 @@ public final class WishlistDtos {
             LocalDate desiredDate,
             WishlistStatus status,
             int optionCount,
-            BigDecimal bestNominalCost) {
+            BigDecimal bestNominalCost,
+            long priceObservationCount,
+            BigDecimal latestObservedPrice,
+            LocalDate latestObservedOn,
+            BigDecimal historicalMinimum,
+            Boolean targetReached) {
     }
 
     public record WishlistItemDetailResponse(
