@@ -24,11 +24,28 @@ export function useWishlist() {
   })
 }
 
-export function usePriceHistory(itemId: number, page = 0, merchant = '') {
-  const params = new URLSearchParams({ page: String(page), size: '20', sort: 'NEWEST' })
-  if (merchant.trim()) params.set('merchant', merchant.trim())
+export interface PriceHistoryFilters {
+  merchant?: string
+  from?: string
+  to?: string
+  purchaseOptionId?: number
+  paymentKind?: 'CASH' | 'INSTALLMENT'
+  sort?: 'NEWEST' | 'OLDEST' | 'LOWEST' | 'HIGHEST'
+}
+
+function priceHistoryParams(filters: PriceHistoryFilters) {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  }
+  return params
+}
+
+export function usePriceHistory(itemId: number, page = 0, filters: PriceHistoryFilters = {}) {
+  const params = priceHistoryParams({ ...filters, sort: filters.sort ?? 'NEWEST' })
+  params.set('page', String(page)); params.set('size', '20')
   return useQuery({
-    queryKey: ['wishlist', itemId, 'price-history', page, merchant],
+    queryKey: ['wishlist', itemId, 'price-history', page, filters],
     queryFn: () => api.get<PageResponse<PriceSnapshot>>(`/wishlist/${itemId}/price-snapshots?${params}`),
   })
 }
@@ -40,10 +57,11 @@ export function usePriceHistorySummary(itemId: number) {
   })
 }
 
-export function usePriceHistoryChart(itemId: number) {
+export function usePriceHistoryChart(itemId: number, filters: PriceHistoryFilters = {}) {
+  const params = priceHistoryParams(filters)
   return useQuery({
-    queryKey: ['wishlist', itemId, 'price-history-chart'],
-    queryFn: () => api.get<PriceChartResponse>(`/wishlist/${itemId}/price-history-series`),
+    queryKey: ['wishlist', itemId, 'price-history-chart', filters],
+    queryFn: () => api.get<PriceChartResponse>(`/wishlist/${itemId}/price-history-series?${params}`),
   })
 }
 

@@ -365,6 +365,7 @@ export default function WishlistItemPage() {
       />
 
       <CaptureOptionPriceDialog
+        key={capturingOption?.id ?? 'closed'}
         itemId={itemId}
         option={capturingOption}
         onClose={() => setCapturingOption(null)}

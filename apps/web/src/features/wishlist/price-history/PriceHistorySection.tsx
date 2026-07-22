@@ -1,6 +1,5 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useDeferredValue, useRef, useState } from 'react'
 import { ExternalLink, Pencil, Plus, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import Dialog from '../../../components/Dialog'
 import FormActions from '../../../components/FormActions'
@@ -12,17 +11,27 @@ import type { PriceSnapshot, PurchaseOption, PurchaseOptionKind } from '../types
 import { createRequestId } from './requestId'
 import './priceHistory.css'
 
+const PriceHistoryChart = lazy(() => import('./PriceHistoryChart'))
+
 interface Props { itemId: number; options: PurchaseOption[] }
 
 export default function PriceHistorySection({ itemId, options }: Props) {
   const [page, setPage] = useState(0)
   const [merchant, setMerchant] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [optionFilter, setOptionFilter] = useState('')
+  const [paymentKind, setPaymentKind] = useState('')
+  const [sort, setSort] = useState<'NEWEST' | 'OLDEST' | 'LOWEST' | 'HIGHEST'>('NEWEST')
+  const deferredMerchant = useDeferredValue(merchant)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PriceSnapshot | null>(null)
   const [deleting, setDeleting] = useState<PriceSnapshot | null>(null)
-  const history = usePriceHistory(itemId, page, merchant)
+  const filters = { merchant: deferredMerchant, from, to, purchaseOptionId: optionFilter ? Number(optionFilter) : undefined,
+    paymentKind: paymentKind ? paymentKind as PurchaseOptionKind : undefined, sort }
+  const history = usePriceHistory(itemId, page, filters)
   const summary = usePriceHistorySummary(itemId)
-  const chart = usePriceHistoryChart(itemId)
+  const chart = usePriceHistoryChart(itemId, filters)
   const remove = useDeletePriceSnapshot(itemId)
 
   return <section className="wishlist-detail-section price-history" aria-labelledby="price-history-title">
@@ -42,19 +51,17 @@ export default function PriceHistorySection({ itemId, options }: Props) {
       <h3>Evolução do menor preço observado por dia</h3>
       {chart.isPending ? <LoadingCards count={1} height={220} /> : chart.isError ?
         <ErrorState error={chart.error} onRetry={() => chart.refetch()} /> : chart.data?.points.length ? <>
-          <p className="sr-only">Gráfico com {chart.data.points.length} dias, de {formatDate(chart.data.points[0].observedOn)} a {formatDate(chart.data.points.at(-1)!.observedOn)}.</p>
-          <div className="price-chart" role="img" aria-label="Linha da evolução dos preços observados">
-            <ResponsiveContainer width="100%" height="100%"><LineChart data={chart.data.points}>
-              <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="observedOn" tickFormatter={formatDate} />
-              <YAxis tickFormatter={(v) => formatBRL(Number(v))} width={92} />
-              <Tooltip formatter={(v) => formatBRL(Number(v))} labelFormatter={(v) => formatDate(String(v))} />
-              <Line type="monotone" dataKey="nominalCost" name="Menor preço" stroke="var(--brand)" strokeWidth={3} dot />
-            </LineChart></ResponsiveContainer>
-          </div></> : <p className="panel-empty">Registre preços para visualizar a evolução.</p>}
+          <Suspense fallback={<LoadingCards count={1} height={220} />}><PriceHistoryChart data={chart.data} /></Suspense>
+        </> : <p className="panel-empty">Registre preços para visualizar a evolução.</p>}
     </div>
 
     <div className="price-history-toolbar">
-      <label>Filtrar por loja<input value={merchant} onChange={(e) => { setMerchant(e.target.value); setPage(0) }} /></label>
+      <label className="form-field">Filtrar por loja<input value={merchant} onChange={(e) => { setMerchant(e.target.value); setPage(0) }} /></label>
+      <label className="form-field">De<input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(0) }} /></label>
+      <label className="form-field">Até<input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(0) }} /></label>
+      <label className="form-field">Opção<select value={optionFilter} onChange={(e) => { setOptionFilter(e.target.value); setPage(0) }}><option value="">Todas</option>{options.map((option) => <option key={option.id} value={option.id}>{option.merchant}</option>)}</select></label>
+      <label className="form-field">Pagamento<select value={paymentKind} onChange={(e) => { setPaymentKind(e.target.value); setPage(0) }}><option value="">Todos</option><option value="CASH">À vista</option><option value="INSTALLMENT">Parcelado</option></select></label>
+      <label className="form-field">Ordenar<select value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); setPage(0) }}><option value="NEWEST">Mais recentes</option><option value="OLDEST">Mais antigos</option><option value="LOWEST">Menor preço</option><option value="HIGHEST">Maior preço</option></select></label>
     </div>
     {history.isPending ? <LoadingCards count={2} height={90} /> : history.isError ?
       <ErrorState error={history.error} onRetry={() => history.refetch()} /> : !history.data?.content.length ?
@@ -62,17 +69,17 @@ export default function PriceHistorySection({ itemId, options }: Props) {
       <div className="price-table-wrap"><table className="price-table"><thead><tr>
         <th>Data</th><th>Loja</th><th>Pagamento</th><th>Total</th><th>Oferta</th><th>Ações</th>
       </tr></thead><tbody>{history.data.content.map((row) => <tr key={row.id}>
-        <td>{formatDate(row.observedOn)}</td><td>{row.merchant}{!row.linkedOptionAvailable && row.seriesKey.startsWith('OPTION:') && <small>Opção removida</small>}</td>
+        <td>{formatDate(row.observedOn)}</td><td>{row.merchant}{!row.linkedOptionAvailable && row.seriesKey.startsWith('OPTION:') && <small>Opção removida</small>}{row.notes && <small className="price-notes">{row.notes}</small>}</td>
         <td>{row.paymentKind === 'CASH' ? 'À vista' : `${row.installmentCount}× ${formatBRL(row.installmentAmount ?? 0)}`}</td>
         <td>{formatBRL(row.nominalCost)}</td><td>{row.offerUrl ? <a href={row.offerUrl} target="_blank" rel="noopener noreferrer" aria-label={`Abrir oferta de ${row.merchant}`}>Ver oferta <ExternalLink size={13} aria-hidden="true" /></a> : '—'}</td>
-        <td><div className="price-row-actions"><button className="btn btn-ghost btn-icon" aria-label={`Editar observação de ${row.merchant}`} onClick={() => setEditing(row)}><Pencil size={15} /></button>
-          <button className="btn btn-ghost btn-icon" aria-label={`Excluir observação de ${row.merchant}`} onClick={() => setDeleting(row)}><Trash2 size={15} /></button></div></td>
+        <td><div className="price-row-actions"><button className="btn btn-ghost btn-icon" aria-label={`Editar observação de ${row.merchant}`} onClick={() => setEditing(row)}><Pencil size={15} aria-hidden="true" /></button>
+          <button className="btn btn-ghost btn-icon" aria-label={`Excluir observação de ${row.merchant}`} onClick={() => setDeleting(row)}><Trash2 size={15} aria-hidden="true" /></button></div></td>
       </tr>)}</tbody></table></div>
       <nav className="price-pagination" aria-label="Paginação do histórico"><button className="btn btn-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>Anterior</button>
         <span>Página {page + 1} de {history.data.totalPages}</span><button className="btn btn-secondary" disabled={page + 1 >= history.data.totalPages} onClick={() => setPage(page + 1)}>Próxima</button></nav>
     </>}
 
-    <SnapshotDialog itemId={itemId} options={options} open={formOpen || editing !== null} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
+    <SnapshotDialog key={`${editing?.id ?? 'new'}-${formOpen}`} itemId={itemId} options={options} open={formOpen || editing !== null} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
     <ConfirmDialog open={deleting !== null} title="Excluir observação" message={`Excluir a observação de ${deleting?.merchant ?? ''} em ${deleting ? formatDate(deleting.observedOn) : ''}? A opção atual não será alterada.`}
       confirmLabel="Excluir observação" danger busy={remove.isPending} onCancel={() => setDeleting(null)} onConfirm={() => deleting && remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })} />
   </section>
@@ -87,7 +94,7 @@ export function PriceSummary({ data }: { data: import('../types').PriceHistorySu
     <div className="card"><span>Observações</span><strong>{data.observationCount}</strong></div>
   </div>{change !== null && <p className="price-trend">{change < 0 ? <TrendingDown aria-hidden="true" /> : <TrendingUp aria-hidden="true" />}
     {change < 0 ? 'Preço diminuiu' : change > 0 ? 'Preço aumentou' : 'Preço sem alteração'} {Math.abs(change).toLocaleString('pt-BR')}% em relação à observação comparável anterior.</p>}
-    {data.targetReached !== null && <p className={`price-target ${data.targetReached ? 'reached' : ''}`}>{data.targetReached ? 'Preço alvo atingido' : `Preço alvo ainda não atingido${data.distanceToTarget !== null ? ` · faltam ${formatBRL(data.distanceToTarget)}` : ''}`}</p>}</>
+    {data.targetReached !== null && <p className={`price-target ${data.targetReached ? 'reached' : ''}`}>{data.targetReached ? 'Preço alvo atingido' : `Preço alvo ainda não atingido${data.distanceToTarget !== null ? ` · faltam ${formatBRL(data.distanceToTarget)}` : ''}`}{data.latestObservedBestCost === null ? ' · com base na melhor opção atual' : ''}</p>}</>
 }
 
 function SnapshotDialog({ itemId, options, open, initial, onClose }: { itemId: number; options: PurchaseOption[]; open: boolean; initial: PriceSnapshot | null; onClose: () => void }) {
