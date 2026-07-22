@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { apiSession, loginViaUi, logoutViaUi, pageGet, pagePost, pagePut, registerViaUi } from './helpers'
+import { apiSession, loginViaUi, logoutViaUi, pageGet, pagePost, pagePut, registerViaUi } from './helpers.ts'
 
 async function seedOverdue(page: Page, title = 'Internet do escritório') {
   const categories = await (await pageGet(page, '/categories?type=EXPENSE')).json()
