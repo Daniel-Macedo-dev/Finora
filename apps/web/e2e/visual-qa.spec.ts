@@ -232,6 +232,18 @@ async function capture(page: Page, path: string, name: string, viewport: (typeof
 
 test('captura estados principais em todos os viewports', async ({ page }) => {
   test.setTimeout(480_000)
+  await page.addInitScript(() => {
+    const state = localStorage.getItem('visual.notification.permission')
+    if (state !== 'granted' && state !== 'denied') return
+    class VisualNotification {
+      static permission = state
+      static requestPermission = async () => state
+      onclick: (() => void) | null = null
+      constructor(_title: string, _options?: NotificationOptions) { /* visual stub */ }
+      close() { /* visual stub */ }
+    }
+    Object.defineProperty(window, 'Notification', { configurable: true, value: VisualNotification })
+  })
   await registerViaUi(page)
   const { itemId, cardId, invoiceId, legacyCardId } = await seedDemoData(page)
 
@@ -273,8 +285,18 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
       await page.goto('/settings')
       await page.waitForLoadState('networkidle')
       await page.screenshot({ path: `${OUT}/${viewport.name}/notification-settings-${theme}.png`, fullPage: true })
+      for (const permission of ['denied', 'granted'] as const) {
+        await page.evaluate((value) => localStorage.setItem('visual.notification.permission', value), permission)
+        await page.reload()
+        await page.waitForLoadState('networkidle')
+        await page.screenshot({
+          path: `${OUT}/${viewport.name}/notification-settings-${permission}-${theme}.png`,
+          fullPage: true,
+        })
+      }
     }
   }
+  await page.evaluate(() => localStorage.removeItem('visual.notification.permission'))
 
   // Recurring dialogs: form, occurrence history, failed occurrence and the
   // reschedule flow — desktop and mobile.
