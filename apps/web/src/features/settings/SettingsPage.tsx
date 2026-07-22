@@ -7,6 +7,7 @@ import { api } from '../../lib/api'
 import { parseMoneyInput } from '../../lib/format'
 import { applyThemePreference, getThemePreference, type ThemePreference } from '../../lib/theme'
 import './settings.css'
+import NotificationPreferences from '../notifications/NotificationPreferences'
 
 interface Settings {
   minimumCashBuffer: number
@@ -223,6 +224,10 @@ export default function SettingsPage() {
             </div>
           </form>
         )}
+      </section>
+      <section className="card settings-section" aria-label="Notificações">
+        <h2 className="panel-title">Notificações</h2>
+        <NotificationPreferences />
       </section>
     </>
   )
