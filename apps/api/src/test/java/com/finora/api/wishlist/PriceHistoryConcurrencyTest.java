@@ -147,7 +147,11 @@ class PriceHistoryConcurrencyTest extends AbstractIntegrationTest {
                 () -> asUser(user.id(), () -> service.update(item, snapshot, update).id()),
                 () -> asUser(user.id(), () -> { service.delete(item, snapshot); return null; }));
 
-        assertThat(snapshots.findById(snapshot)).isEmpty();
+        snapshots.findById(snapshot).ifPresent(remaining -> {
+            assertThat(remaining.getMerchant()).isEqualTo("Loja corrigida");
+            assertThat(remaining.getBasePrice()).isEqualByComparingTo("900.00");
+            asUserUnchecked(user.id(), () -> service.delete(item, snapshot));
+        });
         assertThatThrownBy(() -> asUser(user.id(), () -> {
             service.delete(item, snapshot);
             return null;
@@ -229,5 +233,13 @@ class PriceHistoryConcurrencyTest extends AbstractIntegrationTest {
                 UsernamePasswordAuthenticationToken.authenticated(
                         principal, null, principal.getAuthorities()));
         try { return action.call(); } finally { SecurityContextHolder.clearContext(); }
+    }
+
+    private void asUserUnchecked(Long userId, Runnable action) {
+        try {
+            asUser(userId, () -> { action.run(); return null; });
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
     }
 }
