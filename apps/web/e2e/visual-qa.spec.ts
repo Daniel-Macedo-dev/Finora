@@ -81,12 +81,31 @@ async function seedDemoData(page: Page) {
     headers,
     data: { name: 'Notebook para trabalho', priority: 'HIGH', status: 'MONITORING', referencePrice: 5200, targetPrice: 4600 },
   })).json()
-  await page.request.post(`${API}/wishlist/${item.id}/options`, {
+  const cashOption = await (await page.request.post(`${API}/wishlist/${item.id}/options`, {
     headers, data: { merchant: 'Loja TechPreço', kind: 'CASH', basePrice: 4650, shipping: 45 },
-  })
+  })).json()
   await page.request.post(`${API}/wishlist/${item.id}/options`, {
     headers, data: { merchant: 'MegaStore', kind: 'INSTALLMENT', basePrice: 5100, installmentCount: 10, installmentAmount: 510 },
   })
+  const emptyItem = await (await page.request.post(`${API}/wishlist`, {
+    headers,
+    data: { name: 'Monitor sem observações', priority: 'MEDIUM', status: 'MONITORING', targetPrice: 1200 },
+  })).json()
+  const observation = (merchant: string, basePrice: number, observedOn: string, extra: object = {}) =>
+    page.request.post(`${API}/wishlist/${item.id}/price-snapshots`, {
+      headers,
+      data: {
+        clientRequestId: crypto.randomUUID(), merchant, paymentKind: 'CASH', basePrice,
+        shipping: 0, fees: 0, observedOn, updateLinkedOption: false, ...extra,
+      },
+    })
+  await observation('Loja com um nome excepcionalmente longo para validar o layout responsivo', 4890, '2026-04-10', {
+    offerUrl: 'https://example.test/oferta-segura',
+    notes: 'Observação extensa para validar quebra de linha, leitura e ações sem ocultar conteúdo importante.',
+  })
+  await observation('Loja TechPreço', 4750, '2026-05-10', { purchaseOptionId: cashOption.id })
+  await observation('Loja TechPreço', 4450, '2026-06-10', { purchaseOptionId: cashOption.id })
+  await observation('Oferta temporária', 4680, '2026-07-10')
 
   // Recurring definitions: income, account expense driving the forecast
   // negative, and a card target whose materialization fails (limit exceeded)
@@ -217,6 +236,7 @@ async function seedDemoData(page: Page) {
   await page.request.post(`${API}/notifications/sync`, { headers })
   return {
     itemId: item.id as number,
+    emptyItemId: emptyItem.id as number,
     cardId: card.id as number,
     invoiceId: invoices[0].id as number,
     legacyCardId: legacyCard.id as number,
@@ -231,7 +251,7 @@ async function capture(page: Page, path: string, name: string, viewport: (typeof
 }
 
 test('captura estados principais em todos os viewports', async ({ page }) => {
-  test.setTimeout(480_000)
+  test.setTimeout(1_200_000)
   await page.addInitScript(() => {
     const state = localStorage.getItem('visual.notification.permission')
     if (state !== 'granted' && state !== 'denied') return
@@ -245,7 +265,7 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
     Object.defineProperty(window, 'Notification', { configurable: true, value: VisualNotification })
   })
   await registerViaUi(page)
-  const { itemId, cardId, invoiceId, legacyCardId } = await seedDemoData(page)
+  const { itemId, emptyItemId, cardId, invoiceId, legacyCardId } = await seedDemoData(page)
 
   const pages: Array<[string, string]> = [
     ['/dashboard', 'dashboard'],
@@ -378,8 +398,40 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
   await capture(page, '/commitments', 'commitments-dark', VIEWPORTS[0])
   await capture(page, '/forecast', 'forecast-dark', VIEWPORTS[0])
 
+  // Price-history states at every required viewport in light and dark themes.
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme })
+    await page.evaluate((value) => localStorage.setItem('finora.theme', value), theme)
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.goto(`/wishlist/${itemId}`)
+      await page.waitForLoadState('networkidle')
+      await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
+      await page.getByRole('heading', { name: 'Histórico de preços' }).scrollIntoViewIfNeeded()
+      await page.screenshot({ path: `${OUT}/${viewport.name}/price-history-${theme}.png`, fullPage: true })
+
+      await page.getByRole('button', { name: 'Registrar preço', exact: true }).click()
+      await page.screenshot({ path: `${OUT}/${viewport.name}/price-history-manual-${theme}.png`, fullPage: true })
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: 'Registrar preço atual' }).first().click()
+      await page.screenshot({ path: `${OUT}/${viewport.name}/price-history-capture-${theme}.png`, fullPage: true })
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: /Editar observação de/ }).first().click()
+      await page.screenshot({ path: `${OUT}/${viewport.name}/price-history-edit-${theme}.png`, fullPage: true })
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: /Excluir observação de/ }).first().click()
+      await page.screenshot({ path: `${OUT}/${viewport.name}/price-history-delete-${theme}.png`, fullPage: true })
+      await page.keyboard.press('Escape')
+
+      await page.goto(`/wishlist/${emptyItemId}`)
+      await page.waitForLoadState('networkidle')
+      await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
+      await page.screenshot({ path: `${OUT}/${viewport.name}/price-history-empty-${theme}.png`, fullPage: true })
+    }
+  }
+
   // Auth screens (public).
-  await page.getByRole('button', { name: 'Sair da conta' }).click().catch(() => {})
+  await page.request.post(`${API}/auth/logout`, { headers: await csrfHeader(page) })
   await capture(page, '/login', 'login-dark', VIEWPORTS[0])
   await page.emulateMedia({ colorScheme: 'light' })
   await page.addInitScript(() => localStorage.setItem('finora.theme', 'light'))
