@@ -127,3 +127,11 @@ alerta nativo por padrão, nenhum conteúdo é salvo no `localStorage` e rotas d
 clique são internas. A permissão do navegador depende de gesto explícito. Não há
 SMTP, Web Push, Service Worker ou segredo de provedor. Ver
 [notifications.md](notifications.md).
+
+## Histórico de preços
+
+Snapshots carregam `user_id` e FK composta para item + proprietário. Repositórios,
+agregados e gráfico filtram dono e item; IDs alheios respondem 404. URLs são
+metadados `http`/`https` validados, nunca buscados pelo servidor. O cliente não
+fornece dono, total nominal ou chave de série. Ver
+[wishlist-price-history.md](wishlist-price-history.md).

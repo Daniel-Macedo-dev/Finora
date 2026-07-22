@@ -298,6 +298,10 @@ nos quatro viewports e dois temas.
 
 ## CI
 
+O histórico de preços acrescenta migração populada V12→V13, lifecycle e posse
+via MockMvc, regressão da análise e corridas com threads/Testcontainers. Vitest
+cobre tendências, alvo e UUID; Playwright cobre o fluxo real e responsividade.
+
 `.github/workflows/ci.yml`: job de backend (`mvnw verify` com Testcontainers),
 job de frontend (lint, typecheck, testes, build) e job E2E (serviço PostgreSQL,
 API em background, Playwright) — travas de merge naturais para `main`.

@@ -14,6 +14,7 @@ User 1──n Commitment  n──1 Category, 0..1 Account, 0..1 CreditCard
 Commitment 1──n CommitmentOccurrence ──0..1 {Transaction, CardPurchase}
 User 1──n Goal
 User 1──n WishlistItem 1──n PurchaseOption, 0..1 Category
+WishlistItem 1──n WishlistPriceSnapshot 0..1──1 PurchaseOption
 User 1──1 AppSettings
 User 1──n CreditCard 1──n CardInvoice 1──n {CardInstallment, InvoicePayment, InvoiceAdjustment}
 CreditCard 1──n CardPurchase 1──n CardInstallment
@@ -21,6 +22,11 @@ User 1──n StatementImportBatch n──1 Account
 StatementImportBatch 1──n StatementImportItem ──0..1 Transaction (statement_import_item_id)
 User 1──n CategoryMappingRule n──1 Category, 0..1 Account
 ```
+
+`WishlistPriceSnapshot` é uma observação corrigível que copia valores históricos
+e possui série controlada pelo servidor. Excluir opção limpa só o vínculo;
+excluir item remove o histórico. Ver
+[wishlist-price-history.md](wishlist-price-history.md).
 
 Uniqueness é por usuário e, onde a aplicação compara sem distinção de caixa, o
 banco usa índices case-insensitive: nome de conta por usuário; (nome, tipo) de

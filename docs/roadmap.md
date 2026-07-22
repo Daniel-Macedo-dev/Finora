@@ -38,16 +38,18 @@ promessa de implementação — é direção.
 > revisões de ciclo de vida, preferências, sincronização automática/manual e
 > alertas foreground do navegador com privacidade segura por padrão. Ver
 > [notifications.md](notifications.md).
+>
+> Histórico de preços dos itens de desejo foi **concluído** — snapshots manuais
+> owner-scoped, captura de opção, idempotência, correção, resumo, alvo, gráfico e
+> histórico paginado, sem coleta externa. Ver
+> [wishlist-price-history.md](wishlist-price-history.md).
 
 ## Próxima grande etapa
 
-**Histórico de preços dos itens de desejo** — registros manuais de snapshots de
-preço ao longo do tempo, sem scraping ou integrações externas nesta primeira
-entrega.
+**PWA / offline synchronization**.
 
 ## Depois disso
 
-- PWA / offline com sincronização.
 - Multi-moeda.
 - Relatórios anuais e exportação.
 

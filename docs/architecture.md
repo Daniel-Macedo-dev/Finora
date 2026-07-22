@@ -38,6 +38,11 @@ o escopo de posse — nunca de parâmetros ou corpo da requisição.
 
 ## Backend
 
+O pacote `wishlist` contém também o histórico manual de preços: controller e
+serviço próprios, consultas owner-scoped, agregados PostgreSQL e respostas
+limitadas. A fronteira com `purchaseanalysis` é informativa; o motor lê apenas
+opções atuais. Ver [wishlist-price-history.md](wishlist-price-history.md).
+
 Pacotes por domínio (não por camada técnica):
 
 ```

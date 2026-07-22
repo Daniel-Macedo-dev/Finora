@@ -53,6 +53,9 @@ Interface em português do Brasil; código, banco e API em inglês.
   para alcançar a data alvo.
 - **Lista de desejos + opções de compra** — cada item aceita múltiplas ofertas
   (à vista e parcelado, com frete e taxas validados contra combinações contraditórias).
+- **Histórico manual de preços** — snapshots idempotentes, captura de opções atuais,
+  variação comparável, alvo, gráfico e histórico paginado, sem coleta externa. Ver
+  [docs/wishlist-price-history.md](docs/wishlist-price-history.md).
 - **Motor de análise de compra** — comparação determinística entre opções: custo
   nominal, valor presente à taxa de oportunidade configurável, proteção de liquidez
   (reserva mínima de caixa), pressão de parcelas sobre a sobra e a renda médias, e
@@ -147,7 +150,7 @@ Endpoints principais (JSON, erros em RFC 9457 Problem Details):
 | Orçamentos | `GET /api/budgets?month=YYYY-MM`, `POST`, `PUT/DELETE /{id}` |
 | Recorrentes | `GET/POST /api/commitments`, `GET /api/commitments/upcoming?months=`, `PUT/DELETE /{id}` |
 | Metas | `GET/POST /api/goals`, `PUT/DELETE /{id}`, `POST /{id}/contributions` |
-| Lista de desejos | `GET/POST /api/wishlist`, `GET/PUT/DELETE /{id}`, `POST/PUT/DELETE /{id}/options[/{optionId}]`, `POST /{id}/purchase` |
+| Lista de desejos | `GET/POST /api/wishlist`, `GET/PUT/DELETE /{id}`, opções, compra e histórico manual em `/{id}/price-snapshots`, `price-history-summary`, `price-history-series` |
 | Análise | `GET /api/wishlist/{id}/analysis` |
 | Dashboard | `GET /api/dashboard?month=YYYY-MM` |
 | Insights | `GET /api/insights?month=YYYY-MM` |

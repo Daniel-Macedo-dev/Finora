@@ -5,6 +5,11 @@ apenas dados do Finora e as premissas configuráveis. Todo o cálculo é
 determinístico, em `BigDecimal`, implementado em `PurchaseAnalysisService` e
 coberto por testes de cenário (`PurchaseAnalysisEngineTest`).
 
+O [histórico manual de preços](wishlist-price-history.md) aparece somente como
+contexto informativo. Snapshots, mínimo e alvo não entram nos cálculos abaixo.
+Somente `updateLinkedOption=true` pode mudar a análise, porque atualiza a opção
+atual na mesma transação.
+
 ## Entradas
 
 **Contexto financeiro** (`FinancialContextService`, janela dos **3 meses
