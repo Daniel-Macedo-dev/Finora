@@ -15,7 +15,7 @@ const API = 'http://localhost:8080/api'
 
 const VIEWPORTS = [
   { name: 'desktop-1440', width: 1440, height: 900 },
-  { name: 'laptop-1024', width: 1024, height: 768 },
+  { name: 'desktop-1280', width: 1280, height: 800 },
   { name: 'tablet-768', width: 768, height: 1024 },
   { name: 'mobile-390', width: 390, height: 844 },
 ]
@@ -214,6 +214,7 @@ async function seedDemoData(page: Page) {
     headers,
     data: { accountId: accounts[0].id, amount: 200, paidOn: '2031-03-15' },
   })
+  await page.request.post(`${API}/notifications/sync`, { headers })
   return {
     itemId: item.id as number,
     cardId: card.id as number,
@@ -248,11 +249,30 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
     ['/wishlist', 'wishlist'],
     [`/wishlist/${itemId}`, 'wishlist-detail'],
     ['/settings', 'settings'],
+    ['/notifications', 'notifications'],
     ['/profile', 'profile'],
   ]
   for (const viewport of VIEWPORTS) {
     for (const [path, name] of pages) {
       await capture(page, path, name, viewport)
+    }
+  }
+
+  // Notification-specific responsive/light/dark states, including the panel.
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme })
+    await page.evaluate((value) => localStorage.setItem('finora.theme', value), theme)
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.goto('/notifications')
+      await page.waitForLoadState('networkidle')
+      await page.screenshot({ path: `${OUT}/${viewport.name}/notifications-${theme}.png`, fullPage: true })
+      await page.getByRole('button', { name: /Notificações:/ }).click()
+      await page.screenshot({ path: `${OUT}/${viewport.name}/notification-panel-${theme}.png`, fullPage: true })
+      await page.keyboard.press('Escape')
+      await page.goto('/settings')
+      await page.waitForLoadState('networkidle')
+      await page.screenshot({ path: `${OUT}/${viewport.name}/notification-settings-${theme}.png`, fullPage: true })
     }
   }
 
