@@ -40,6 +40,9 @@ describe('notification center', () => {
     expect(screen.getByText('99+')).toBeInTheDocument()
     fireEvent.click(bell)
     expect(await screen.findByRole('dialog', { name: 'Notificações' })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(bell).toHaveFocus())
+    expect(screen.queryByRole('dialog', { name: 'Notificações' })).not.toBeInTheDocument()
   })
 
   it('renders history, filters, source navigation and lifecycle actions', async () => {

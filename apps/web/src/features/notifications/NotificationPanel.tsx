@@ -9,9 +9,33 @@ export default function NotificationPanel({ onClose }: { onClose: () => void }) 
   const notifications = useNotifications('ACTIVE', 0, 5)
   useEffect(() => {
     panel.current?.focus()
-    const close = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
-    document.addEventListener('keydown', close)
-    return () => document.removeEventListener('keydown', close)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab' || !panel.current) return
+      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ))
+      if (focusable.length === 0) {
+        event.preventDefault()
+        panel.current.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
   return (
     <div ref={panel} className="notification-panel" role="dialog" aria-modal="false"
