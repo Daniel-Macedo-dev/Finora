@@ -96,7 +96,7 @@ export default function WishlistPage() {
               </div>
               <dl className="wishlist-facts">
                 <div>
-                  <dt>Melhor preço cadastrado</dt>
+                  <dt>Melhor opção atual</dt>
                   <dd>
                     {item.bestNominalCost !== null ? (
                       <Money value={item.bestNominalCost} />
@@ -107,6 +107,12 @@ export default function WishlistPage() {
                     )}
                   </dd>
                 </div>
+                {item.latestObservedPrice !== null && (
+                  <div><dt>Último preço observado</dt><dd><Money value={item.latestObservedPrice} /></dd></div>
+                )}
+                {item.historicalMinimum !== null && (
+                  <div><dt>Menor preço registrado</dt><dd><Money value={item.historicalMinimum} /></dd></div>
+                )}
                 {item.targetPrice !== null && (
                   <div>
                     <dt>Preço alvo</dt>
@@ -124,6 +130,8 @@ export default function WishlistPage() {
               </dl>
               <div className="wishlist-card-footer">
                 <span className="stat-footnote">
+                  {item.priceObservationCount > 0 && `${item.priceObservationCount} observação${item.priceObservationCount === 1 ? '' : 'ões'} · `}
+                  {item.targetReached === true && 'Preço alvo atingido · '}
                   {item.optionCount === 0
                     ? 'Nenhuma opção de compra'
                     : item.optionCount === 1

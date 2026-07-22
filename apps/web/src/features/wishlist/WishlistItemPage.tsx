@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, ShoppingCart, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, ShoppingCart, Tag, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
 import Dialog from '../../components/Dialog'
@@ -11,6 +11,8 @@ import WishlistItemForm from './WishlistItemForm'
 import PurchaseOptionForm from './PurchaseOptionForm'
 import ExecutePurchaseForm from './ExecutePurchaseDialog'
 import AnalysisPanel from './AnalysisPanel'
+import PriceHistorySection from './price-history/PriceHistorySection'
+import CaptureOptionPriceDialog from './price-history/CaptureOptionPriceDialog'
 import {
   useAddOption,
   useDeleteOption,
@@ -53,6 +55,7 @@ export default function WishlistItemPage() {
   const [editingOption, setEditingOption] = useState<PurchaseOption | null>(null)
   const [deletingOption, setDeletingOption] = useState<PurchaseOption | null>(null)
   const [executingOption, setExecutingOption] = useState<PurchaseOption | null>(null)
+  const [capturingOption, setCapturingOption] = useState<PurchaseOption | null>(null)
 
   if (!Number.isInteger(itemId)) {
     return (
@@ -211,6 +214,14 @@ export default function WishlistItemPage() {
                   <Money value={option.nominalCost} />
                 </div>
                 <div className="option-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setCapturingOption(option)}
+                  >
+                    <Tag size={15} aria-hidden="true" />
+                    Registrar preço atual
+                  </button>
                   {data.status !== 'PURCHASED' && (
                     <button
                       type="button"
@@ -251,6 +262,8 @@ export default function WishlistItemPage() {
           </ul>
         )}
       </section>
+
+      <PriceHistorySection itemId={itemId} options={data.options} />
 
       <section className="wishlist-detail-section" aria-label="Análise de compra">
         <div className="wishlist-detail-section-header">
@@ -301,7 +314,7 @@ export default function WishlistItemPage() {
       <ConfirmDialog
         open={deleteOpen}
         title="Excluir item"
-        message={`Excluir "${data.name}" e todas as suas opções de compra?`}
+        message={`Excluir "${data.name}", todas as opções e todas as observações do histórico de preços?`}
         confirmLabel="Excluir"
         danger
         busy={deleteItem.isPending}
@@ -349,6 +362,12 @@ export default function WishlistItemPage() {
           })
         }
         onCancel={() => setDeletingOption(null)}
+      />
+
+      <CaptureOptionPriceDialog
+        itemId={itemId}
+        option={capturingOption}
+        onClose={() => setCapturingOption(null)}
       />
     </>
   )
