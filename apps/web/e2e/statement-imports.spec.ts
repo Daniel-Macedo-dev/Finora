@@ -84,9 +84,14 @@ async function assignAllCategories(page: Page) {
   for (let index = 0; index < count; index += 1) {
     const select = selects.nth(index)
     if ((await select.inputValue()) === '') {
+      const label = await select.getAttribute('aria-label')
+      const saved = page.waitForResponse((response) =>
+        response.request().method() === 'PATCH' && /\/statement-imports\/\d+\/items\/\d+$/.test(response.url()),
+      )
       await select.selectOption({ index: 1 })
-      // Each assignment refetches the batch; wait for the value to stick.
-      await expect(select).not.toHaveValue('')
+      await saved
+      // Each assignment refetches the batch; resolve a fresh node and wait for persistence.
+      await expect(page.getByLabel(label!, { exact: true })).not.toHaveValue('')
     }
   }
 }
