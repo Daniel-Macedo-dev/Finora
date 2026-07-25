@@ -10,6 +10,7 @@ import { AUTH_ME_KEY } from './features/auth/api'
 import { LoadingCards } from './components/states'
 import { watchSystemTheme } from './lib/theme'
 import { PwaProvider } from './pwa/PwaProvider'
+import { ConnectionProvider } from './offline/connection'
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -41,13 +42,15 @@ watchSystemTheme()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <PwaProvider>
-        <BrowserRouter>
-          <Suspense fallback={<LoadingCards count={3} height={120} />}>
-            <App />
-          </Suspense>
-        </BrowserRouter>
-      </PwaProvider>
+      <ConnectionProvider>
+        <PwaProvider>
+          <BrowserRouter>
+            <Suspense fallback={<LoadingCards count={3} height={120} />}>
+              <App />
+            </Suspense>
+          </BrowserRouter>
+        </PwaProvider>
+      </ConnectionProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

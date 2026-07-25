@@ -2,6 +2,24 @@
   min-height: 100vh;
 }
 
+.connection-banner,
+.update-banner {
+  position: relative;
+  z-index: 45;
+  margin-left: var(--sidebar-width);
+  padding: var(--space-2) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--warning-soft);
+  color: var(--ink-primary);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.update-banner { background: var(--info-soft); }
+
 .skip-link {
   position: absolute;
   left: -9999px;
@@ -160,6 +178,12 @@
 }
 
 @media (max-width: 900px) {
+  .connection-banner,
+  .update-banner {
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
   .mobile-topbar {
     display: flex;
     align-items: center;

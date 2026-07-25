@@ -17,10 +17,14 @@ import {
   X,
   UserRound,
   LogOut,
+  WifiOff,
+  RefreshCw,
 } from 'lucide-react'
 import { useCurrentUser, useLogout } from '../features/auth/api'
 import NotificationBell from '../features/notifications/NotificationBell'
 import './AppShell.css'
+import { useConnection } from '../offline/connection'
+import { usePwa } from '../pwa/PwaProvider'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
@@ -91,6 +95,8 @@ function UserPanel() {
 export default function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
+  const connection = useConnection()
+  const pwa = usePwa()
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -122,6 +128,21 @@ export default function AppShell() {
       <a className="skip-link" href="#main-content">
         Pular para o conteúdo
       </a>
+      {connection.state !== 'ONLINE' && (
+        <div className="connection-banner" role="status" aria-live="polite">
+          {connection.state === 'OFFLINE' ? <WifiOff size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
+          <span>{connection.state === 'OFFLINE' ? 'Sem conexão. O acesso offline é somente leitura.' : 'Reconectando ao Finora…'}</span>
+          <button type="button" className="btn btn-secondary" onClick={connection.retry}>Tentar novamente</button>
+        </div>
+      )}
+      {pwa.updateAvailable && (
+        <div className="update-banner" role="status">
+          <span>Uma nova versão do Finora está disponível.</span>
+          <button type="button" className="btn btn-primary" onClick={() => void pwa.applyUpdate()}>
+            Atualizar agora
+          </button>
+        </div>
+      )}
       <div className="shell-notification-bell"><NotificationBell /></div>
 
       <header className="mobile-topbar">

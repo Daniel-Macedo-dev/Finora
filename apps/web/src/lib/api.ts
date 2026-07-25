@@ -8,6 +8,8 @@
  * localStorage.
  */
 
+import { reportApiReachability } from '../offline/connection'
+
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -116,8 +118,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers,
     })
   } catch {
+    reportApiReachability(false)
     throw new NetworkError()
   }
+  reportApiReachability(true)
   if (!response.ok) {
     // Mutations are never replayed automatically: a CSRF/session failure on a
     // financial write must surface instead of risking a duplicate write.

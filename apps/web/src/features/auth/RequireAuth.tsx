@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { ErrorState, LoadingCards } from '../../components/states'
 import { useCurrentUser } from './api'
@@ -12,6 +12,13 @@ import { useCurrentUser } from './api'
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const currentUser = useCurrentUser()
   const location = useLocation()
+  const refetchCurrentUser = currentUser.refetch
+
+  useEffect(() => {
+    const retry = () => void refetchCurrentUser()
+    window.addEventListener('finora:retry-connection', retry)
+    return () => window.removeEventListener('finora:retry-connection', retry)
+  }, [refetchCurrentUser])
 
   if (currentUser.isPending) {
     return (
