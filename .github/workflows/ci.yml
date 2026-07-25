@@ -47,6 +47,9 @@ jobs:
       - name: Production build
         working-directory: apps/web
         run: npm run build
+      - name: Verify PWA artifacts and API cache boundary
+        working-directory: apps/web
+        run: npm run verify:pwa
 
   e2e:
     name: E2E (Playwright)

@@ -26,6 +26,7 @@ import './AppShell.css'
 import { useConnection } from '../offline/connection'
 import { usePwa } from '../pwa/PwaProvider'
 import { useVault } from '../offline/VaultProvider'
+import OfflineUnavailable from '../offline/OfflineUnavailable'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
@@ -101,6 +102,7 @@ export default function AppShell() {
   const pwa = usePwa()
   const vault = useVault()
   const offlineUnlocked = vault.state === 'UNLOCKED_OFFLINE'
+  const offlineRouteSupported = new Set(['/dashboard', '/transactions', '/credit-cards', '/budgets', '/commitments', '/forecast', '/goals', '/wishlist', '/settings', '/notifications']).has(location.pathname)
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -194,9 +196,11 @@ export default function AppShell() {
             <button data-offline-allowed="true" type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
           </div>
         )}
-        <Suspense fallback={<LoadingCards count={3} height={120} />}>
-          <Outlet />
-        </Suspense>
+        {offlineUnlocked && !offlineRouteSupported ? <OfflineUnavailable /> : (
+          <Suspense fallback={<LoadingCards count={3} height={120} />}>
+            <Outlet />
+          </Suspense>
+        )}
       </main>
     </div>
   )

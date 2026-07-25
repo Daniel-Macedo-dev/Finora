@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "verify:pwa": "node scripts/verify-pwa.mjs",
     "lint": "oxlint",
     "typecheck": "tsc -b",
     "test": "vitest run",

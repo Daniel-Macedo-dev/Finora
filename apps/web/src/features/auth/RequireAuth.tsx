@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { ErrorState, LoadingCards } from '../../components/states'
 import { useCurrentUser } from './api'
-import { useVault } from '../../offline/VaultProvider'
+import { useOptionalVault } from '../../offline/VaultProvider'
 import OfflineUnlock from '../../offline/OfflineUnlock'
 
 /**
@@ -13,7 +13,7 @@ import OfflineUnlock from '../../offline/OfflineUnlock'
  */
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const currentUser = useCurrentUser()
-  const vault = useVault()
+  const vault = useOptionalVault()
   const location = useLocation()
   const refetchCurrentUser = currentUser.refetch
 
@@ -24,7 +24,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   }, [refetchCurrentUser])
 
   useEffect(() => {
-    if (vault.state === 'UNLOCKED_OFFLINE' && currentUser.isSuccess) {
+    if (vault?.state === 'UNLOCKED_OFFLINE' && currentUser.isSuccess) {
       vault.reconcileOnline(currentUser.data)
     }
   }, [currentUser.data, currentUser.isSuccess, vault])
@@ -38,10 +38,10 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   if (currentUser.isError) {
-    if (vault.state === 'LOCKED' || vault.state === 'CORRUPTED' || vault.state === 'UNLOCKING') {
+    if (vault && (vault.state === 'LOCKED' || vault.state === 'CORRUPTED' || vault.state === 'UNLOCKING')) {
       return <OfflineUnlock />
     }
-    if (vault.state === 'UNLOCKED_OFFLINE') return children
+    if (vault?.state === 'UNLOCKED_OFFLINE') return children
     return (
       <main style={{ padding: 'var(--space-6)', maxWidth: 640, margin: '0 auto' }}>
         <ErrorState error={currentUser.error} onRetry={() => currentUser.refetch()} />

@@ -148,3 +148,7 @@ export function useVault(): VaultContextValue {
   if (!value) throw new Error('useVault must be used within VaultProvider')
   return value
 }
+
+export function useOptionalVault(): VaultContextValue | null {
+  return useContext(VaultContext)
+}
