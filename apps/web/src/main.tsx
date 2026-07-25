@@ -11,6 +11,7 @@ import { LoadingCards } from './components/states'
 import { watchSystemTheme } from './lib/theme'
 import { PwaProvider } from './pwa/PwaProvider'
 import { ConnectionProvider } from './offline/connection'
+import { VaultProvider } from './offline/VaultProvider'
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -43,13 +44,15 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ConnectionProvider>
-        <PwaProvider>
-          <BrowserRouter>
-            <Suspense fallback={<LoadingCards count={3} height={120} />}>
-              <App />
-            </Suspense>
-          </BrowserRouter>
-        </PwaProvider>
+        <VaultProvider>
+          <PwaProvider>
+            <BrowserRouter>
+              <Suspense fallback={<LoadingCards count={3} height={120} />}>
+                <App />
+              </Suspense>
+            </BrowserRouter>
+          </PwaProvider>
+        </VaultProvider>
       </ConnectionProvider>
     </QueryClientProvider>
   </StrictMode>,

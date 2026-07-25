@@ -1,8 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, NetworkError, queryString } from './api'
+import { api, ApiError, NetworkError, OfflineMutationError, queryString } from './api'
+import { setOfflineUnlocked } from '../offline/session'
 
 afterEach(() => {
+  setOfflineUnlocked(false)
   vi.restoreAllMocks()
+})
+
+describe('offline mutation boundary', () => {
+  it.each([
+    ['POST', () => api.post('/transactions', { amount: 1 })],
+    ['PUT', () => api.put('/transactions/1', { amount: 1 })],
+    ['PATCH', () => api.patch('/statement-imports/1', { included: false })],
+    ['DELETE', () => api.delete('/transactions/1')],
+  ])('blocks %s before fetch or CSRF bootstrap', async (_method, request) => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    setOfflineUnlocked(true)
+    const error = await request().catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(OfflineMutationError)
+    expect((error as Error).message).toBe('Esta ação precisa de conexão. O modo offline do Finora é somente leitura.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })
 
 function mockFetchResponse(status: number, body: unknown) {

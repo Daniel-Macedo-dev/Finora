@@ -9,6 +9,7 @@
  */
 
 import { reportApiReachability } from '../offline/connection'
+import { isOfflineUnlocked } from '../offline/session'
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -51,6 +52,13 @@ export class NetworkError extends Error {
   constructor() {
     super('Não foi possível conectar ao servidor. Verifique se a API está em execução.')
     this.name = 'NetworkError'
+  }
+}
+
+export class OfflineMutationError extends Error {
+  constructor() {
+    super('Esta ação precisa de conexão. O modo offline do Finora é somente leitura.')
+    this.name = 'OfflineMutationError'
   }
 }
 
@@ -99,6 +107,9 @@ async function toApiError(response: Response): Promise<ApiError> {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
+  if (UNSAFE_METHODS.has(method) && isOfflineUnlocked()) {
+    throw new OfflineMutationError()
+  }
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...(init?.headers as Record<string, string>),

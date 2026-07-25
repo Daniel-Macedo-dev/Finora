@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api'
 import type { AuthUser, LoginRequest, RegisterRequest } from './types'
+import { deleteVault } from '../../offline/vaultStorage'
+import { setOfflineUnlocked } from '../../offline/session'
 
 export const AUTH_ME_KEY = ['auth', 'me'] as const
 
@@ -53,9 +55,11 @@ export function useLogout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => api.post<void>('/auth/logout'),
-    onSettled: () => {
+    onSettled: async () => {
       // Even if the request failed the local state must not keep stale data.
+      setOfflineUnlocked(false)
       resetForNewIdentity(queryClient, null)
+      await deleteVault()
     },
   })
 }
