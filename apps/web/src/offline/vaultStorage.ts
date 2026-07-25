@@ -37,10 +37,11 @@ async function transaction<T>(
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, mode)
     const request = operation(tx.objectStore(STORE_NAME))
-    request.onsuccess = () => resolve(request.result)
+    let result: T
+    request.onsuccess = () => { result = request.result }
     request.onerror = () => reject(new VaultStorageError())
     tx.onabort = () => reject(new VaultStorageError())
-    tx.oncomplete = () => db.close()
+    tx.oncomplete = () => { db.close(); resolve(result) }
   })
 }
 

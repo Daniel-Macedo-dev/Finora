@@ -37,7 +37,7 @@ export default function OfflineSettings() {
     <section className="card settings-section" aria-label="Aplicativo e acesso offline">
       <h2 className="panel-title">Aplicativo e acesso offline</h2>
       <dl className="offline-status-list">
-        <div><dt>Instalação</dt><dd>{pwa.installState === 'installed' ? 'Instalado' : pwa.installState === 'available' ? 'Disponível' : 'Use o menu do navegador quando compatível'}</dd></div>
+        <div><dt>Instalação</dt><dd>{pwa.installState === 'installed' ? 'Instalado' : pwa.installState === 'accepted' ? 'Solicitação aceita; aguardando confirmação' : pwa.installState === 'available' ? 'Disponível' : 'Use o menu do navegador quando compatível'}</dd></div>
         <div><dt>Service Worker</dt><dd>{pwa.registrationError ? 'Falha no registro' : pwa.serviceWorkerReady ? 'Ativo' : 'Aguardando'}</dd></div>
         <div><dt>Cópia offline</dt><dd>{vault.state === 'ABSENT' ? 'Desativada' : vault.state === 'LOCKED' ? 'Bloqueada' : vault.state.startsWith('UNLOCKED') ? 'Desbloqueada' : vault.state === 'CORRUPTED' ? 'Indisponível' : 'Verificando'}</dd></div>
         {vault.updatedAt && <div><dt>Última atualização</dt><dd>{new Date(vault.updatedAt).toLocaleString('pt-BR')}</dd></div>}

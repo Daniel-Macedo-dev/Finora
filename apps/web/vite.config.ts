@@ -45,6 +45,11 @@ export default defineConfig({
             handler: 'NetworkOnly',
             method: 'GET',
           },
+          ...(['POST', 'PUT', 'PATCH', 'DELETE'] as const).map((method) => ({
+            urlPattern: ({ url }: { url: URL }) => url.pathname === '/api' || url.pathname.startsWith('/api/'),
+            handler: 'NetworkOnly' as const,
+            method,
+          })),
         ],
       },
     }),

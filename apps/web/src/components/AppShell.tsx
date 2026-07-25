@@ -122,6 +122,31 @@ export default function AppShell() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [menuOpen])
 
+  useEffect(() => {
+    if (!offlineUnlocked) return
+    const disableMutations = () => {
+      document.querySelectorAll<HTMLButtonElement>("#main-content button:not([data-offline-allowed='true'])").forEach((button) => {
+        if (!button.disabled) {
+          button.dataset.offlineDisabled = 'true'
+          button.disabled = true
+          button.title = 'Esta ação precisa de conexão. O modo offline do Finora é somente leitura.'
+        }
+      })
+    }
+    disableMutations()
+    const observer = new MutationObserver(disableMutations)
+    const main = document.getElementById('main-content')
+    if (main) observer.observe(main, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+      document.querySelectorAll<HTMLButtonElement>("#main-content button[data-offline-disabled='true']").forEach((button) => {
+        button.disabled = false
+        delete button.dataset.offlineDisabled
+        button.removeAttribute('title')
+      })
+    }
+  }, [location.pathname, offlineUnlocked])
+
   const navLinks = NAV_ITEMS.map(({ to, label, icon: Icon }) => (
     <NavLink key={to} to={to} className="nav-link">
       <Icon size={18} aria-hidden="true" />

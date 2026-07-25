@@ -6,7 +6,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-export type InstallState = 'available' | 'installed' | 'dismissed' | 'unsupported'
+export type InstallState = 'available' | 'accepted' | 'installed' | 'dismissed' | 'unsupported'
 
 interface PwaContextValue {
   installState: InstallState
@@ -64,7 +64,7 @@ export function PwaProvider({ children }: { children: ReactNode }) {
       await installPrompt.prompt()
       const choice = await installPrompt.userChoice
       setInstallPrompt(null)
-      setInstallState(choice.outcome === 'accepted' ? 'installed' : 'dismissed')
+      setInstallState(choice.outcome === 'accepted' ? 'accepted' : 'dismissed')
       return choice.outcome === 'accepted'
     },
     applyUpdate: async () => {
