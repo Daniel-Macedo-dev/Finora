@@ -91,6 +91,7 @@ test.describe('Cenário — Isolamento entre usuários', () => {
 
     // B logs in fresh and sees an empty wishlist.
     await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
     await registerViaUi(page)
     await page.goto('/wishlist')
     await expect(page.getByText('Câmera da Alice')).toHaveCount(0)
