@@ -8,6 +8,7 @@ import { parseMoneyInput } from '../../lib/format'
 import { applyThemePreference, getThemePreference, type ThemePreference } from '../../lib/theme'
 import './settings.css'
 import NotificationPreferences from '../notifications/NotificationPreferences'
+import OfflineSettings from './OfflineSettings'
 
 interface Settings {
   minimumCashBuffer: number
@@ -229,6 +230,7 @@ export default function SettingsPage() {
         <h2 className="panel-title">Notificações</h2>
         <NotificationPreferences />
       </section>
+      <OfflineSettings />
     </>
   )
 }

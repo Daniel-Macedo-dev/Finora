@@ -25,6 +25,7 @@ import NotificationBell from '../features/notifications/NotificationBell'
 import './AppShell.css'
 import { useConnection } from '../offline/connection'
 import { usePwa } from '../pwa/PwaProvider'
+import { useVault } from '../offline/VaultProvider'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
@@ -53,10 +54,11 @@ function BrandMark() {
 
 function UserPanel() {
   const currentUser = useCurrentUser()
+  const vault = useVault()
   const logout = useLogout()
   const navigate = useNavigate()
 
-  const user = currentUser.data
+  const user = currentUser.data ?? vault.owner
   if (!user) {
     return null
   }
@@ -97,6 +99,8 @@ export default function AppShell() {
   const location = useLocation()
   const connection = useConnection()
   const pwa = usePwa()
+  const vault = useVault()
+  const offlineUnlocked = vault.state === 'UNLOCKED_OFFLINE'
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -124,7 +128,7 @@ export default function AppShell() {
   ))
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${offlineUnlocked ? 'offline-readonly' : ''}`}>
       <a className="skip-link" href="#main-content">
         Pular para o conteúdo
       </a>
@@ -182,6 +186,14 @@ export default function AppShell() {
       </nav>
 
       <main id="main-content" className="app-main">
+        {offlineUnlocked && (
+          <div className="offline-context" role="status">
+            <strong>Modo somente leitura</strong>
+            <span>Dados salvos em {vault.updatedAt ? new Date(vault.updatedAt).toLocaleString('pt-BR') : 'data desconhecida'}.</span>
+            <span>Os valores podem estar desatualizados.</span>
+            <button data-offline-allowed="true" type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
+          </div>
+        )}
         <Suspense fallback={<LoadingCards count={3} height={120} />}>
           <Outlet />
         </Suspense>

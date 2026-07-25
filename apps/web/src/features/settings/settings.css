@@ -36,3 +36,10 @@
 .settings-actions {
   margin-top: var(--space-4);
 }
+
+.offline-status-list { display: grid; gap: var(--space-2); margin: 0; }
+.offline-status-list div { display: flex; justify-content: space-between; gap: var(--space-3); border-bottom: 1px solid var(--border); padding-bottom: var(--space-2); }
+.offline-status-list dt { color: var(--ink-secondary); }
+.offline-status-list dd { margin: 0; font-weight: 600; text-align: right; }
+.offline-settings-form { display: grid; gap: var(--space-2); }
+.offline-settings-form label { font-size: var(--text-sm); font-weight: 600; }
