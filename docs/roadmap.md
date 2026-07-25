@@ -43,10 +43,15 @@ promessa de implementação — é direção.
 > owner-scoped, captura de opção, idempotência, correção, resumo, alvo, gráfico e
 > histórico paginado, sem coleta externa. Ver
 > [wishlist-price-history.md](wishlist-price-history.md).
+>
+> **PWA foundation, installability and secure offline read mode** foi concluído —
+> shell instalável, Service Worker sem cache de API e cofre IndexedDB criptografado,
+> owner-isolated e somente leitura. A sincronização offline completa ainda não está
+> concluída. Ver [pwa-offline.md](pwa-offline.md).
 
 ## Próxima grande etapa
 
-**PWA / offline synchronization**.
+**Offline mutation outbox, idempotency and conflict resolution**.
 
 ## Depois disso
 

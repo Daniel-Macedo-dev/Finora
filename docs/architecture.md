@@ -152,6 +152,14 @@ unicidade `(user_id, source_key)`. O scheduler de notificações é independente
 do processamento automático de recorrentes. Detalhes em
 [notifications.md](notifications.md).
 
+## PWA e sessão offline
+
+O build Vite gera manifesto e Service Worker Workbox. Cache Storage guarda somente
+o shell/ativos revisionados; `/api/**` é NetworkOnly. `src/offline/` separa conexão,
+criptografia, IndexedDB, allowlist de queries e o modo de sessão local. O servidor
+continua autoritativo e uma identidade descriptografada nunca vira sessão online.
+Detalhes em [pwa-offline.md](pwa-offline.md).
+
 ## Dados de demonstração e testes
 
 - A aplicação sobe **vazia** (apenas categorias padrão da migração).

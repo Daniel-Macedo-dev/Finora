@@ -109,6 +109,15 @@ permitidas — portanto **nunca** wildcard de origem. Exposto como
 `CorsConfigurationSource` para integrar à cadeia de filtros do Spring Security.
 Implantação same-origin é a direção preferida.
 
+## Cofre offline
+
+O acesso offline exige opt-in e senha local, usa PBKDF2-HMAC-SHA-256 (310.000)
+e AES-256-GCM com salt/IV aleatórios. Identidade e finanças existem somente no
+ciphertext IndexedDB; senha e chave não são persistidas. API nunca é cacheada pelo
+Service Worker, mutações são bloqueadas antes de CSRF/fetch, schemas desconhecidos e
+adulteração falham fechados, e lock/logout limpam dados descriptografados. Um único
+cofre por perfil impede merge entre proprietários. Ver [pwa-offline.md](pwa-offline.md).
+
 ## Limitações conhecidas
 
 - Sem verificação de e-mail.

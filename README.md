@@ -67,6 +67,9 @@ Interface em português do Brasil; código, banco e API em inglês.
   "categoria dominante", "orçamento estourado", "compra da lista de desejos viável".
 - **Tema claro / escuro / sistema**, layout responsivo (desktop → 360px) e
   acessibilidade prática (WCAG 2.2 AA nos fluxos principais).
+- **PWA instalável e leitura offline segura** — shell estático offline, atualização
+  controlada e cópia financeira opcional criptografada com senha local; nunca há
+  mutação ou replay offline. Ver [docs/pwa-offline.md](docs/pwa-offline.md).
 
 ## Stack
 
@@ -75,6 +78,7 @@ Interface em português do Brasil; código, banco e API em inglês.
 | Backend | Java 21 · Spring Boot 4.1 (Web MVC, Validation, Data JPA, Security, Session JDBC) · Flyway |
 | Banco | PostgreSQL 16 (Docker Compose) · sessões persistidas via Spring Session JDBC |
 | Frontend | React 19 · TypeScript · Vite · TanStack Query · React Router · Recharts |
+| PWA offline | Workbox · Web Crypto · IndexedDB (somente leitura) |
 | Testes | JUnit 5 + MockMvc + Testcontainers · Vitest + Testing Library · Playwright |
 | CI | GitHub Actions (backend, frontend e E2E) |
 

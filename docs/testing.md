@@ -298,6 +298,15 @@ nos quatro viewports e dois temas.
 
 ## CI
 
+### PWA e offline
+
+`vaultCrypto.test.ts`, `vaultStorage.test.ts`, `queryPersistence.test.ts` e
+`api.test.ts` cobrem criptografia autenticada, corrupção, storage, allowlist e
+mutação bloqueada antes da rede. Após `npm run build`, `npm run verify:pwa` valida
+manifesto/ícones/SW/fallback e `/api` NetworkOnly. `pwa-offline.spec.ts` contém 12
+jornadas Chromium no preview de produção, inclusive reload sem rede e ausência de
+plaintext/JSON de API nos storages.
+
 O histórico de preços acrescenta migração populada V12→V13, lifecycle e posse
 via MockMvc, regressão da análise e corridas com threads/Testcontainers. Vitest
 cobre tendências, alvo e UUID; Playwright cobre o fluxo real e responsividade.
