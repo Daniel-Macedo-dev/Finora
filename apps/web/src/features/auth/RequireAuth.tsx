@@ -29,6 +29,10 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     }
   }, [currentUser.data, currentUser.isSuccess, vault])
 
+  // A successfully decrypted vault is an explicit local session mode. It must
+  // not be hidden by a new pending /auth/me attempt while the browser is offline.
+  if (vault?.state === 'UNLOCKED_OFFLINE') return children
+
   if (currentUser.isPending) {
     return (
       <main style={{ padding: 'var(--space-6)', maxWidth: 960, margin: '0 auto' }}>
@@ -41,7 +45,6 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     if (vault && (vault.state === 'LOCKED' || vault.state === 'CORRUPTED' || vault.state === 'UNLOCKING')) {
       return <OfflineUnlock />
     }
-    if (vault?.state === 'UNLOCKED_OFFLINE') return children
     return (
       <main style={{ padding: 'var(--space-6)', maxWidth: 640, margin: '0 auto' }}>
         <ErrorState error={currentUser.error} onRetry={() => currentUser.refetch()} />

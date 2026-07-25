@@ -2,7 +2,8 @@ import { defineConfig } from '@playwright/test'
 
 /**
  * E2E suite. Expects the API (localhost:8080, with PostgreSQL) to be running;
- * the Vite dev server is started automatically when not already up.
+ * the production preview is built and started automatically so manifest and
+ * Service Worker behavior are exercised exactly as shipped.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -11,13 +12,13 @@ export default defineConfig({
   timeout: 30_000,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:4173',
     locale: 'pt-BR',
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: 'npm run build && npm run preview -- --host 127.0.0.1',
+    url: 'http://localhost:4173',
     reuseExistingServer: true,
     timeout: 60_000,
   },
