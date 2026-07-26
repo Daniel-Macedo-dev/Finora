@@ -102,7 +102,7 @@ test('snooze moves a notification to the snoozed filter', async ({ page }) => {
 
 test('unread filter shows current unread revisions', async ({ page }) => {
   await registerAndSeed(page)
-  await page.getByRole('button', { name: 'Não lidas' }).click()
+  await page.getByRole('button', { name: 'Não lidas', exact: true }).click()
   await expect(page.getByText('Internet do escritório', { exact: false })).toBeVisible()
 })
 
