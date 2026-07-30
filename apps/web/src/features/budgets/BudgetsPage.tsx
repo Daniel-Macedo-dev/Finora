@@ -87,11 +87,17 @@ export default function BudgetsPage() {
     }
     setFormError(null)
     const request = { month, categoryId: Number(form.categoryId), limitAmount: limit }
+    const categoryName = (categories.data ?? []).find(
+      (category) => category.id === request.categoryId,
+    )?.name
     const onSuccess = () => setFormOpen(false)
     if (editing) {
-      updateMutation.mutate({ id: editing.id, request }, { onSuccess })
+      updateMutation.mutate(
+        { id: editing.id, request, version: editing.version, categoryName },
+        { onSuccess },
+      )
     } else {
-      createMutation.mutate(request, { onSuccess })
+      createMutation.mutate({ request, categoryName }, { onSuccess })
     }
   }
 
@@ -266,7 +272,7 @@ export default function BudgetsPage() {
         danger
         busy={deleteMutation.isPending}
         onConfirm={() =>
-          deleting && deleteMutation.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+          deleting && deleteMutation.mutate(deleting, { onSuccess: () => setDeleting(null) })
         }
         onCancel={() => setDeleting(null)}
       />

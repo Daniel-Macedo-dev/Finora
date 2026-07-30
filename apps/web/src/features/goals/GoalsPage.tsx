@@ -101,7 +101,7 @@ export default function GoalsPage() {
     }
     const onSuccess = () => setFormOpen(false)
     if (editing) {
-      updateMutation.mutate({ id: editing.id, request }, { onSuccess })
+      updateMutation.mutate({ id: editing.id, request, version: editing.version }, { onSuccess })
     } else {
       createMutation.mutate(request, { onSuccess })
     }
@@ -338,7 +338,7 @@ export default function GoalsPage() {
         danger
         busy={deleteMutation.isPending}
         onConfirm={() =>
-          deleting && deleteMutation.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+          deleting && deleteMutation.mutate(deleting, { onSuccess: () => setDeleting(null) })
         }
         onCancel={() => setDeleting(null)}
       />

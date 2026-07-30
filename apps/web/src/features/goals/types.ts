@@ -10,6 +10,8 @@ export interface Goal {
   targetDate: string | null
   status: GoalStatus
   suggestedMonthlyContribution: number | null
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface GoalRequest {

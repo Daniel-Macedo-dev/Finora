@@ -34,6 +34,8 @@ export interface WishlistItemSummary {
   latestObservedOn: string | null
   historicalMinimum: number | null
   targetReached: boolean | null
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface PurchaseOption {
@@ -49,6 +51,8 @@ export interface PurchaseOption {
   creditCardId: number | null
   creditCardName: string | null
   notes: string | null
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface WishlistItemDetail {
@@ -62,6 +66,8 @@ export interface WishlistItemDetail {
   desiredDate: string | null
   status: WishlistStatus
   options: PurchaseOption[]
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface WishlistItemRequest {

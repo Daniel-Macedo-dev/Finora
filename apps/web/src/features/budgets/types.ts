@@ -11,6 +11,8 @@ export interface Budget {
   remainingAmount: number
   percentUsed: number
   status: BudgetStatus
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface BudgetSummary {

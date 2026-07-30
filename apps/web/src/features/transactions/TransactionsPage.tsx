@@ -73,7 +73,10 @@ export default function TransactionsPage() {
       setEditing(null)
     }
     if (editing) {
-      updateMutation.mutate({ id: editing.id, request }, { onSuccess })
+      updateMutation.mutate(
+        { id: editing.id, request, version: editing.version },
+        { onSuccess },
+      )
     } else {
       createMutation.mutate(request, { onSuccess })
     }
@@ -83,7 +86,7 @@ export default function TransactionsPage() {
     if (!deleting) {
       return
     }
-    deleteMutation.mutate(deleting.id, {
+    deleteMutation.mutate(deleting, {
       onSuccess: () => setDeleting(null),
     })
   }

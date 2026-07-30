@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { useOfflineOutbox, type QueuedMutation } from '../../offline/outbox/useOutbox'
 import type {
   ExecutePurchaseRequest,
   ExecutePurchaseResponse,
@@ -133,54 +134,203 @@ function invalidateItem(queryClient: ReturnType<typeof useQueryClient>, id?: num
   }
 }
 
+function itemPayload(request: WishlistItemRequest): Record<string, unknown> {
+  return {
+    name: request.name,
+    priority: request.priority,
+    ...(request.notes ? { notes: request.notes } : {}),
+    ...(request.categoryId != null ? { categoryId: request.categoryId } : {}),
+    ...(request.referencePrice != null ? { referencePrice: request.referencePrice } : {}),
+    ...(request.targetPrice != null ? { targetPrice: request.targetPrice } : {}),
+    ...(request.desiredDate ? { desiredDate: request.desiredDate } : {}),
+    ...(request.status ? { status: request.status } : {}),
+  }
+}
+
 export function useCreateWishlistItem() {
   const queryClient = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: (request: WishlistItemRequest) =>
-      api.post<WishlistItemDetail>('/wishlist', request),
+    mutationFn: async (
+      request: WishlistItemRequest,
+    ): Promise<WishlistItemDetail | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'WISHLIST_ITEM',
+          operation: 'CREATE',
+          clientResourceId: outbox.newResourceId(),
+          baseVersion: null,
+          payload: itemPayload(request),
+          label: request.name,
+        })
+      }
+      return api.post<WishlistItemDetail>('/wishlist', request)
+    },
     onSuccess: () => invalidateItem(queryClient),
   })
 }
 
 export function useUpdateWishlistItem() {
   const queryClient = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: ({ id, request }: { id: number; request: WishlistItemRequest }) =>
-      api.put<WishlistItemDetail>(`/wishlist/${id}`, request),
+    mutationFn: async ({
+      id,
+      request,
+      version,
+    }: {
+      id: number
+      request: WishlistItemRequest
+      version?: number
+    }): Promise<WishlistItemDetail | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'WISHLIST_ITEM',
+          operation: 'UPDATE',
+          clientResourceId: String(id),
+          serverId: id,
+          baseVersion: version ?? 0,
+          payload: itemPayload(request),
+          label: request.name,
+        })
+      }
+      return api.put<WishlistItemDetail>(`/wishlist/${id}`, request)
+    },
     onSuccess: (_data, variables) => invalidateItem(queryClient, variables.id),
   })
 }
 
 export function useDeleteWishlistItem() {
   const queryClient = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: (id: number) => api.delete(`/wishlist/${id}`),
+    mutationFn: async (item: {
+      id: number
+      name: string
+      version?: number
+    }): Promise<void | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'WISHLIST_ITEM',
+          operation: 'DELETE',
+          clientResourceId: String(item.id),
+          serverId: item.id,
+          baseVersion: item.version ?? 0,
+          payload: {},
+          label: item.name,
+        })
+      }
+      return api.delete(`/wishlist/${item.id}`)
+    },
     onSuccess: () => invalidateItem(queryClient),
   })
 }
 
-export function useAddOption(itemId: number) {
+function optionPayload(
+  request: PurchaseOptionRequest,
+  item: { serverId?: number; clientResourceId?: string },
+): Record<string, unknown> {
+  return {
+    item,
+    merchant: request.merchant,
+    kind: request.kind,
+    basePrice: request.basePrice,
+    ...(request.shipping != null ? { shipping: request.shipping } : {}),
+    ...(request.fees != null ? { fees: request.fees } : {}),
+    ...(request.installmentCount != null ? { installmentCount: request.installmentCount } : {}),
+    ...(request.installmentAmount != null
+      ? { installmentAmount: request.installmentAmount }
+      : {}),
+    ...(request.creditCardId != null ? { creditCardId: request.creditCardId } : {}),
+    ...(request.notes ? { notes: request.notes } : {}),
+  }
+}
+
+/**
+ * @param itemClientResourceId set when the parent item was itself created
+ *   offline, so the option can name a parent that has no server id yet
+ */
+export function useAddOption(itemId: number, itemClientResourceId?: string) {
   const queryClient = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: (request: PurchaseOptionRequest) =>
-      api.post<PurchaseOption>(`/wishlist/${itemId}/options`, request),
+    mutationFn: async (
+      request: PurchaseOptionRequest,
+    ): Promise<PurchaseOption | QueuedMutation> => {
+      if (outbox.enabled) {
+        const parent = itemClientResourceId
+          ? { clientResourceId: itemClientResourceId }
+          : { serverId: itemId }
+        return outbox.enqueue({
+          resourceType: 'PURCHASE_OPTION',
+          operation: 'CREATE',
+          clientResourceId: outbox.newResourceId(),
+          baseVersion: null,
+          payload: optionPayload(request, parent),
+          // A child queued under an unsynchronized parent must never be sent
+          // before it; the replay engine orders on exactly this.
+          dependencies: itemClientResourceId ? [itemClientResourceId] : [],
+          label: request.merchant,
+        })
+      }
+      return api.post<PurchaseOption>(`/wishlist/${itemId}/options`, request)
+    },
     onSuccess: () => invalidateItem(queryClient, itemId),
   })
 }
 
 export function useUpdateOption(itemId: number) {
   const queryClient = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: ({ optionId, request }: { optionId: number; request: PurchaseOptionRequest }) =>
-      api.put<PurchaseOption>(`/wishlist/${itemId}/options/${optionId}`, request),
+    mutationFn: async ({
+      optionId,
+      request,
+      version,
+    }: {
+      optionId: number
+      request: PurchaseOptionRequest
+      version?: number
+    }): Promise<PurchaseOption | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'PURCHASE_OPTION',
+          operation: 'UPDATE',
+          clientResourceId: String(optionId),
+          serverId: optionId,
+          baseVersion: version ?? 0,
+          payload: optionPayload(request, { serverId: itemId }),
+          label: request.merchant,
+        })
+      }
+      return api.put<PurchaseOption>(`/wishlist/${itemId}/options/${optionId}`, request)
+    },
     onSuccess: () => invalidateItem(queryClient, itemId),
   })
 }
 
 export function useDeleteOption(itemId: number) {
   const queryClient = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: (optionId: number) => api.delete(`/wishlist/${itemId}/options/${optionId}`),
+    mutationFn: async (option: {
+      id: number
+      merchant: string
+      version?: number
+    }): Promise<void | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'PURCHASE_OPTION',
+          operation: 'DELETE',
+          clientResourceId: String(option.id),
+          serverId: option.id,
+          baseVersion: option.version ?? 0,
+          payload: {},
+          label: option.merchant,
+        })
+      }
+      return api.delete(`/wishlist/${itemId}/options/${option.id}`)
+    },
     onSuccess: () => invalidateItem(queryClient, itemId),
   })
 }

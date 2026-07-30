@@ -32,6 +32,8 @@ export interface Transaction {
   generatedCardPurchaseId: number | null
   wishlistItemId: number | null
   notes: string | null
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface TransactionRequest {

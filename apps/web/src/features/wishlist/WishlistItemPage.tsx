@@ -81,7 +81,10 @@ export default function WishlistItemPage() {
   const data = item.data
 
   function handleUpdate(request: WishlistItemRequest) {
-    updateItem.mutate({ id: itemId, request }, { onSuccess: () => setEditOpen(false) })
+    updateItem.mutate(
+      { id: itemId, request, version: item.data?.version },
+      { onSuccess: () => setEditOpen(false) },
+    )
   }
 
   function handleOptionSubmit(request: PurchaseOptionRequest) {
@@ -90,7 +93,10 @@ export default function WishlistItemPage() {
       setEditingOption(null)
     }
     if (editingOption) {
-      updateOption.mutate({ optionId: editingOption.id, request }, { onSuccess })
+      updateOption.mutate(
+        { optionId: editingOption.id, request, version: editingOption.version },
+        { onSuccess },
+      )
     } else {
       addOption.mutate(request, { onSuccess })
     }
@@ -319,9 +325,10 @@ export default function WishlistItemPage() {
         danger
         busy={deleteItem.isPending}
         onConfirm={() =>
-          deleteItem.mutate(itemId, {
-            onSuccess: () => navigate('/wishlist'),
-          })
+          deleteItem.mutate(
+            { id: itemId, name: data.name, version: data.version },
+            { onSuccess: () => navigate('/wishlist') },
+          )
         }
         onCancel={() => setDeleteOpen(false)}
       />
@@ -357,7 +364,7 @@ export default function WishlistItemPage() {
         busy={deleteOption.isPending}
         onConfirm={() =>
           deletingOption &&
-          deleteOption.mutate(deletingOption.id, {
+          deleteOption.mutate(deletingOption, {
             onSuccess: () => setDeletingOption(null),
           })
         }
