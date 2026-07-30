@@ -1,5 +1,13 @@
-export const VAULT_SCHEMA_VERSION = 1
-export const DATA_SCHEMA_VERSION = 1
+import {
+  DEFAULT_SYNC_PREFERENCES,
+  type OutboxEntry,
+  type ResourceMapping,
+  type SyncHistoryEntry,
+  type SyncPreferences,
+} from './outbox/types'
+
+export const VAULT_SCHEMA_VERSION = 2
+export const DATA_SCHEMA_VERSION = 2
 export const PBKDF2_ITERATIONS = 310_000
 
 export interface OfflineQuery {
@@ -8,11 +16,29 @@ export interface OfflineQuery {
   dataUpdatedAt: number
 }
 
+export interface VaultOwner {
+  id: number
+  displayName: string
+  email: string
+}
+
+/**
+ * Everything the vault holds, all of it inside authenticated ciphertext.
+ *
+ * The outbox is what changed the security calculus for this stage. The
+ * read-only vault held a copy of data the server already had, so losing it cost
+ * nothing but convenience. A queued mutation is the only copy of work the
+ * server has never seen.
+ */
 export interface VaultPayload {
   dataSchemaVersion: number
-  owner: { id: number; displayName: string; email: string }
+  owner: VaultOwner
   preparedAt: string
   queries: OfflineQuery[]
+  outbox: OutboxEntry[]
+  resourceMappings: ResourceMapping[]
+  syncHistory: SyncHistoryEntry[]
+  syncPreferences: SyncPreferences
 }
 
 export interface EncryptedVault {
@@ -25,6 +51,22 @@ export interface EncryptedVault {
   ciphertext: string
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * An unlocked vault's key material, held only in memory.
+ *
+ * Queueing a mutation has to rewrite the vault, and asking for the offline
+ * password on every entry is not a usable product — so the derived key outlives
+ * the unlock. The password does not: it is used for derivation and then
+ * dropped. Locking, logging out and the inactivity timer all discard this
+ * object, and nothing ever writes it to storage.
+ */
+export interface VaultSession {
+  readonly key: CryptoKey
+  readonly salt: Uint8Array<ArrayBuffer>
+  readonly iterations: number
+  readonly createdAt: string
 }
 
 export class VaultError extends Error {
@@ -49,7 +91,11 @@ function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   }
 }
 
-async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>, iterations: number): Promise<CryptoKey> {
+async function deriveKey(
+  password: string,
+  salt: Uint8Array<ArrayBuffer>,
+  iterations: number,
+): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -61,56 +107,142 @@ async function deriveKey(password: string, salt: Uint8Array<ArrayBuffer>, iterat
     { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
     material,
     { name: 'AES-GCM', length: 256 },
+    // Not extractable: the key cannot be read back out and persisted, even by
+    // our own code.
     false,
     ['encrypt', 'decrypt'],
   )
 }
 
+function isOwner(value: unknown): value is VaultOwner {
+  const owner = value as Partial<VaultOwner> | undefined
+  return (
+    !!owner &&
+    typeof owner.id === 'number' &&
+    typeof owner.displayName === 'string' &&
+    typeof owner.email === 'string'
+  )
+}
+
+/**
+ * Accepts the current schema and the previous one, and nothing else.
+ *
+ * An unknown higher schema means this browser is running older code against a
+ * vault newer code wrote. Guessing at its contents could silently drop queued
+ * mutations, so it fails closed and leaves the ciphertext untouched.
+ */
 function validatePayload(value: unknown): VaultPayload {
   if (!value || typeof value !== 'object') throw new VaultError()
   const payload = value as Partial<VaultPayload>
   if (
-    payload.dataSchemaVersion !== DATA_SCHEMA_VERSION ||
-    !payload.owner || typeof payload.owner.id !== 'number' ||
-    typeof payload.owner.displayName !== 'string' || typeof payload.owner.email !== 'string' ||
-    typeof payload.preparedAt !== 'string' || !Array.isArray(payload.queries)
-  ) throw new VaultError()
+    !isOwner(payload.owner) ||
+    typeof payload.preparedAt !== 'string' ||
+    !Array.isArray(payload.queries)
+  ) {
+    throw new VaultError()
+  }
+  if (payload.dataSchemaVersion === 1) {
+    return migrateV1(payload)
+  }
+  if (payload.dataSchemaVersion !== DATA_SCHEMA_VERSION) throw new VaultError()
+  if (
+    !Array.isArray(payload.outbox) ||
+    !Array.isArray(payload.resourceMappings) ||
+    !Array.isArray(payload.syncHistory) ||
+    !payload.syncPreferences ||
+    typeof payload.syncPreferences.autoSync !== 'boolean'
+  ) {
+    throw new VaultError()
+  }
   return payload as VaultPayload
 }
 
-export async function encryptVault(
+/**
+ * Upgrades a read-only vault in memory.
+ *
+ * A V1 vault is perfectly valid data — it simply predates the outbox. Refusing
+ * it would force the user to delete and rebuild a vault that has nothing wrong
+ * with it, so it is carried forward with its owner, timestamp and cached
+ * queries intact and an empty queue alongside.
+ */
+function migrateV1(payload: Partial<VaultPayload>): VaultPayload {
+  return {
+    dataSchemaVersion: DATA_SCHEMA_VERSION,
+    owner: payload.owner as VaultOwner,
+    preparedAt: payload.preparedAt as string,
+    queries: payload.queries as OfflineQuery[],
+    outbox: [],
+    resourceMappings: [],
+    syncHistory: [],
+    syncPreferences: { ...DEFAULT_SYNC_PREFERENCES },
+  }
+}
+
+/** True when the stored record predates the outbox and should be rewritten. */
+export function needsMigration(vault: EncryptedVault): boolean {
+  return vault.vaultSchemaVersion < VAULT_SCHEMA_VERSION
+}
+
+async function seal(
   payload: VaultPayload,
-  password: string,
-  createdAt = new Date().toISOString(),
+  session: VaultSession,
+  createdAt: string,
 ): Promise<EncryptedVault> {
-  if (password.length < 12) throw new VaultError()
-  const salt = crypto.getRandomValues(new Uint8Array(16))
+  // A fresh IV for every write. Reusing one under the same AES-GCM key is a
+  // catastrophic failure, and this vault is rewritten on every queued mutation.
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  const key = await deriveKey(password, salt, PBKDF2_ITERATIONS)
   const plaintext = new TextEncoder().encode(JSON.stringify(payload))
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext)
-  const updatedAt = new Date().toISOString()
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, session.key, plaintext)
   return {
     vaultSchemaVersion: VAULT_SCHEMA_VERSION,
     dataSchemaVersion: DATA_SCHEMA_VERSION,
     kdf: 'PBKDF2-HMAC-SHA-256',
-    iterations: PBKDF2_ITERATIONS,
-    salt: bytesToBase64(salt),
+    iterations: session.iterations,
+    salt: bytesToBase64(session.salt),
     iv: bytesToBase64(iv),
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
     createdAt,
-    updatedAt,
+    updatedAt: new Date().toISOString(),
   }
 }
 
-export async function decryptVault(vault: EncryptedVault, password: string): Promise<VaultPayload> {
+/** Creates a brand-new vault and the in-memory session that can rewrite it. */
+export async function createVault(
+  payload: VaultPayload,
+  password: string,
+  createdAt = new Date().toISOString(),
+): Promise<{ encrypted: EncryptedVault; session: VaultSession }> {
+  if (password.length < 12) throw new VaultError()
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const session: VaultSession = {
+    key: await deriveKey(password, salt, PBKDF2_ITERATIONS),
+    salt,
+    iterations: PBKDF2_ITERATIONS,
+    createdAt,
+  }
+  return { encrypted: await seal(payload, session, createdAt), session }
+}
+
+/**
+ * Decrypts and returns both the payload and the session that can re-seal it.
+ *
+ * The payload comes back already migrated when the record was V1; the caller
+ * decides when to persist that upgrade, so a failed write leaves the original
+ * ciphertext in place and nothing is lost.
+ */
+export async function unlockVault(
+  vault: EncryptedVault,
+  password: string,
+): Promise<{ payload: VaultPayload; session: VaultSession }> {
   try {
     if (
-      vault.vaultSchemaVersion !== VAULT_SCHEMA_VERSION ||
-      vault.dataSchemaVersion !== DATA_SCHEMA_VERSION ||
+      vault.vaultSchemaVersion > VAULT_SCHEMA_VERSION ||
+      vault.vaultSchemaVersion < 1 ||
       vault.kdf !== 'PBKDF2-HMAC-SHA-256' ||
       vault.iterations !== PBKDF2_ITERATIONS
-    ) throw new VaultError()
+    ) {
+      throw new VaultError()
+    }
     const salt = base64ToBytes(vault.salt)
     const iv = base64ToBytes(vault.iv)
     if (salt.byteLength !== 16 || iv.byteLength !== 12) throw new VaultError()
@@ -120,8 +252,38 @@ export async function decryptVault(vault: EncryptedVault, password: string): Pro
       key,
       base64ToBytes(vault.ciphertext),
     )
-    return validatePayload(JSON.parse(new TextDecoder().decode(plaintext)))
+    const payload = validatePayload(JSON.parse(new TextDecoder().decode(plaintext)))
+    return {
+      payload,
+      session: { key, salt, iterations: vault.iterations, createdAt: vault.createdAt },
+    }
   } catch {
+    // One generic failure for a wrong password, a tampered record and an
+    // unreadable schema alike: telling them apart would leak whether a guess
+    // was close.
     throw new VaultError()
+  }
+}
+
+/** Re-seals an unlocked vault without ever needing the password again. */
+export function resealVault(payload: VaultPayload, session: VaultSession): Promise<EncryptedVault> {
+  return seal(payload, session, session.createdAt)
+}
+
+/** An empty V2 payload for a freshly enabled vault. */
+export function emptyPayload(
+  owner: VaultOwner,
+  preparedAt: string,
+  queries: OfflineQuery[],
+): VaultPayload {
+  return {
+    dataSchemaVersion: DATA_SCHEMA_VERSION,
+    owner,
+    preparedAt,
+    queries,
+    outbox: [],
+    resourceMappings: [],
+    syncHistory: [],
+    syncPreferences: { ...DEFAULT_SYNC_PREFERENCES },
   }
 }
