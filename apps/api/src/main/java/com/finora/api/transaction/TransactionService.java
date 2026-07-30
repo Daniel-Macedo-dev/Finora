@@ -165,6 +165,20 @@ public class TransactionService {
     }
 
     public TransactionResponse create(TransactionRequest request) {
+        return create(request, null);
+    }
+
+    /**
+     * Same rules as {@link #create(TransactionRequest)}, with the stable
+     * identity a transaction created offline already carries.
+     *
+     * <p>The identity has to be attached before the insert — the column is
+     * insert-only, precisely so a replay can never repoint an existing row at a
+     * different client id.
+     *
+     * @param clientResourceId null for anything created online
+     */
+    public TransactionResponse create(TransactionRequest request, java.util.UUID clientResourceId) {
         Long userId = currentUser.currentUserId();
         Category category = resolveCategory(userId, request);
         Transaction transaction = new Transaction(
@@ -174,6 +188,7 @@ public class TransactionService {
                 request.description().trim(),
                 request.date(),
                 category);
+        transaction.setClientResourceId(clientResourceId);
         applyOptionalFields(userId, transaction, request);
         return TransactionResponse.from(transactions.save(transaction));
     }

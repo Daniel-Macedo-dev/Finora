@@ -73,8 +73,22 @@ public class WishlistService {
     }
 
     public WishlistItemDetailResponse create(WishlistItemRequest request) {
+        return create(request, null);
+    }
+
+    /**
+     * Same rules as {@link #create(WishlistItemRequest)}, with the stable
+     * identity an item created offline already carries. Offline-created
+     * purchase options and price observations reference their parent through
+     * that identity until the item receives a server id.
+     *
+     * @param clientResourceId null for anything created online
+     */
+    public WishlistItemDetailResponse create(WishlistItemRequest request,
+                                             java.util.UUID clientResourceId) {
         WishlistItem item = new WishlistItem(
                 currentUser.currentUserId(), request.name().trim(), request.priority());
+        item.setClientResourceId(clientResourceId);
         apply(item, request);
         return toDetail(items.save(item));
     }
@@ -92,6 +106,17 @@ public class WishlistService {
     }
 
     public PurchaseOptionResponse addOption(Long itemId, PurchaseOptionRequest request) {
+        return addOption(itemId, request, null);
+    }
+
+    /**
+     * Same rules as {@link #addOption(Long, PurchaseOptionRequest)}, with the
+     * stable identity an option created offline already carries.
+     *
+     * @param clientResourceId null for anything created online
+     */
+    public PurchaseOptionResponse addOption(Long itemId, PurchaseOptionRequest request,
+                                            java.util.UUID clientResourceId) {
         WishlistItem item = find(itemId);
         validateOption(request);
         PurchaseOption option = new PurchaseOption(
@@ -103,6 +128,7 @@ public class WishlistService {
                 MoneyRules.normalize(orZero(request.fees())));
         applyInstallments(option, request);
         option.setNotes(trimmedOrNull(request.notes()));
+        option.setClientResourceId(clientResourceId);
         item.getOptions().add(option);
         items.flush();
         return PurchaseOptionResponse.from(option);

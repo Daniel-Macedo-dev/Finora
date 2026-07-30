@@ -145,6 +145,18 @@ public class PriceHistoryService {
         snapshots.delete(snapshot);
     }
 
+    /**
+     * One owner-scoped observation. Used to show the server's side of a
+     * synchronization conflict without exposing the entity itself.
+     */
+    @Transactional(readOnly = true)
+    public SnapshotResponse get(Long itemId, Long snapshotId) {
+        Long userId = currentUser.currentUserId();
+        findItem(itemId, userId);
+        return SnapshotResponse.from(snapshots.findByIdAndItemIdAndUserId(snapshotId, itemId, userId)
+                .orElseThrow(() -> new NotFoundException("Observação de preço", snapshotId)));
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<SnapshotResponse> history(Long itemId, int page, int size,
             LocalDate from, LocalDate to, String merchant, Long optionId,

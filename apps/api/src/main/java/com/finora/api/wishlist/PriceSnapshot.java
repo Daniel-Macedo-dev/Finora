@@ -122,4 +122,6 @@ public class PriceSnapshot extends AuditableEntity {
     public void setOfferUrl(String value) { offerUrl = value; }
     public String getNotes() { return notes; }
     public void setNotes(String value) { notes = value; }
+    /** Optimistic concurrency token; offline UPDATE/DELETE compare against it. */
+    public long getVersion() { return version; }
 }

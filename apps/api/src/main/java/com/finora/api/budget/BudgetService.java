@@ -88,6 +88,17 @@ public class BudgetService {
     }
 
     public BudgetResponse create(BudgetRequest request) {
+        return create(request, null);
+    }
+
+    /**
+     * Same rules as {@link #create(BudgetRequest)}, with the stable identity a
+     * budget created offline already carries. The identity has to be attached
+     * before the insert — the column is insert-only.
+     *
+     * @param clientResourceId null for anything created online
+     */
+    public BudgetResponse create(BudgetRequest request, java.util.UUID clientResourceId) {
         Long userId = currentUser.currentUserId();
         Category category = categories.findByIdAndUserId(request.categoryId(), userId)
                 .orElseThrow(() -> new NotFoundException("Categoria", request.categoryId()));
@@ -102,6 +113,7 @@ public class BudgetService {
                 });
         Budget budget = new Budget(userId, request.month(), category,
                 MoneyRules.normalize(request.limitAmount()));
+        budget.setClientResourceId(clientResourceId);
         return toResponse(budgets.save(budget));
     }
 

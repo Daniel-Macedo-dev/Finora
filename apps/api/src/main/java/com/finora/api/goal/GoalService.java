@@ -49,6 +49,17 @@ public class GoalService {
     }
 
     public GoalResponse create(GoalRequest request) {
+        return create(request, null);
+    }
+
+    /**
+     * Same rules as {@link #create(GoalRequest)}, with the stable identity a
+     * goal created offline already carries. The identity has to be attached
+     * before the insert — the column is insert-only.
+     *
+     * @param clientResourceId null for anything created online
+     */
+    public GoalResponse create(GoalRequest request, java.util.UUID clientResourceId) {
         Goal goal = new Goal(
                 currentUser.currentUserId(),
                 request.name().trim(),
@@ -60,6 +71,7 @@ public class GoalService {
         if (request.archived() != null) {
             goal.setArchived(request.archived());
         }
+        goal.setClientResourceId(clientResourceId);
         return toResponse(goals.save(goal), LocalDate.now());
     }
 
