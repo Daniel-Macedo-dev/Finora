@@ -9,18 +9,46 @@ afterEach(() => {
 
 describe('offline mutation boundary', () => {
   it.each([
-    ['POST', () => api.post('/transactions', { amount: 1 })],
-    ['PUT', () => api.put('/transactions/1', { amount: 1 })],
+    ['POST', () => api.post('/statement-imports', { file: 'x' })],
+    ['PUT', () => api.put('/credit-cards/1', { name: 'x' })],
     ['PATCH', () => api.patch('/statement-imports/1', { included: false })],
-    ['DELETE', () => api.delete('/transactions/1')],
+    ['DELETE', () => api.delete('/credit-cards/1')],
   ])('blocks %s before fetch or CSRF bootstrap', async (_method, request) => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     setOfflineUnlocked(true)
     const error = await request().catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(OfflineMutationError)
-    expect((error as Error).message).toBe('Esta ação precisa de conexão. O modo offline do Finora é somente leitura.')
+    expect((error as Error).message).toBe(
+      'Esta ação ainda exige conexão e não pode ser adicionada à fila offline.',
+    )
+    // Nothing is negotiated with the network — not even the CSRF bootstrap.
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('still blocks a raw call on a domain that supports queueing', async () => {
+    // Supported domains queue through their hooks, never through the raw
+    // client. A direct call is therefore always a mistake, and is refused
+    // exactly like an unsupported one.
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    setOfflineUnlocked(true)
+    await expect(api.post('/transactions', { amount: 1 })).rejects.toBeInstanceOf(
+      OfflineMutationError,
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('allows reads while offline', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    setOfflineUnlocked(true)
+    await expect(api.get('/dashboard')).resolves.toEqual({ ok: true })
   })
 })
 

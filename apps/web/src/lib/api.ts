@@ -55,9 +55,19 @@ export class NetworkError extends Error {
   }
 }
 
+/**
+ * Refusal of an unsafe request while the vault is unlocked offline.
+ *
+ * Offline mode is no longer read-only — allowlisted domains queue their
+ * mutations instead. This stays as the defence in depth underneath that: any
+ * unsafe request that reaches the client while offline is, by definition, one
+ * no domain hook chose to queue, and it fails here before CSRF bootstrap and
+ * before fetch. That ordering is the point — a statement upload or an invoice
+ * payment must not even begin to negotiate with the network.
+ */
 export class OfflineMutationError extends Error {
   constructor() {
-    super('Esta ação precisa de conexão. O modo offline do Finora é somente leitura.')
+    super('Esta ação ainda exige conexão e não pode ser adicionada à fila offline.')
     this.name = 'OfflineMutationError'
   }
 }
