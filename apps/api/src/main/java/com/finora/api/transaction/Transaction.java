@@ -14,8 +14,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "transactions")
@@ -90,6 +92,23 @@ public class Transaction extends AuditableEntity {
 
     @Column(columnDefinition = "text")
     private String notes;
+
+    /**
+     * Stable identity a transaction created offline was given by the client
+     * before any server id existed. NULL for everything created online — it is
+     * only the anchor that lets a queued mutation and its dependents resolve
+     * the resource after replay. Unique per owner, never globally.
+     */
+    @Column(name = "client_resource_id", updatable = false)
+    private UUID clientResourceId;
+
+    /**
+     * Optimistic concurrency token. Offline UPDATE/DELETE carry the version the
+     * user actually saw; a mismatch is a typed conflict, never a silent
+     * overwrite.
+     */
+    @Version
+    private long version;
 
     protected Transaction() {
     }
@@ -210,5 +229,17 @@ public class Transaction extends AuditableEntity {
 
     public void setStatementImportItemId(Long statementImportItemId) {
         this.statementImportItemId = statementImportItemId;
+    }
+
+    public UUID getClientResourceId() {
+        return clientResourceId;
+    }
+
+    public void setClientResourceId(UUID clientResourceId) {
+        this.clientResourceId = clientResourceId;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

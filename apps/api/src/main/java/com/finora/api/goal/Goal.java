@@ -7,8 +7,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "goals")
@@ -35,6 +37,14 @@ public class Goal extends AuditableEntity {
 
     @Column(nullable = false)
     private boolean archived;
+
+    /** Client-side identity of a goal created offline; NULL when created online. */
+    @Column(name = "client_resource_id", updatable = false)
+    private UUID clientResourceId;
+
+    /** Optimistic concurrency token for offline UPDATE/DELETE conflict detection. */
+    @Version
+    private long version;
 
     protected Goal() {
     }
@@ -95,5 +105,17 @@ public class Goal extends AuditableEntity {
 
     public void setArchived(boolean archived) {
         this.archived = archived;
+    }
+
+    public UUID getClientResourceId() {
+        return clientResourceId;
+    }
+
+    public void setClientResourceId(UUID clientResourceId) {
+        this.clientResourceId = clientResourceId;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

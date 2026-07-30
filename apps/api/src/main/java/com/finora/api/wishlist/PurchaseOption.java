@@ -13,7 +13,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Entity
 @Table(name = "purchase_options")
@@ -58,12 +60,31 @@ public class PurchaseOption extends AuditableEntity {
     @Column(columnDefinition = "text")
     private String notes;
 
+    /**
+     * Owner of the parent item, denormalized by V14. Options are still reached
+     * exclusively through owner-scoped item lookups; this column exists so the
+     * client-created identity below can be unique <em>per owner</em>, which a
+     * per-item column cannot express. A composite foreign key to
+     * {@code wishlist_items (id, user_id)} keeps it from ever drifting.
+     */
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
+    /** Client-side identity of an option created offline; NULL when created online. */
+    @Column(name = "client_resource_id", updatable = false)
+    private UUID clientResourceId;
+
+    /** Optimistic concurrency token for offline UPDATE/DELETE conflict detection. */
+    @Version
+    private long version;
+
     protected PurchaseOption() {
     }
 
     public PurchaseOption(WishlistItem item, String merchant, PurchaseOptionKind kind,
                           BigDecimal basePrice, BigDecimal shipping, BigDecimal fees) {
         this.item = item;
+        this.userId = item.getUserId();
         this.merchant = merchant;
         this.kind = kind;
         this.basePrice = basePrice;
@@ -154,5 +175,21 @@ public class PurchaseOption extends AuditableEntity {
 
     public void setCreditCard(CreditCard creditCard) {
         this.creditCard = creditCard;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public UUID getClientResourceId() {
+        return clientResourceId;
+    }
+
+    public void setClientResourceId(UUID clientResourceId) {
+        this.clientResourceId = clientResourceId;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

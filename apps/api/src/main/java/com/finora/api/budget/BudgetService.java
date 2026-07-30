@@ -151,7 +151,8 @@ public class BudgetService {
                 MoneyRules.normalize(consumed),
                 MoneyRules.normalize(limit.subtract(consumed)),
                 percentUsed,
-                status(budget.getUserId(), consumed, limit));
+                status(budget.getUserId(), consumed, limit),
+                budget.getVersion());
     }
 
     private BudgetStatus status(Long userId, BigDecimal consumed, BigDecimal limit) {

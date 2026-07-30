@@ -72,7 +72,9 @@ public final class TransactionDtos {
             Long statementImportItemId,
             /** The import batch of that item — resolved in bulk by the service. */
             Long statementImportBatchId,
-            String notes) {
+            String notes,
+            /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
+            long version) {
 
         public static TransactionResponse from(Transaction t) {
             return from(t, null, null, null);
@@ -116,7 +118,8 @@ public final class TransactionDtos {
                     t.getStatementImportItemId() != null,
                     t.getStatementImportItemId(),
                     statementImportBatchId,
-                    t.getNotes());
+                    t.getNotes(),
+                    t.getVersion());
         }
     }
 }

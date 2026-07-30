@@ -43,7 +43,9 @@ public final class BudgetDtos {
             BigDecimal consumedAmount,
             BigDecimal remainingAmount,
             BigDecimal percentUsed,
-            BudgetStatus status) {
+            BudgetStatus status,
+            /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
+            long version) {
     }
 
     public record BudgetSummaryResponse(

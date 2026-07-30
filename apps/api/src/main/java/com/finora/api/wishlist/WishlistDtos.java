@@ -95,7 +95,9 @@ public final class WishlistDtos {
             BigDecimal installmentAmount,
             Long creditCardId,
             String creditCardName,
-            String notes) {
+            String notes,
+            /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
+            long version) {
 
         public static PurchaseOptionResponse from(PurchaseOption option) {
             return new PurchaseOptionResponse(
@@ -110,7 +112,8 @@ public final class WishlistDtos {
                     option.getInstallmentAmount(),
                     option.getCreditCard() != null ? option.getCreditCard().getId() : null,
                     option.getCreditCard() != null ? option.getCreditCard().getName() : null,
-                    option.getNotes());
+                    option.getNotes(),
+                    option.getVersion());
         }
     }
 
@@ -130,7 +133,9 @@ public final class WishlistDtos {
             BigDecimal latestObservedPrice,
             LocalDate latestObservedOn,
             BigDecimal historicalMinimum,
-            Boolean targetReached) {
+            Boolean targetReached,
+            /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
+            long version) {
     }
 
     public record WishlistItemDetailResponse(
@@ -143,6 +148,8 @@ public final class WishlistDtos {
             WishlistPriority priority,
             LocalDate desiredDate,
             WishlistStatus status,
-            List<PurchaseOptionResponse> options) {
+            List<PurchaseOptionResponse> options,
+            /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
+            long version) {
     }
 }

@@ -127,7 +127,8 @@ public class GoalService {
                 percent,
                 goal.getTargetDate(),
                 status,
-                suggestedMonthlyContribution(goal, remaining, today));
+                suggestedMonthlyContribution(goal, remaining, today),
+                goal.getVersion());
     }
 
     /**

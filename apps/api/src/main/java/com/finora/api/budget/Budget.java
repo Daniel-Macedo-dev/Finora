@@ -11,9 +11,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.UUID;
 
 @Entity
 @Table(name = "budgets")
@@ -36,6 +38,14 @@ public class Budget extends AuditableEntity {
 
     @Column(name = "limit_amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal limitAmount;
+
+    /** Client-side identity of a budget created offline; NULL when created online. */
+    @Column(name = "client_resource_id", updatable = false)
+    private UUID clientResourceId;
+
+    /** Optimistic concurrency token for offline UPDATE/DELETE conflict detection. */
+    @Version
+    private long version;
 
     protected Budget() {
     }
@@ -69,5 +79,17 @@ public class Budget extends AuditableEntity {
 
     public void setLimitAmount(BigDecimal limitAmount) {
         this.limitAmount = limitAmount;
+    }
+
+    public UUID getClientResourceId() {
+        return clientResourceId;
+    }
+
+    public void setClientResourceId(UUID clientResourceId) {
+        this.clientResourceId = clientResourceId;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

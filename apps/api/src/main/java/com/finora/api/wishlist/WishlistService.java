@@ -233,7 +233,8 @@ public class WishlistService {
                 history == null ? null : history.getLatestObservedOn(),
                 history == null ? null : history.getHistoricalMinimum(),
                 history == null || item.getTargetPrice() == null ? null
-                        : history.getLatestObservedPrice().compareTo(item.getTargetPrice()) <= 0);
+                        : history.getLatestObservedPrice().compareTo(item.getTargetPrice()) <= 0,
+                item.getVersion());
     }
 
     private WishlistItemDetailResponse toDetail(WishlistItem item) {
@@ -247,7 +248,8 @@ public class WishlistService {
                 item.getPriority(),
                 item.getDesiredDate(),
                 item.getStatus(),
-                item.getOptions().stream().map(PurchaseOptionResponse::from).toList());
+                item.getOptions().stream().map(PurchaseOptionResponse::from).toList(),
+                item.getVersion());
     }
 
     private static WishlistCategory toCategory(WishlistItem item) {

@@ -16,10 +16,12 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "wishlist_items")
@@ -62,6 +64,18 @@ public class WishlistItem extends AuditableEntity {
     @OneToMany(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id asc")
     private List<PurchaseOption> options = new ArrayList<>();
+
+    /**
+     * Client-side identity of an item created offline; NULL when created online.
+     * Offline-created purchase options and price snapshots reference their
+     * parent through this value until the item receives a server id.
+     */
+    @Column(name = "client_resource_id", updatable = false)
+    private UUID clientResourceId;
+
+    /** Optimistic concurrency token for offline UPDATE/DELETE conflict detection. */
+    @Version
+    private long version;
 
     protected WishlistItem() {
     }
@@ -147,5 +161,17 @@ public class WishlistItem extends AuditableEntity {
 
     public List<PurchaseOption> getOptions() {
         return options;
+    }
+
+    public UUID getClientResourceId() {
+        return clientResourceId;
+    }
+
+    public void setClientResourceId(UUID clientResourceId) {
+        this.clientResourceId = clientResourceId;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

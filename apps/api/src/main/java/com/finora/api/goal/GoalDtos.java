@@ -55,6 +55,8 @@ public final class GoalDtos {
             LocalDate targetDate,
             GoalStatus status,
             /** Suggested contribution per month to hit the target date; null without a future target date. */
-            BigDecimal suggestedMonthlyContribution) {
+            BigDecimal suggestedMonthlyContribution,
+            /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
+            long version) {
     }
 }
