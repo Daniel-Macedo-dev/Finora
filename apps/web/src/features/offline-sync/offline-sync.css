@@ -117,11 +117,15 @@
 }
 
 /* Wide comparisons scroll inside their own container; the page body never
-   scrolls sideways. */
-.sync-comparison-table {
-  display: block;
+   scrolls sideways. The scroller is a wrapper so the table keeps its row and
+   column semantics, and it is focusable so it can be reached by keyboard. */
+.sync-comparison-scroll {
   overflow-x: auto;
   max-width: 100%;
+}
+
+.sync-comparison-table {
+  width: 100%;
 }
 
 .sync-row-changed th[scope='row'] {

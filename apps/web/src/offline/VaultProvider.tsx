@@ -317,19 +317,34 @@ export function VaultProvider({
     try {
       return await withReplayLock(async () => {
         broadcast({ type: 'REPLAY_STARTED' })
-        const outcome = await replayOnce(payloadRef.current ?? current, send)
-        await persist(pruneMappings(outcome.payload))
-        broadcast({
-          type: 'REPLAY_FINISHED',
-          applied: outcome.applied,
-          conflicts: outcome.conflicts,
-        })
-        if (outcome.applied > 0) {
+        // A queue longer than one batch is drained in place rather than left
+        // for the next trigger: making the user press "sync" once per twenty
+        // operations would be absurd. The loop is bounded twice over — it stops
+        // the moment a round applies nothing, and never exceeds MAX_ROUNDS — so
+        // a queue that cannot progress can never spin.
+        const MAX_ROUNDS = 10
+        let outcome = await replayOnce(payloadRef.current ?? current, send)
+        let applied = outcome.applied
+        let conflicts = outcome.conflicts
+        let rejected = outcome.rejected
+        for (let round = 1; round < MAX_ROUNDS; round += 1) {
+          if (outcome.transportError || outcome.applied === 0) break
+          const next = await replayOnce(outcome.payload, send)
+          if (!next.sent) break
+          outcome = next
+          applied += next.applied
+          conflicts += next.conflicts
+          rejected += next.rejected
+        }
+        const totals = { ...outcome, applied, conflicts, rejected }
+        await persist(pruneMappings(totals.payload))
+        broadcast({ type: 'REPLAY_FINISHED', applied, conflicts })
+        if (applied > 0) {
           queryClient.invalidateQueries({
             predicate: (query) => isAllowedOfflineKey(query.queryKey),
           })
         }
-        return outcome
+        return totals
       })
     } finally {
       setReplaying(false)

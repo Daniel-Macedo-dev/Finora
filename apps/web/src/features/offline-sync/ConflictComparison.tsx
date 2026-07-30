@@ -122,6 +122,16 @@ export default function ConflictComparison({ entry }: { entry: OutboxEntry }) {
     <div className="sync-comparison">
       <p className="sync-conflict-detail">{conflict.detail}</p>
       {snapshot ? (
+        // The scroll container is a wrapper, never the table itself: giving a
+        // <table> `display: block` strips its row and column semantics in
+        // several screen readers, which is precisely the information this
+        // comparison exists to convey.
+        <div
+          className="sync-comparison-scroll"
+          tabIndex={0}
+          role="group"
+          aria-label="Comparação de valores"
+        >
         <table className="data sync-comparison-table">
           <caption className="visually-hidden">
             Comparação entre o valor salvo no servidor e a alteração feita offline
@@ -149,6 +159,7 @@ export default function ConflictComparison({ entry }: { entry: OutboxEntry }) {
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <p className="sync-note">
           O servidor não enviou uma versão para comparar. Sua alteração offline está listada abaixo.
