@@ -1,6 +1,7 @@
 package com.finora.api.wishlist;
 
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PurchaseOptionRepository extends JpaRepository<PurchaseOption, Long> {
@@ -11,4 +12,10 @@ public interface PurchaseOptionRepository extends JpaRepository<PurchaseOption, 
      * empty (presented as 404).
      */
     Optional<PurchaseOption> findByIdAndItemIdAndItemUserId(Long id, Long itemId, Long userId);
+
+    /** Owner-scoped lookup by server id alone, without knowing the parent item. */
+    Optional<PurchaseOption> findByIdAndUserId(Long id, Long userId);
+
+    /** Owner-scoped: another user's client identity resolves to empty. */
+    Optional<PurchaseOption> findByUserIdAndClientResourceId(Long userId, UUID clientResourceId);
 }

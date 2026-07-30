@@ -3,6 +3,7 @@ package com.finora.api.wishlist;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,9 @@ public interface WishlistItemRepository extends JpaRepository<WishlistItem, Long
     List<WishlistItem> findAllByUserIdAndStatusIn(Long userId, List<WishlistStatus> statuses);
 
     Optional<WishlistItem> findByIdAndUserId(Long id, Long userId);
+
+    /** Owner-scoped: another user's client identity resolves to empty. */
+    Optional<WishlistItem> findByUserIdAndClientResourceId(Long userId, UUID clientResourceId);
 
     /**
      * Owner-scoped lookup with a pessimistic write lock. Serializes purchase

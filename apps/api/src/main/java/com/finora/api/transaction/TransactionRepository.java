@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -14,6 +15,9 @@ public interface TransactionRepository
         extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction> {
 
     Optional<Transaction> findByIdAndUserId(Long id, Long userId);
+
+    /** Owner-scoped: another user's client identity resolves to empty. */
+    Optional<Transaction> findByUserIdAndClientResourceId(Long userId, UUID clientResourceId);
 
     /**
      * Owner-scoped lookup with a pessimistic write lock. The legacy-conversion
