@@ -3,8 +3,9 @@
 ## Escopo
 
 O Finora é instalável e pode abrir o shell sem rede. O acesso a dados financeiros
-offline é opcional, local, criptografado e estritamente somente leitura. Esta etapa
-não contém outbox, replay, sincronização em background ou resolução de conflitos.
+offline é opcional, local e criptografado. Esta etapa cobre instalação, Service
+Worker e leitura offline; a escrita offline veio na etapa seguinte, descrita em
+[offline-sync.md](offline-sync.md).
 
 ## Instalação e Service Worker
 
@@ -85,7 +86,13 @@ iOS usa “Adicionar à Tela de Início”. Não há inspeção automatizada da 
 
 ## Exclusões explícitas
 
-Sem gravações offline, drafts, outbox, replay, Background Sync, conflitos,
-idempotency keys de sync, Web Push, importação de extrato offline ou endpoint/backend
-novo. O servidor continua autoritativo. A próxima etapa é “Offline mutation outbox,
-idempotency and conflict resolution”.
+Sem Background Sync, Web Push, importação de extrato offline ou replay no Service
+Worker. O servidor continua autoritativo.
+
+## Etapa seguinte (concluída)
+
+O modo offline deixou de ser somente leitura para um conjunto explícito de
+operações seguras. A fila criptografada, os recibos de idempotência, as versões
+otimistas e a resolução de conflitos estão descritos em
+[offline-sync.md](offline-sync.md); o cofre passou a `VAULT_SCHEMA_VERSION = 2` com
+migração não destrutiva a partir de V1.

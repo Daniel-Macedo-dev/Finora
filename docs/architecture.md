@@ -160,6 +160,15 @@ criptografia, IndexedDB, allowlist de queries e o modo de sessão local. O servi
 continua autoritativo e uma identidade descriptografada nunca vira sessão online.
 Detalhes em [pwa-offline.md](pwa-offline.md).
 
+`src/offline/outbox/` acrescenta a fila de mutações: tipos, compactação, ordenação
+por dependência, motor de replay, coordenação entre abas e o transporte para
+`POST /api/offline-sync/mutations`. No backend, `com.finora.api.offlinesync`
+concentra o envelope tipado, o registro explícito de handlers por recurso, a
+impressão digital canônica das requisições e os recibos de idempotência; os
+handlers delegam as regras financeiras aos serviços de domínio existentes e nunca
+as reescrevem. Cada mutação roda na sua própria transação, junto com o seu recibo.
+Detalhes em [offline-sync.md](offline-sync.md).
+
 ## Dados de demonstração e testes
 
 - A aplicação sobe **vazia** (apenas categorias padrão da migração).

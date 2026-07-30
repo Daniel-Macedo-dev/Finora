@@ -243,6 +243,15 @@ dados de A pela UI nem por ID direto na API, e sua análise de compra é inacess
 **ciclo de sessão** (expiração leva ao login e permite reentrar; troca de senha
 mantém a sessão atual e permite login com a nova); navegação e autenticação mobile
 (390px: registro, drawer, criar transação, menu de usuário, logout);
+**sincronização offline** (`offline-sync.spec.ts`, 24 jornadas: criar offline sem
+nenhuma requisição sair do navegador, indicador do shell, aviso de totais
+desatualizados, cofre bloqueado sem replay, recarregar preservando a fila
+criptografada, sincronizar exatamente uma vez, resposta perdida sem duplicar,
+criar-e-excluir sem escrita no servidor, orçamento e item de desejo offline,
+aporte e cartões bloqueados, saída com pendências exigindo decisão, descarte
+confirmado removendo o cofre, conflito com comparação legível, aplicar-local com
+confirmação, falha permanente acionável, falha temporária reenviada com a mesma
+identidade, isolamento entre donos e a central a 390px);
 **recorrentes** (criar despesa e receita recorrentes; preview de ocorrências;
 executar manualmente com estorno exato e terminal; pular/reativar/reagendar
 mantendo a identidade; "Processar vencidos" idempotente — segunda execução não
@@ -306,6 +315,38 @@ mutação bloqueada antes da rede. Após `npm run build`, `npm run verify:pwa` v
 manifesto/ícones/SW/fallback e `/api` NetworkOnly. `pwa-offline.spec.ts` contém 12
 jornadas Chromium no preview de produção, inclusive reload sem rede e ausência de
 plaintext/JSON de API nos storages.
+
+### Sincronização offline
+
+Backend, com PostgreSQL real: `MigrationFromPopulatedV13Test` migra um banco V13
+populado (dois donos, transação importada, gerada por recorrente e de crédito
+legado inativa, orçamentos, metas, itens, opções, snapshot com versão própria,
+notificações e importação) e prova que nada se moveu, que versões começam em zero,
+que a versão de snapshot é preservada e que nenhuma identidade de cliente ou recibo
+é fabricado. `OfflineSyncContractTest` cobre a forma do endpoint (autenticação,
+CSRF, lote vazio/grande demais, payload grande demais, tipo e operação fora da
+lista, alvo ambíguo/ausente, versão base obrigatória, ordem e sucesso parcial).
+`OfflineSyncIdempotencyTest` cobre resposta perdida, chave reutilizada com conteúdo
+diferente, diferenças de formatação que não são diferenças de conteúdo, donos
+independentes com a mesma chave e ausência de recibo para recusas.
+`OfflineSyncConflictTest` cobre versão desatualizada, exclusão remota, unicidade de
+orçamento, dependência ausente e a ausência de vazamento no retrato do servidor.
+`OfflineSyncDomainTest` cobre o ciclo completo de cada domínio, as cinco recusas de
+registros protegidos e a impossibilidade de contrabandear a atualização da opção
+vinculada. `OfflineSyncOwnershipTest` prova que "não é seu" e "não existe" são
+indistinguíveis. `OfflineSyncConcurrencyTest` roda corridas reais: criações
+idênticas simultâneas, duas criações com a mesma identidade de recurso, duas
+edições sobre a mesma versão base, edição contra exclusão, orçamentos duplicados e
+o lote inteiro enviado duas vezes ao mesmo tempo.
+
+Frontend: `queue.test.ts` (compactação, cancelamento em cascata, limites,
+ordenação e ciclos), `replay.test.ts` (aplicação, já aplicado, perda de conexão,
+backoff, recusa permanente, conflito, dependência e lote limitado),
+`projection.test.ts` (sobreposição pendente sem reescrever o retrato do servidor) e
+`VaultProvider.test.tsx` (ciclo real de habilitar, enfileirar, persistir, bloquear,
+desbloquear, resolver e remover). `offline-sync.spec.ts` contém 24 jornadas
+Chromium, incluindo perda de resposta simulada abortando a resposta depois do
+commit, conflito entre dois contextos reais e isolamento entre donos.
 
 O histórico de preços acrescenta migração populada V12→V13, lifecycle e posse
 via MockMvc, regressão da análise e corridas com threads/Testcontainers. Vitest

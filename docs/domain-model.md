@@ -28,6 +28,14 @@ e possui série controlada pelo servidor. Excluir opção limpa só o vínculo;
 excluir item remove o histórico. Ver
 [wishlist-price-history.md](wishlist-price-history.md).
 
+`OfflineMutationReceipt` é a prova durável de que uma mutação offline já produziu
+o seu efeito, gravada na mesma transação da escrita que descreve e única por
+`(usuário, clientMutationId)`. Transações, orçamentos, metas, itens da lista de
+desejos e opções de compra passaram a ter versão otimista e uma identidade de
+cliente opcional (`client_resource_id`), única por dono, que dá nome a um recurso
+criado offline antes de ele ter id no servidor. Observações de preço reutilizam o
+`client_request_id` que já possuíam. Ver [offline-sync.md](offline-sync.md).
+
 Uniqueness é por usuário e, onde a aplicação compara sem distinção de caixa, o
 banco usa índices case-insensitive: nome de conta por usuário; (nome, tipo) de
 categoria por usuário; (mês, categoria) de orçamento por usuário; uma linha de

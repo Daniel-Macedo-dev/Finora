@@ -118,6 +118,24 @@ Service Worker, mutações são bloqueadas antes de CSRF/fetch, schemas desconhe
 adulteração falham fechados, e lock/logout limpam dados descriptografados. Um único
 cofre por perfil impede merge entre proprietários. Ver [pwa-offline.md](pwa-offline.md).
 
+## Sincronização offline
+
+A fila de mutações offline vive dentro do mesmo texto cifrado autenticado do cofre —
+nunca em localStorage, Cache Storage ou no Service Worker. A chave derivada passa a
+sobreviver ao desbloqueio (enfileirar reescreve o cofre), mas é não extraível, vive
+apenas em memória e é apagada ao bloquear, sair e no timer de inatividade; a senha
+continua descartada logo após a derivação e cada reescrita usa um IV novo.
+
+No servidor, o dono vem sempre da sessão: o envelope não tem onde declarar um
+`userId`, e o despacho é um registro explícito por enum, sem reflexão. Recibos de
+idempotência são únicos por `(user_id, client_mutation_id)`, imutáveis e consultados
+apenas com escopo de dono — dois usuários podem usar o mesmo UUID com segurança. Um
+id de servidor ou de cliente pertencente a outro dono se comporta como ausente, de
+forma indistinguível de inexistente; a diferença transformaria o endpoint em um
+oráculo de existência sobre finanças alheias. Registros financeiros gerados
+(importados, de recorrente, de compra da wishlist, de crédito legado e convertidos)
+não podem ser alterados por esse caminho. Ver [offline-sync.md](offline-sync.md).
+
 ## Limitações conhecidas
 
 - Sem verificação de e-mail.

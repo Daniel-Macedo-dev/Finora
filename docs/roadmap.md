@@ -44,18 +44,26 @@ promessa de implementação — é direção.
 > histórico paginado, sem coleta externa. Ver
 > [wishlist-price-history.md](wishlist-price-history.md).
 >
-> **PWA foundation, installability and secure offline read mode** foi concluído —
-> shell instalável, Service Worker sem cache de API e cofre IndexedDB criptografado,
-> owner-isolated e somente leitura. A sincronização offline completa ainda não está
-> concluída. Ver [pwa-offline.md](pwa-offline.md).
+> PWA, instalabilidade e modo offline seguro foram **concluídos** — shell
+> instalável, Service Worker sem cache de API e cofre IndexedDB criptografado e
+> owner-isolated. Ver [pwa-offline.md](pwa-offline.md).
+>
+> **Fila de mutações offline, idempotência e resolução de conflitos** foi
+> **concluída** — CRUD offline para transações comuns, orçamentos, metas, itens da
+> lista de desejos, opções de compra e observações manuais de preço, com fila
+> criptografada, compactação, ordenação por dependência, recibos duráveis
+> owner-scoped, versões otimistas, conflitos tipados resolvidos pelo usuário e
+> central de sincronização. Fluxos com auditoria própria — extratos, cartões,
+> faturas, recorrentes, aportes, execução de compra e captura de preço — continuam
+> exigindo conexão **por decisão**, não por omissão. Ver
+> [offline-sync.md](offline-sync.md).
 
 ## Próxima grande etapa
 
-**Offline mutation outbox, idempotency and conflict resolution**.
+**Multi-moeda**.
 
 ## Depois disso
 
-- Multi-moeda.
 - Relatórios anuais e exportação.
 
 ## Fora de cobertura deliberadamente

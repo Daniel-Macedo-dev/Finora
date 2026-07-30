@@ -67,9 +67,16 @@ Interface em português do Brasil; código, banco e API em inglês.
   "categoria dominante", "orçamento estourado", "compra da lista de desejos viável".
 - **Tema claro / escuro / sistema**, layout responsivo (desktop → 360px) e
   acessibilidade prática (WCAG 2.2 AA nos fluxos principais).
-- **PWA instalável e leitura offline segura** — shell estático offline, atualização
-  controlada e cópia financeira opcional criptografada com senha local; nunca há
-  mutação ou replay offline. Ver [docs/pwa-offline.md](docs/pwa-offline.md).
+- **PWA instalável e acesso offline seguro** — shell estático offline, atualização
+  controlada e cópia financeira opcional criptografada com senha local. Ver
+  [docs/pwa-offline.md](docs/pwa-offline.md).
+- **Escrita offline com fila e resolução de conflitos** — transações comuns,
+  orçamentos, metas, itens da lista de desejos, opções de compra e observações
+  manuais de preço podem ser registrados sem conexão e enviados depois, com
+  idempotência durável no servidor, versões otimistas e conflitos resolvidos pelo
+  usuário (nunca mesclados automaticamente). Extratos, cartões, faturas,
+  recorrentes, aportes e execução de compra continuam exigindo conexão. Ver
+  [docs/offline-sync.md](docs/offline-sync.md).
 
 ## Stack
 
