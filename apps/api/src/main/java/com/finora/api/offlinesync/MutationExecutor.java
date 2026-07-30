@@ -50,6 +50,12 @@ public class MutationExecutor {
     /**
      * Applies the mutation and records its receipt atomically.
      *
+     * @param userId          the authenticated owner; never taken from the request
+     * @param envelope        the queued mutation as submitted
+     * @param handler         the handler registered for this resource type
+     * @param canonicalPayload the normalized payload the handler produced
+     * @param requestHash     the canonical fingerprint stored on the receipt
+     * @return what was applied, as the client needs to see it
      * @throws SyncConflictException      server state moved on; nothing was written
      * @throws SyncRejectedException      permanently invalid; nothing was written
      * @throws DependencyMissingException an offline parent has not landed yet

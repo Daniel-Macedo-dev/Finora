@@ -32,7 +32,14 @@ public class PayloadCodec {
         this.validator = validator;
     }
 
-    /** Parses and validates; never returns a partially valid object. */
+    /**
+     * Parses and validates a queued payload; never returns a partially valid object.
+     *
+     * @param payload the raw JSON object from the envelope
+     * @param type    the domain request record that defines the accepted fields
+     * @return the validated instance
+     * @throws SyncRejectedException when the payload is malformed or violates a constraint
+     */
     public <T> T parse(JsonNode payload, Class<T> type) {
         if (payload == null || !payload.isObject()) {
             throw new SyncRejectedException("SYNC_PAYLOAD_INVALID",

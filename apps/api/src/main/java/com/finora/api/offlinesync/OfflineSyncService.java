@@ -70,6 +70,14 @@ public class OfflineSyncService {
         this.mapper = mapper;
     }
 
+    /**
+     * Processes a bounded batch, one mutation per transaction.
+     *
+     * @param request the queued mutations, in the order the client wants them applied
+     * @return one result per input mutation, in the same order
+     * @throws SyncBatchRejectedException when the batch itself exceeds a size limit,
+     *                                    in which case nothing in it is processed
+     */
     public MutationBatchResponse replay(MutationBatchRequest request) {
         Long userId = currentUser.currentUserId();
         requireBoundedBatch(request.mutations());
