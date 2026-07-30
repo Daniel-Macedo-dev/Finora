@@ -1,0 +1,166 @@
+/* Synchronization centre. Status is always carried by text; colour only
+   reinforces it, so the page stays readable in monochrome and for anyone who
+   cannot distinguish the hues. */
+
+.sync-summary {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sync-summary-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.sync-summary-list dt {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.sync-summary-list dd {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.sync-feedback:empty {
+  display: none;
+}
+
+.sync-feedback,
+.sync-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.sync-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sync-entry {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sync-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.sync-entry-title {
+  margin: 0;
+  font-weight: 600;
+  /* Long resource names wrap instead of forcing the card to scroll. */
+  overflow-wrap: anywhere;
+}
+
+.sync-entry-meta {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.sync-entry-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.sync-entry-facts dt {
+  color: var(--ink-secondary);
+}
+
+.sync-entry-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sync-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--danger-ink, var(--ink-primary));
+  overflow-wrap: anywhere;
+}
+
+.sync-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sync-conflict {
+  display: grid;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+
+.sync-comparison {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sync-conflict-detail {
+  margin: 0;
+}
+
+/* Wide comparisons scroll inside their own container; the page body never
+   scrolls sideways. */
+.sync-comparison-table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.sync-row-changed th[scope='row'] {
+  font-weight: 700;
+}
+
+.sync-technical summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+/* The shell indicator: restrained, textual, and never the only signal. */
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.sync-indicator-count {
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .sync-entry-head {
+    flex-direction: column;
+  }
+
+  .sync-comparison-table th,
+  .sync-comparison-table td {
+    /* Keeps the server/local columns legible rather than crushed. */
+    min-width: 8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-indicator svg {
+    animation: none;
+  }
+}

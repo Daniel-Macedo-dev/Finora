@@ -194,9 +194,12 @@ export default function GoalsPage() {
                 )}
               </p>
               <div className="goal-actions">
+                {/* A contribution is a delta against the balance at the
+                    moment it runs, so it cannot be replayed from a queue. */}
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  data-offline-blocked="true"
                   onClick={() => openContribute(goal)}
                 >
                   <PiggyBank size={15} aria-hidden="true" />

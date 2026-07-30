@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LoadingCards } from './states'
+import Dialog from './Dialog'
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -27,6 +28,9 @@ import { useConnection } from '../offline/connection'
 import { usePwa } from '../pwa/PwaProvider'
 import { useVault } from '../offline/VaultProvider'
 import OfflineUnavailable from '../offline/OfflineUnavailable'
+import { UNSUPPORTED_OFFLINE_MESSAGE } from '../offline/outbox/useOutbox'
+import SyncIndicator from '../features/offline-sync/SyncIndicator'
+import { useReplayTriggers } from '../features/offline-sync/useReplayTriggers'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
@@ -58,16 +62,34 @@ function UserPanel() {
   const vault = useVault()
   const logout = useLogout()
   const navigate = useNavigate()
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
 
   const user = currentUser.data ?? vault.owner
   if (!user) {
     return null
   }
 
-  function handleLogout() {
+  function signOut() {
     logout.mutate(undefined, {
-      onSettled: () => navigate('/login', { replace: true }),
+      // Local cleanup runs whichever way the server call went: a failed
+      // logout request must not leave decrypted data behind on the device.
+      onSettled: () => {
+        void vault.remove().finally(() => navigate('/login', { replace: true }))
+      },
     })
+  }
+
+  /**
+   * Logging out deletes the local encrypted copy — including anything the
+   * server has never seen. That is not a decision to make on the user's behalf
+   * behind a generic "Sair", so unsynchronized work turns it into a question.
+   */
+  function handleLogout() {
+    if (vault.hasPendingWork) {
+      setConfirmingLogout(true)
+      return
+    }
+    signOut()
   }
 
   return (
@@ -91,6 +113,46 @@ function UserPanel() {
       >
         <LogOut size={16} aria-hidden="true" />
       </button>
+
+      <Dialog
+        open={confirmingLogout}
+        title="Sair com alterações offline pendentes"
+        onClose={() => setConfirmingLogout(false)}
+      >
+        <p style={{ color: 'var(--ink-secondary)' }}>
+          Há {vault.counts.total} alteração(ões) offline que ainda não chegaram ao servidor
+          {vault.counts.conflicts > 0 && `, sendo ${vault.counts.conflicts} em conflito`}
+          {vault.counts.permanent > 0 && ` e ${vault.counts.permanent} com falha`}. Sair da conta
+          apaga a cópia local criptografada deste dispositivo, e essas alterações não existem em
+          nenhum outro lugar.
+        </p>
+        <div className="form-footer">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setConfirmingLogout(false)}
+          >
+            Cancelar
+          </button>
+          <NavLink
+            to="/offline-sync"
+            className="btn btn-primary"
+            onClick={() => setConfirmingLogout(false)}
+          >
+            Sincronizar agora
+          </NavLink>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => {
+              setConfirmingLogout(false)
+              signOut()
+            }}
+          >
+            Descartar alterações e sair
+          </button>
+        </div>
+      </Dialog>
     </div>
   )
 }
@@ -101,8 +163,16 @@ export default function AppShell() {
   const connection = useConnection()
   const pwa = usePwa()
   const vault = useVault()
+  useReplayTriggers()
   const offlineUnlocked = vault.state === 'UNLOCKED_OFFLINE'
-  const offlineRouteSupported = new Set(['/dashboard', '/transactions', '/credit-cards', '/budgets', '/commitments', '/forecast', '/goals', '/wishlist', '/settings', '/notifications']).has(location.pathname)
+  const offlineRouteSupported = new Set(['/dashboard', '/transactions', '/credit-cards', '/budgets', '/commitments', '/forecast', '/goals', '/wishlist', '/settings', '/notifications', '/offline-sync']).has(location.pathname)
+  /** Routes whose domains can be queued while offline. */
+  const offlineWritableRoute =
+    location.pathname === '/transactions'
+    || location.pathname === '/budgets'
+    || location.pathname === '/goals'
+    || location.pathname === '/offline-sync'
+    || location.pathname.startsWith('/wishlist')
 
   // Close the mobile drawer on navigation.
   useEffect(() => {
@@ -122,14 +192,24 @@ export default function AppShell() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [menuOpen])
 
+  // Offline mode is no longer read-only, but only the allowlisted domains can
+  // be queued. On those routes everything is enabled except controls marked as
+  // online-only; everywhere else the whole page stays blocked, so a workflow
+  // that was never designed for replay cannot be started by accident. The API
+  // client's refusal of unsafe requests remains the real boundary — this is the
+  // part that explains it to the user before they try.
   useEffect(() => {
     if (!offlineUnlocked) return
+    const selector = offlineWritableRoute
+      ? "#main-content [data-offline-blocked='true'] button, " +
+        "#main-content button[data-offline-blocked='true']"
+      : "#main-content button:not([data-offline-allowed='true'])"
     const disableMutations = () => {
-      document.querySelectorAll<HTMLButtonElement>("#main-content button:not([data-offline-allowed='true'])").forEach((button) => {
+      document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
         if (!button.disabled) {
           button.dataset.offlineDisabled = 'true'
           button.disabled = true
-          button.title = 'Esta ação precisa de conexão. O modo offline do Finora é somente leitura.'
+          button.title = UNSUPPORTED_OFFLINE_MESSAGE
         }
       })
     }
@@ -145,7 +225,7 @@ export default function AppShell() {
         button.removeAttribute('title')
       })
     }
-  }, [location.pathname, offlineUnlocked])
+  }, [location.pathname, offlineUnlocked, offlineWritableRoute])
 
   const navLinks = NAV_ITEMS.map(({ to, label, icon: Icon }) => (
     <NavLink key={to} to={to} className="nav-link">
@@ -174,7 +254,10 @@ export default function AppShell() {
           </button>
         </div>
       )}
-      <div className="shell-notification-bell"><NotificationBell /></div>
+      <div className="shell-notification-bell">
+        <SyncIndicator />
+        <NotificationBell />
+      </div>
 
       <header className="mobile-topbar">
         <BrandMark />

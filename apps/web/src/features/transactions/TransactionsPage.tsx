@@ -20,6 +20,9 @@ import {
   useUpdateTransaction,
 } from './api'
 import type { Transaction, TransactionRequest } from './types'
+import { useOptionalVault } from '../../offline/VaultProvider'
+import { localId, projectList } from '../../offline/outbox/projection'
+import PendingBadge, { StaleTotalsWarning } from '../offline-sync/PendingBadge'
 import './transactions.css'
 
 export default function TransactionsPage() {
@@ -92,7 +95,56 @@ export default function TransactionsPage() {
   }
 
   const data = transactions.data
+  const vault = useOptionalVault()
   const busy = createMutation.isPending || updateMutation.isPending
+
+  /**
+   * The list the user sees is the server page with the queue laid over it. The
+   * cached server data is never rewritten, so discarding a pending change
+   * restores this view exactly, with nothing to undo.
+   */
+  const rows = projectList(
+    data?.content ?? [],
+    vault?.entries ?? [],
+    'TRANSACTION',
+    (base, entry) => {
+      if (entry.operation === 'DELETE') return base
+      const payload = entry.payload as Partial<Transaction> & { categoryId?: number }
+      const category =
+        base?.category
+        ?? (categories.data ?? []).find((candidate) => candidate.id === payload.categoryId)
+        ?? { id: payload.categoryId ?? 0, name: 'Categoria', type: 'EXPENSE' as const }
+      if (!base) {
+        return {
+          id: localId(entry.clientResourceId),
+          type: payload.type ?? 'EXPENSE',
+          amount: Number(payload.amount ?? 0),
+          description: String(payload.description ?? entry.label),
+          date: String(payload.date ?? entry.createdAt.slice(0, 10)),
+          category,
+          account: null,
+          paymentMethod: payload.paymentMethod ?? null,
+          legacyCredit: false,
+          financiallyActive: true,
+          legacyConversionStatus: null,
+          generatedCardPurchaseId: null,
+          wishlistItemId: null,
+          notes: payload.notes ?? null,
+          version: 0,
+        }
+      }
+      return {
+        ...base,
+        type: payload.type ?? base.type,
+        amount: Number(payload.amount ?? base.amount),
+        description: String(payload.description ?? base.description),
+        date: String(payload.date ?? base.date),
+        category,
+        paymentMethod: payload.paymentMethod ?? base.paymentMethod,
+        notes: payload.notes ?? base.notes,
+      }
+    },
+  )
 
   return (
     <>
@@ -167,7 +219,7 @@ export default function TransactionsPage() {
         <LoadingCards count={4} height={64} />
       ) : transactions.isError ? (
         <ErrorState error={transactions.error} onRetry={() => transactions.refetch()} />
-      ) : data && data.content.length === 0 ? (
+      ) : data && rows.length === 0 ? (
         <EmptyState
           title="Nenhuma transação encontrada"
           description={
@@ -184,6 +236,7 @@ export default function TransactionsPage() {
         />
       ) : data ? (
         <>
+          <StaleTotalsWarning pendingCount={vault?.counts.total ?? 0} />
           <div className="card table-wrap" style={{ padding: 0 }}>
             <table className="data">
               <thead>
@@ -203,10 +256,18 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.content.map((transaction) => (
-                  <tr key={transaction.id}>
+                {rows.map(({ item: transaction, pending }) => (
+                  <tr key={transaction.id} className={pending ? 'tx-pending' : undefined}>
                     <td>{formatDate(transaction.date)}</td>
-                    <td className="tx-description">{transaction.description}</td>
+                    <td className="tx-description">
+                      {transaction.description}
+                      {pending && (
+                        <>
+                          {' '}
+                          <PendingBadge state={pending} />
+                        </>
+                      )}
+                    </td>
                     <td>
                       <span className="badge badge-neutral">{transaction.category.name}</span>
                     </td>

@@ -25,6 +25,7 @@ const WishlistItemPage = lazy(() => import('./features/wishlist/WishlistItemPage
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
 const ProfilePage = lazy(() => import('./features/profile/ProfilePage'))
 const NotificationsPage = lazy(() => import('./features/notifications/NotificationsPage'))
+const OfflineSyncPage = lazy(() => import('./features/offline-sync/OfflineSyncPage'))
 
 export default function App() {
   return (
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/offline-sync" element={<OfflineSyncPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

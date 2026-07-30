@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useCurrentUser } from '../auth/api'
 import { useVault } from '../../offline/VaultProvider'
 import { usePwa } from '../../pwa/PwaProvider'
@@ -42,10 +43,23 @@ export default function OfflineSettings() {
         <div><dt>Cópia offline</dt><dd>{vault.state === 'ABSENT' ? 'Desativada' : vault.state === 'LOCKED' ? 'Bloqueada' : vault.state.startsWith('UNLOCKED') ? 'Desbloqueada' : vault.state === 'CORRUPTED' ? 'Indisponível' : 'Verificando'}</dd></div>
         {vault.updatedAt && <div><dt>Última atualização</dt><dd>{new Date(vault.updatedAt).toLocaleString('pt-BR')}</dd></div>}
         {vault.size !== null && <div><dt>Tamanho criptografado</dt><dd>{Math.ceil(vault.size / 1024)} KB</dd></div>}
+        <div><dt>Alterações offline pendentes</dt><dd>{vault.counts.total}</dd></div>
+        <div><dt>Última sincronização</dt><dd>{vault.lastSyncAt ? new Date(vault.lastSyncAt).toLocaleString('pt-BR') : 'Ainda não sincronizado'}</dd></div>
       </dl>
+      {/* Never claim "tudo sincronizado" while a conflict or a failure is
+          waiting: that is exactly when the user most needs to look. */}
+      {vault.counts.total > 0 && (
+        <p className="settings-note">
+          {vault.counts.conflicts + vault.counts.permanent > 0
+            ? 'Há alterações offline que precisam da sua decisão.'
+            : 'Há alterações offline aguardando envio.'}{' '}
+          <Link to="/offline-sync">Abrir central de sincronização</Link>
+        </p>
+      )}
       {pwa.installState === 'available' && <button type="button" className="btn btn-primary" onClick={() => void pwa.install()}>Instalar Finora</button>}
       {pwa.installState === 'unsupported' && <p className="settings-note">No iPhone/iPad, use Compartilhar → Adicionar à Tela de Início. Alguns navegadores não oferecem instalação.</p>}
-      <p className="settings-note">O acesso offline é opcional e somente leitura. Dados financeiros selecionados ficam criptografados neste navegador, podem ficar desatualizados e podem ser removidos pelo navegador, sistema operacional ou por você.</p>
+      <p className="settings-note">O acesso offline é opcional. Dados financeiros selecionados ficam criptografados neste navegador, podem ficar desatualizados e podem ser removidos pelo navegador, sistema operacional ou por você. Transações comuns, orçamentos, metas, itens da lista de desejos, opções de compra e observações de preço podem ser registrados offline e enviados depois; extratos, cartões, faturas, recorrentes e aportes continuam exigindo conexão.</p>
+      <p className="settings-note">A sincronização acontece <strong>somente com o aplicativo aberto, com conexão e com a cópia offline desbloqueada</strong>. O Finora não sincroniza em segundo plano.</p>
       <p className="settings-note"><strong>A senha offline é separada da senha da conta e não pode ser recuperada pelo Finora.</strong> Se perdê-la, exclua e recrie a cópia local. Sair da conta também exclui a cópia.</p>
       {!hasVault ? (
         <form onSubmit={(event) => void enable(event)} className="offline-settings-form">
@@ -61,8 +75,32 @@ export default function OfflineSettings() {
           <label htmlFor="refresh-offline-password">Senha offline para atualizar</label>
           <input id="refresh-offline-password" className="input" type={showPassword ? 'text' : 'password'} autoComplete="off" value={password} onChange={(event) => setPassword(event.target.value)} />
           <button type="button" className="btn btn-secondary" onClick={() => void refresh()} disabled={busy}>Atualizar dados offline</button>
+          <label className="offline-autosync">
+            <input
+              type="checkbox"
+              checked={vault.autoSync}
+              onChange={(event) => void vault.setAutoSync(event.target.checked)}
+              disabled={vault.state !== 'UNLOCKED_ONLINE' && vault.state !== 'UNLOCKED_OFFLINE'}
+            />
+            Sincronizar automaticamente ao reconectar
+          </label>
+          <Link to="/offline-sync" className="btn btn-secondary">Abrir central de sincronização</Link>
           <button type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
-          <button type="button" className="btn btn-danger" onClick={() => { if (window.confirm('Desativar o acesso offline e excluir a cópia local? Os dados do servidor não serão alterados.')) void vault.remove() }}>Desativar e excluir cópia local</button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => {
+              // Removing the vault destroys queued work the server has never
+              // seen, so the confirmation has to say so in those terms.
+              const message = vault.hasPendingWork
+                ? `Há ${vault.counts.total} alteração(ões) offline que ainda não chegaram ao servidor. `
+                  + 'Excluir a cópia local apaga essas alterações definitivamente. Continuar?'
+                : 'Desativar o acesso offline e excluir a cópia local? Os dados do servidor não serão alterados.'
+              if (window.confirm(message)) void vault.remove()
+            }}
+          >
+            Desativar e excluir cópia local
+          </button>
         </div>
       )}
       {feedback && <p role="status" className="settings-feedback">{feedback}</p>}

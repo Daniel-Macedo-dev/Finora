@@ -220,18 +220,24 @@ export default function WishlistItemPage() {
                   <Money value={option.nominalCost} />
                 </div>
                 <div className="option-actions">
+                  {/* Capturing copies whatever the option holds right now,
+                      which is not what an offline user observed. */}
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    data-offline-blocked="true"
                     onClick={() => setCapturingOption(option)}
                   >
                     <Tag size={15} aria-hidden="true" />
                     Registrar preço atual
                   </button>
+                  {/* Executing a purchase creates real financial records across
+                      several domains; it stays online-only. */}
                   {data.status !== 'PURCHASED' && (
                     <button
                       type="button"
                       className="btn btn-secondary"
+                      data-offline-blocked="true"
                       onClick={() => {
                         executePurchase.reset()
                         setExecutingOption(option)
