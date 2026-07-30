@@ -124,8 +124,10 @@ public class PriceSnapshotMutationHandler implements MutationHandler {
                         payload.basePrice(), payload.shipping(), payload.fees(),
                         payload.installmentCount(), payload.installmentAmount(),
                         payload.observedOn(), payload.offerUrl(), payload.notes()));
+        // The optimistic version is assigned at flush; read it only afterwards.
+        command.flush().run();
         return new AppliedMutation(existing.getClientRequestId(), updated.id(),
-                existing.getVersion() + 1, updated);
+                existing.getVersion(), updated);
     }
 
     private AppliedMutation delete(MutationCommand command) {

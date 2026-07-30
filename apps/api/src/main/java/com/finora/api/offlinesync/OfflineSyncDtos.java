@@ -36,8 +36,7 @@ public final class OfflineSyncDtos {
     public record MutationBatchRequest(
             @NotEmpty(message = "Informe ao menos uma operação.")
             @Size(max = MAX_BATCH_SIZE, message = "Envie no máximo " + MAX_BATCH_SIZE + " operações por lote.")
-            @Valid
-            List<MutationEnvelope> mutations) {
+            List<@Valid MutationEnvelope> mutations) {
     }
 
     /**

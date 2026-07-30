@@ -5,6 +5,10 @@ import com.finora.api.common.error.NotFoundException;
 import com.finora.api.offlinesync.MutationHandler.AppliedMutation;
 import com.finora.api.offlinesync.MutationHandler.MutationCommand;
 import com.finora.api.offlinesync.OfflineSyncDtos.MutationEnvelope;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.OptimisticLockException;
+import jakarta.persistence.PersistenceContext;
+import org.hibernate.StaleStateException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
@@ -33,6 +37,9 @@ public class MutationExecutor {
     private final ResourceResolver resolver;
     private final ObjectMapper mapper;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public MutationExecutor(MutationReceiptRepository receipts, ResourceResolver resolver,
                             ObjectMapper mapper) {
         this.receipts = receipts;
@@ -54,11 +61,19 @@ public class MutationExecutor {
         AppliedMutation applied;
         try {
             applied = handler.apply(new MutationCommand(userId, envelope.operation(),
-                    envelope.target(), envelope.baseVersion(), canonicalPayload, resolver));
-        } catch (ObjectOptimisticLockingFailureException e) {
-            // The row changed between the version comparison and the flush.
-            // Same user-visible contract as the explicit comparison: the client
-            // never has to distinguish the two windows.
+                    envelope.target(), envelope.baseVersion(), canonicalPayload, resolver,
+                    entityManager::flush));
+            // Force the write out now. Left to commit time it would escape this
+            // block entirely and surface as a 500 that the client would treat as
+            // a retryable transport failure — for a mutation that must never be
+            // retried blindly.
+            entityManager.flush();
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException
+                 | StaleStateException e) {
+            // The row changed — or vanished — between the version comparison and
+            // the flush. Hibernate reports this in three shapes depending on the
+            // path; all three mean the same thing to the user, and all three
+            // must become the same typed conflict rather than a server error.
             throw new SyncConflictException(ConflictType.VERSION_MISMATCH,
                     "Este registro foi alterado no servidor enquanto a sincronização acontecia.",
                     null, null, java.util.List.of(ResolutionOption.KEEP_SERVER,

@@ -96,8 +96,10 @@ public class TransactionMutationHandler implements MutationHandler {
         VersionGuard.require(existing.getVersion(), command.baseVersion(),
                 TransactionResponse.from(existing),
                 "Esta transação foi alterada em outro dispositivo depois da sua edição offline.");
-        TransactionResponse updated = transactions.update(
-                existing.getId(), (TransactionRequest) command.payload());
+        transactions.update(existing.getId(), (TransactionRequest) command.payload());
+        // The optimistic version is assigned at flush; read it only afterwards.
+        command.flush().run();
+        TransactionResponse updated = TransactionResponse.from(existing);
         return new AppliedMutation(existing.getClientResourceId(), updated.id(),
                 updated.version(), updated);
     }
@@ -139,15 +141,18 @@ public class TransactionMutationHandler implements MutationHandler {
                     "Esta transação foi gerada pela compra de um item da lista de desejos "
                             + "e só pode ser alterada com conexão.");
         }
-        if (transaction.isLegacyCredit()) {
-            throw new SyncRejectedException("SYNC_TRANSACTION_LEGACY_CREDIT",
-                    "Esta transação é um registro histórico de crédito e só pode ser "
-                            + "alterada com conexão.");
-        }
+        // A financially inactive row is always a legacy-credit one (V10 enforces
+        // that invariant), so the more specific reason has to be checked first
+        // or it would never be reported.
         if (!transaction.isFinanciallyActive()) {
             throw new SyncRejectedException("SYNC_TRANSACTION_CONVERTED",
                     "Esta transação foi convertida em compra de cartão e é um registro "
                             + "de auditoria. Estorne a conversão com conexão para editá-la.");
+        }
+        if (transaction.isLegacyCredit()) {
+            throw new SyncRejectedException("SYNC_TRANSACTION_LEGACY_CREDIT",
+                    "Esta transação é um registro histórico de crédito e só pode ser "
+                            + "alterada com conexão.");
         }
     }
 }

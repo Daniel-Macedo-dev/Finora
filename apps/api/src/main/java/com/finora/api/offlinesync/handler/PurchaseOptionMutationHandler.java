@@ -92,9 +92,11 @@ public class PurchaseOptionMutationHandler implements MutationHandler {
         VersionGuard.require(existing.getVersion(), command.baseVersion(),
                 PurchaseOptionResponse.from(existing),
                 "Esta opção de compra foi alterada em outro dispositivo depois da sua edição offline.");
-        PurchaseOptionResponse updated = wishlist.updateOption(
-                existing.getItem().getId(), existing.getId(),
+        wishlist.updateOption(existing.getItem().getId(), existing.getId(),
                 toRequest((OptionPayload) command.payload()));
+        // The optimistic version is assigned at flush; read it only afterwards.
+        command.flush().run();
+        PurchaseOptionResponse updated = PurchaseOptionResponse.from(existing);
         return new AppliedMutation(existing.getClientResourceId(), updated.id(),
                 updated.version(), updated);
     }

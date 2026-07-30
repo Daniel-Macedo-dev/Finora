@@ -80,8 +80,10 @@ public class WishlistItemMutationHandler implements MutationHandler {
         VersionGuard.require(existing.getVersion(), command.baseVersion(),
                 wishlist.get(existing.getId()),
                 "Este item foi alterado em outro dispositivo depois da sua edição offline.");
-        WishlistItemDetailResponse updated = wishlist.update(
-                existing.getId(), (WishlistItemRequest) command.payload());
+        wishlist.update(existing.getId(), (WishlistItemRequest) command.payload());
+        // The optimistic version is assigned at flush; read it only afterwards.
+        command.flush().run();
+        WishlistItemDetailResponse updated = wishlist.get(existing.getId());
         return new AppliedMutation(existing.getClientResourceId(), updated.id(),
                 updated.version(), updated);
     }

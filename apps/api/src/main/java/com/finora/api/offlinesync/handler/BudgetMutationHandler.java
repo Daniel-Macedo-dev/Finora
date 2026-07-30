@@ -93,7 +93,10 @@ public class BudgetMutationHandler implements MutationHandler {
         VersionGuard.require(existing.getVersion(), command.baseVersion(),
                 budgets.get(existing.getId()),
                 "Este orçamento foi alterado em outro dispositivo depois da sua edição offline.");
-        BudgetResponse updated = budgets.update(existing.getId(), (BudgetRequest) command.payload());
+        budgets.update(existing.getId(), (BudgetRequest) command.payload());
+        // The optimistic version is assigned at flush; read it only afterwards.
+        command.flush().run();
+        BudgetResponse updated = budgets.get(existing.getId());
         return new AppliedMutation(existing.getClientResourceId(), updated.id(),
                 updated.version(), updated);
     }

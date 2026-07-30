@@ -75,7 +75,10 @@ public class GoalMutationHandler implements MutationHandler {
         Goal existing = require(command);
         VersionGuard.require(existing.getVersion(), command.baseVersion(), goals.get(existing.getId()),
                 "Esta meta foi alterada em outro dispositivo depois da sua edição offline.");
-        GoalResponse updated = goals.update(existing.getId(), (GoalRequest) command.payload());
+        goals.update(existing.getId(), (GoalRequest) command.payload());
+        // The optimistic version is assigned at flush; read it only afterwards.
+        command.flush().run();
+        GoalResponse updated = goals.get(existing.getId());
         return new AppliedMutation(existing.getClientResourceId(), updated.id(),
                 updated.version(), updated);
     }

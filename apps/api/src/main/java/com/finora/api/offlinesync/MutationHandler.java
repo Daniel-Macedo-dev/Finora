@@ -60,12 +60,18 @@ public interface MutationHandler {
      * @param userId      always from the authenticated session, never the request
      * @param baseVersion the version the offline edit saw; null for CREATE
      * @param payload     the canonical object this handler produced
+     * @param flush       forces pending changes to the database. An update must
+     *                    call this before reading the new optimistic version:
+     *                    Hibernate assigns it at flush time, so a version read
+     *                    beforehand is the old one — and a client that stored it
+     *                    would conflict with itself on its next edit.
      */
     record MutationCommand(Long userId,
                            SyncOperation operation,
                            ResourceTarget target,
                            Long baseVersion,
                            Object payload,
-                           ResourceResolver resolver) {
+                           ResourceResolver resolver,
+                           Runnable flush) {
     }
 }

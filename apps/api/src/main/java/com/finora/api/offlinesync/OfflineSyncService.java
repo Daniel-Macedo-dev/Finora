@@ -81,16 +81,27 @@ public class OfflineSyncService {
     }
 
     private MutationResult process(Long userId, MutationEnvelope envelope) {
+        MutationHandler handler;
+        Object canonical;
+        String requestHash;
+        // Shape and payload validation happens before anything is attempted, so
+        // a malformed mutation costs no transaction — and produces no hash to
+        // reconcile against later.
         try {
             requireValidTarget(envelope);
-            MutationHandler handler = handlers.get(envelope.resourceType());
+            handler = handlers.get(envelope.resourceType());
             if (handler == null) {
                 throw new SyncRejectedException("SYNC_RESOURCE_UNSUPPORTED",
                         "Este tipo de recurso não pode ser sincronizado offline.");
             }
-            Object canonical = handler.canonicalize(envelope.operation(), envelope.payload());
-            String requestHash = RequestFingerprint.of(envelope, canonical, mapper);
+            canonical = handler.canonicalize(envelope.operation(), envelope.payload());
+            requestHash = RequestFingerprint.of(envelope, canonical, mapper);
+        } catch (SyncRejectedException e) {
+            return MutationResult.rejected(envelope,
+                    new ErrorDetail(e.getCode(), e.getMessage(), e.getFieldErrors()));
+        }
 
+        try {
             Optional<MutationReceipt> stored = findReceipt(userId, envelope.clientMutationId());
             if (stored.isPresent()) {
                 return replayStored(envelope, stored.get(), requestHash);
@@ -101,13 +112,16 @@ public class OfflineSyncService {
             return MutationResult.applied(envelope, applied.clientResourceId(),
                     applied.resourceId(), applied.version(), mapper.valueToTree(applied.result()));
         } catch (SyncConflictException e) {
-            return MutationResult.conflict(envelope, new ConflictDetail(
-                    e.getConflictType(), envelope.baseVersion(), e.getServerVersion(),
-                    e.getServerSnapshot() == null ? null : mapper.valueToTree(e.getServerSnapshot()),
-                    e.getResolutionOptions(), e.getMessage()));
+            return orStoredResult(userId, envelope, requestHash,
+                    () -> MutationResult.conflict(envelope, new ConflictDetail(
+                            e.getConflictType(), envelope.baseVersion(), e.getServerVersion(),
+                            e.getServerSnapshot() == null
+                                    ? null : mapper.valueToTree(e.getServerSnapshot()),
+                            e.getResolutionOptions(), e.getMessage())));
         } catch (SyncRejectedException e) {
-            return MutationResult.rejected(envelope,
-                    new ErrorDetail(e.getCode(), e.getMessage(), e.getFieldErrors()));
+            return orStoredResult(userId, envelope, requestHash,
+                    () -> MutationResult.rejected(envelope,
+                            new ErrorDetail(e.getCode(), e.getMessage(), e.getFieldErrors())));
         } catch (DependencyMissingException e) {
             return MutationResult.dependencyMissing(envelope,
                     ErrorDetail.of(e.getCode(), e.getMessage()));
@@ -116,12 +130,31 @@ public class OfflineSyncService {
             // unique constraint: the other one won, so its receipt is now the
             // authority. Never log the payload — only safe identifiers.
             log.info("Offline sync receipt race for mutation {}", envelope.clientMutationId());
-            return findReceipt(userId, envelope.clientMutationId())
-                    .map(receipt -> storedResult(envelope, receipt))
-                    .orElseGet(() -> MutationResult.rejected(envelope, ErrorDetail.of(
+            return orStoredResult(userId, envelope, requestHash,
+                    () -> MutationResult.rejected(envelope, ErrorDetail.of(
                             "SYNC_CONFLICTING_WRITE",
                             "Esta operação conflitou com outra sincronização simultânea.")));
         }
+    }
+
+    /**
+     * Resolves a failure that may actually be this mutation's own twin winning
+     * the race.
+     *
+     * <p>Two tabs replaying the same queue reach the receipt check before either
+     * writes, so both proceed — and the loser fails on a unique index or an
+     * optimistic lock. That failure is not something to show the user: the side
+     * effect they asked for did happen. Re-reading the receipt after the fact
+     * tells the two cases apart, because a receipt now exists under this exact
+     * key with this exact fingerprint only if this very mutation was applied.
+     */
+    private MutationResult orStoredResult(Long userId, MutationEnvelope envelope,
+                                          String requestHash,
+                                          java.util.function.Supplier<MutationResult> failure) {
+        return findReceipt(userId, envelope.clientMutationId())
+                .filter(receipt -> receipt.getRequestHash().equals(requestHash))
+                .map(receipt -> storedResult(envelope, receipt))
+                .orElseGet(failure);
     }
 
     /**
