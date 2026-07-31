@@ -20,6 +20,7 @@ export default function OfflineSyncPage() {
   const [confirming, setConfirming] = useState<OutboxEntry | null>(null)
   const [applying, setApplying] = useState<OutboxEntry | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [password, setPassword] = useState('')
 
   const online = connection.state === 'ONLINE'
   const unlocked = vault.state === 'UNLOCKED_ONLINE' || vault.state === 'UNLOCKED_OFFLINE'
@@ -56,6 +57,41 @@ export default function OfflineSyncPage() {
             + 'Desbloqueie a cópia offline para vê-las e sincronizá-las.'
           }
         />
+        {/* The unlock screen only appears when the browser is offline, so
+            without this there is no way back into the queue once the
+            connection returns — the one moment it can actually be sent. */}
+        {vault.state === 'LOCKED' && (
+          <form
+            className="card sync-unlock"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void vault.unlock(password, online).catch(() => setPassword(''))
+            }}
+          >
+            <label htmlFor="sync-unlock-password">Senha offline</label>
+            <input
+              id="sync-unlock-password"
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-describedby={vault.error ? 'sync-unlock-error' : undefined}
+            />
+            {vault.error && (
+              <p id="sync-unlock-error" role="alert" className="field-error">
+                {vault.error}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={password.length === 0 || vault.state !== 'LOCKED'}
+            >
+              Desbloquear cópia offline
+            </button>
+          </form>
+        )}
       </>
     )
   }

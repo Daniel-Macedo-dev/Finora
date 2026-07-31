@@ -169,6 +169,13 @@
   }
 }
 
+.sync-unlock {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 26rem;
+  margin-top: var(--space-4);
+}
+
 /* Lives here rather than in a single feature's stylesheet: every screen whose
    figures come from the last server snapshot renders this warning, and a rule
    that only loaded with the transactions page left the rest unstyled. */
