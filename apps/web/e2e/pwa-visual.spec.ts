@@ -51,7 +51,7 @@ test('estados offline em todos os viewports e temas', async ({ page, context }) 
 
   await page.getByLabel('Senha offline').fill(PASSWORD)
   await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
-  await expect(page.getByText('Modo somente leitura')).toBeVisible()
+  await expect(page.getByText(/^Modo offline/)).toBeVisible()
   for (const theme of ['light', 'dark'] as const) {
     await page.evaluate((value) => { localStorage.setItem('finora.theme', value); document.documentElement.dataset.theme = value }, theme)
     for (const viewport of VIEWPORTS) {

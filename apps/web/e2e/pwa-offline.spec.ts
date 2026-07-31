@@ -83,16 +83,18 @@ test.describe.serial('PWA e acesso offline seguro', () => {
     await expect(page.getByText(knownValue)).toHaveCount(0)
   })
 
-  test('senha correta abre dados salvos em modo somente leitura', async () => {
+  test('senha correta abre os dados salvos', async () => {
     await page.getByLabel('Senha offline').fill(password)
     await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
-    await expect(page.getByText('Modo somente leitura')).toBeVisible()
+    await expect(page.getByText(/^Modo offline/)).toBeVisible()
     await expect(page.getByText(/Dados salvos em/)).toBeVisible()
   })
 
-  test('controles financeiros ficam indisponíveis offline', async () => {
+  test('controles não suportados ficam indisponíveis offline', async () => {
+    // The dashboard queues nothing, so every one of its controls stays out of
+    // reach — the routes that do queue are covered in offline-sync.spec.ts.
     const blocked = page.locator('.app-main button:not([data-offline-allowed="true"])').first()
-    if (await blocked.count()) await expect(blocked).toHaveCSS('pointer-events', 'none')
+    if (await blocked.count()) await expect(blocked).toBeDisabled()
   })
 
   test('rota não preparada explica como recuperar acesso', async () => {
@@ -104,7 +106,7 @@ test.describe.serial('PWA e acesso offline seguro', () => {
   test('reconexão revalida a sessão e logout remove o cofre', async () => {
     await context.setOffline(false)
     await page.goto('/dashboard')
-    await expect(page.getByText('Modo somente leitura')).toHaveCount(0, { timeout: 20_000 })
+    await expect(page.getByText(/^Modo offline/)).toHaveCount(0, { timeout: 20_000 })
     await page.getByRole('button', { name: 'Sair da conta' }).click()
     await expect(page).toHaveURL(/\/login/)
     const exists = await page.evaluate(async () => new Promise<boolean>((resolve) => {

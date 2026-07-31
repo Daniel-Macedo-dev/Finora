@@ -235,14 +235,14 @@ export default function AppShell() {
   ))
 
   return (
-    <div className={`app-shell ${offlineUnlocked ? 'offline-readonly' : ''}`}>
+    <div className={`app-shell ${offlineUnlocked ? 'offline-unlocked' : ''}`}>
       <a className="skip-link" href="#main-content">
         Pular para o conteúdo
       </a>
       {connection.state !== 'ONLINE' && (
         <div className="connection-banner" role="status" aria-live="polite">
           {connection.state === 'OFFLINE' ? <WifiOff size={18} aria-hidden="true" /> : <RefreshCw size={18} aria-hidden="true" />}
-          <span>{connection.state === 'OFFLINE' ? 'Sem conexão. O acesso offline é somente leitura.' : 'Reconectando ao Finora…'}</span>
+          <span>{connection.state === 'OFFLINE' ? 'Sem conexão. Algumas alterações podem ser feitas e ficam na fila até a conexão voltar.' : 'Reconectando ao Finora…'}</span>
           <button type="button" className="btn btn-secondary" onClick={connection.retry}>Tentar novamente</button>
         </div>
       )}
@@ -298,9 +298,13 @@ export default function AppShell() {
       <main id="main-content" className="app-main">
         {offlineUnlocked && (
           <div className="offline-context" role="status">
-            <strong>Modo somente leitura</strong>
+            <strong>{offlineWritableRoute ? 'Modo offline' : 'Modo offline (somente leitura)'}</strong>
             <span>Dados salvos em {vault.updatedAt ? new Date(vault.updatedAt).toLocaleString('pt-BR') : 'data desconhecida'}.</span>
-            <span>Os valores podem estar desatualizados.</span>
+            <span>
+              {offlineWritableRoute
+                ? 'As alterações desta tela ficam na fila até a conexão voltar.'
+                : 'Os valores podem estar desatualizados.'}
+            </span>
             <button data-offline-allowed="true" type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
           </div>
         )}
