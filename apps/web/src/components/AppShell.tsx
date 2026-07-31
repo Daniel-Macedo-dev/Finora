@@ -165,7 +165,13 @@ export default function AppShell() {
   const vault = useVault()
   useReplayTriggers()
   const offlineUnlocked = vault.state === 'UNLOCKED_OFFLINE'
-  const offlineRouteSupported = new Set(['/dashboard', '/transactions', '/credit-cards', '/budgets', '/commitments', '/forecast', '/goals', '/wishlist', '/settings', '/notifications', '/offline-sync']).has(location.pathname)
+  const offlineRouteSupported =
+    new Set(['/dashboard', '/transactions', '/credit-cards', '/budgets', '/commitments', '/forecast', '/goals', '/wishlist', '/settings', '/notifications', '/offline-sync']).has(location.pathname)
+    // A wishlist item's own page is where purchase options and price
+    // observations are added, so it has to be reachable offline for the
+    // dependency chain to exist at all. Its detail query is part of the bounded
+    // offline dataset for that reason; an exact-match list quietly excluded it.
+    || /^\/wishlist\/[^/]+$/.test(location.pathname)
   /** Routes whose domains can be queued while offline. */
   const offlineWritableRoute =
     location.pathname === '/transactions'

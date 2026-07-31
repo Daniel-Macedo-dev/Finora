@@ -229,6 +229,17 @@ queries, nomes acessíveis.
 npm run e2e   # requer a API em :8080 (docker compose up -d + mvnw spring-boot:run)
 ```
 
+A suíte roda contra o **preview de produção** em `:4173`, não contra o dev server
+em `:5173`. A API precisa aceitar essa origem, ou toda requisição não-GET do
+navegador volta `403 Invalid CORS request` e os cenários falham no cadastro:
+
+```bash
+FINORA_CORS_ALLOWED_ORIGINS=http://localhost:4173 ./mvnw.cmd spring-boot:run
+```
+
+O CI já faz isso (`.github/workflows/ci.yml`); localmente é fácil subir a API com
+o default de desenvolvimento e interpretar a falha como defeito do produto.
+
 Isolamento por identidade: cada cenário **registra um usuário único** (e-mail
 determinístico) via UI, então enxerga apenas os próprios dados — não há mais limpeza
 global destrutiva por API aberta (que seria um bypass de posse). Cenários: registrar
@@ -243,15 +254,19 @@ dados de A pela UI nem por ID direto na API, e sua análise de compra é inacess
 **ciclo de sessão** (expiração leva ao login e permite reentrar; troca de senha
 mantém a sessão atual e permite login com a nova); navegação e autenticação mobile
 (390px: registro, drawer, criar transação, menu de usuário, logout);
-**sincronização offline** (`offline-sync.spec.ts`, 24 jornadas: criar offline sem
+**sincronização offline** (`offline-sync.spec.ts`, 29 jornadas: criar offline sem
 nenhuma requisição sair do navegador, indicador do shell, aviso de totais
 desatualizados, cofre bloqueado sem replay, recarregar preservando a fila
 criptografada, sincronizar exatamente uma vez, resposta perdida sem duplicar,
-criar-e-excluir sem escrita no servidor, orçamento e item de desejo offline,
-aporte e cartões bloqueados, saída com pendências exigindo decisão, descarte
-confirmado removendo o cofre, conflito com comparação legível, aplicar-local com
-confirmação, falha permanente acionável, falha temporária reenviada com a mesma
-identidade, isolamento entre donos e a central a 390px);
+criar-e-excluir sem escrita no servidor, orçamento e meta offline, aporte e
+cartões bloqueados, saída com pendências exigindo decisão, descarte confirmado
+removendo o cofre, item de desejo criado offline visível como pendente, opção de
+compra nomeando um item que só existe na fila, observação de preço nomeando essa
+opção, a cadeia inteira sincronizando na ordem de dependência, conflito com
+comparação legível, aplicar-local com confirmação, manter-servidor sem enviar
+nada, falha permanente acionável, falha temporária reenviada com a mesma
+identidade, duas abas do mesmo dono sem duplicar o efeito, isolamento entre donos
+e a central a 390px);
 **recorrentes** (criar despesa e receita recorrentes; preview de ocorrências;
 executar manualmente com estorno exato e terminal; pular/reativar/reagendar
 mantendo a identidade; "Processar vencidos" idempotente — segunda execução não
@@ -297,6 +312,15 @@ Semeia dados demo determinísticos e captura os estados principais em
 recorrentes, formulário, histórico de ocorrências, ocorrência com falha,
 diálogo de reagendamento, previsão com saldo negativo e seção de caixa futuro
 do dashboard — desktop e mobile, claro e escuro.
+
+Os estados de sincronização offline ficam em um segundo teste do mesmo arquivo,
+separado porque exige cofre desbloqueado e navegador desconectado — condições
+sob as quais o restante da suíte não pode rodar. Ele captura, nos quatro
+viewports e nos dois temas: central vazia, linha pendente com descrição longa,
+exclusão pendente, item e opção criados offline, fila com dependências, cofre
+bloqueado com trabalho pendente, aviso de saída, confirmação de descarte, falha
+permanente com mensagem longa, falha temporária, conflito e a comparação
+servidor/local aberta.
 
 A entrega de notificações acrescenta migração PostgreSQL populada V11→V12,
 identidade estável de eventos, API/ownership/lifecycle, quatro testes reais de

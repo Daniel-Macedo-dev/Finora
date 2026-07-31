@@ -85,7 +85,7 @@ Interface em português do Brasil; código, banco e API em inglês.
 | Backend | Java 21 · Spring Boot 4.1 (Web MVC, Validation, Data JPA, Security, Session JDBC) · Flyway |
 | Banco | PostgreSQL 16 (Docker Compose) · sessões persistidas via Spring Session JDBC |
 | Frontend | React 19 · TypeScript · Vite · TanStack Query · React Router · Recharts |
-| PWA offline | Workbox · Web Crypto · IndexedDB (somente leitura) |
+| PWA offline | Workbox · Web Crypto · IndexedDB (leitura + fila de mutações criptografada) |
 | Testes | JUnit 5 + MockMvc + Testcontainers · Vitest + Testing Library · Playwright |
 | CI | GitHub Actions (backend, frontend e E2E) |
 

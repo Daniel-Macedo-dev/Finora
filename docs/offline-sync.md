@@ -92,7 +92,9 @@ unique (user_id, client_resource_id) where client_resource_id is not null
 Dois usuários podem gerar o mesmo UUID sem colidir, e um UUID de outro dono
 resolve para nada. `wishlist_price_snapshots` já tinha `client_request_id`
 owner-scoped desde V13; ele é reutilizado como identidade de cliente em vez de
-criar uma segunda coluna redundante.
+criar uma segunda coluna redundante. No cliente, o mesmo `clientRequestId` que o
+formulário de observação de preço já gerava vira o `clientResourceId` da entrada
+na fila — um segundo UUID teria de ser mantido em sincronia com ele para nada.
 
 `purchase_options` ganhou `user_id` desnormalizado, preenchido a partir do item e
 preso a ele por chave estrangeira composta. V8 tinha omitido a coluna porque todo
@@ -304,6 +306,25 @@ mais uma guarda em processo. Sem Web Locks, os recibos do servidor absorvem o qu
 duas abas conseguirem enviar. `BroadcastChannel` transporta apenas contagens e
 transições de estado — nunca payload financeiro, nunca id de dono.
 
+Ao receber esse aviso, a segunda aba **relê** o cofre em vez de iniciar o próprio
+replay: a fila é compartilhada, então a resposta certa é atualizar a visão, nunca
+reenviar as mesmas mutações. A releitura usa a chave que aquela aba já tem em
+memória — sem pedir a senha offline de novo — e falha fechada em silêncio: um
+registro que a chave não abre deixa a visão como está, em vez de derrubar a
+sessão desbloqueada.
+
+## Preparação de dados offline
+
+Além do conjunto já persistido na etapa anterior, a lista de consultas inclui as
+categorias do dono nas três chaves que os formulários usam (`all`, `EXPENSE` e
+`INCOME`). `useCategories(type)` guarda em cache por tipo, e os formulários que
+enfileiram pedem por tipo — cachear só a lista sem tipo deixava os selects vazios
+offline e, como categoria é obrigatória, nada podia ser enfileirado.
+
+Continuam fora: conteúdo de arquivos de extrato, coleções de itens de importação,
+páginas ilimitadas de transações, histórico ilimitado de faturas e notificações,
+cache de mutação, erros de API, valores de CSRF e cookies de sessão.
+
 ## Cofre V2
 
 `VAULT_SCHEMA_VERSION = 2`, `DATA_SCHEMA_VERSION = 2`. O payload passou a conter
@@ -351,6 +372,30 @@ dados.
 Rótulos: `Pendente`, `Sincronizando`, `Conflito`, `Falha`, `Exclusão pendente`,
 `Criado offline`. Estado **nunca** é comunicado só por cor.
 
+### Onde a projeção aparece
+
+| Tela | O que é projetado | O que **não** é recalculado |
+| --- | --- | --- |
+| Transações | linhas criadas, editadas e excluídas | totais do período |
+| Orçamentos | limite e existência do orçamento | consumo, percentual e status |
+| Metas | nome, alvo, valor atual, data, arquivamento, restante e percentual | sugestão de aporte mensal |
+| Lista de desejos | itens criados e editados, contagem de opções na fila | melhor custo, preço observado, mínimo histórico |
+| Item da lista de desejos | opções criadas, editadas e excluídas | análise de compra |
+| Histórico de preços | observações criadas offline | série, KPIs e gráfico |
+
+Orçamento e lista de desejos não recalculam suas figuras derivadas de propósito:
+elas dependem de registros que podem estar na própria fila, e uma barra saudável
+sobre uma categoria já estourada seria pior do que dizer que o número ainda não
+chegou. Metas são a exceção — restante e percentual saem dos dois valores que a
+pessoa acabou de digitar, e não de nenhum outro registro financeiro.
+
+Um item criado offline recebe um id local negativo e **tem página de detalhe**:
+é ali que opções de compra e observações de preço são cadastradas, e as duas
+precisam poder nomear um pai que ainda não tem id no servidor. Nessa página, a
+análise de compra, a captura de preço da opção e a execução da compra ficam
+desabilitadas com o motivo explicado, porque todas dependem de estado que só o
+servidor tem.
+
 ### Limitação deliberada dos totais derivados
 
 Dashboard, saldos, previsão, insights e totais entre domínios continuam baseados
@@ -372,6 +417,18 @@ descartar. Nunca exibe payload cru, JSON interno ou id de dono.
 
 Um indicador compacto aparece no shell **apenas quando há algo a dizer**, com
 contagem limitada a `99+` e o motivo no nome acessível.
+
+### Quais telas aceitam ação offline
+
+O shell decide por rota. Em `/transactions`, `/budgets`, `/goals`, `/offline-sync`
+e `/wishlist` (inclusive a página de um item) tudo fica habilitado **exceto** os
+controles marcados como online-only, que ficam desabilitados com o motivo no
+`title`. Nas demais rotas preparadas, a página inteira continua somente leitura,
+para que um fluxo que nunca foi desenhado para replay não comece por acidente.
+
+Essa decisão existe em um lugar só. A recusa do cliente de API a qualquer
+requisição insegura continua sendo a fronteira real; o shell apenas explica antes
+que a pessoa tente.
 
 ## Saída, bloqueio e remoção do cofre
 
@@ -413,6 +470,19 @@ Lotes limitados, ordenação estável, compactação local, invalidação seleti
 query, linhas colapsadas, formulários de conflito renderizados sob demanda,
 índices owner-scoped, uma transação por mutação, retentativa limitada e mensagens
 de broadcast mínimas.
+
+Custo real da etapa no bundle de produção, medido com `vite build` antes
+(`e3488a4`) e depois:
+
+| Artefato | Antes | Depois | Diferença |
+| --- | --- | --- | --- |
+| `index.js` | 267,56 kB (gzip 85,72 kB) | 285,80 kB (gzip 91,14 kB) | +18,24 kB (+5,42 kB gzip) |
+| `index.css` | 16,26 kB (gzip 4,46 kB) | 16,83 kB (gzip 4,55 kB) | +0,57 kB (+0,09 kB gzip) |
+| Precache | 80 entradas · 1010,02 KiB | 80 entradas · 1057,82 KiB | +47,80 KiB |
+
+A central de sincronização é carregada sob demanda como rota; o que entrou no
+chunk principal é a fila, o motor de replay e a projeção, que qualquer tela com
+pendências precisa.
 
 ## Limitações conhecidas
 
