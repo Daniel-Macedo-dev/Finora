@@ -168,3 +168,12 @@
     animation: none;
   }
 }
+
+/* Lives here rather than in a single feature's stylesheet: every screen whose
+   figures come from the last server snapshot renders this warning, and a rule
+   that only loaded with the transactions page left the rest unstyled. */
+.stale-totals-warning {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}

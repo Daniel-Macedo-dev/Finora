@@ -7,6 +7,9 @@ import Dialog from '../../components/Dialog'
 import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
 import { formatDate } from '../../lib/format'
 import WishlistItemForm from './WishlistItemForm'
+import { useOptionalVault } from '../../offline/VaultProvider'
+import { localId, projectList } from '../../offline/outbox/projection'
+import PendingBadge from '../offline-sync/PendingBadge'
 import { useCreateWishlistItem, useWishlist } from './api'
 import {
   PRIORITY_LABELS,
@@ -36,10 +39,64 @@ export default function WishlistPage() {
   const [formOpen, setFormOpen] = useState(false)
   const wishlist = useWishlist()
   const createMutation = useCreateWishlistItem()
+  const vault = useOptionalVault()
 
   function handleCreate(request: WishlistItemRequest) {
     createMutation.mutate(request, { onSuccess: () => setFormOpen(false) })
   }
+
+  /**
+   * The server's list with the queue laid over it.
+   *
+   * Counts and best-cost figures stay null on a queued item: they are computed
+   * from options and observations the server has not seen yet, and a confident
+   * "R$ 0,00" would be worse than an honest blank.
+   */
+  const rows = projectList(
+    wishlist.data ?? [],
+    vault?.entries ?? [],
+    'WISHLIST_ITEM',
+    (base, entry) => {
+      if (entry.operation === 'DELETE') return base
+      const payload = entry.payload as Partial<WishlistItemRequest>
+      if (base) {
+        return {
+          ...base,
+          name: String(payload.name ?? base.name),
+          notes: payload.notes ?? base.notes,
+          referencePrice: payload.referencePrice ?? base.referencePrice,
+          targetPrice: payload.targetPrice ?? base.targetPrice,
+          priority: payload.priority ?? base.priority,
+          desiredDate: payload.desiredDate ?? base.desiredDate,
+          status: payload.status ?? base.status,
+        }
+      }
+      return {
+        id: localId(entry.clientResourceId),
+        name: String(payload.name ?? entry.label),
+        notes: payload.notes ?? null,
+        category: null,
+        referencePrice: payload.referencePrice ?? null,
+        targetPrice: payload.targetPrice ?? null,
+        priority: payload.priority ?? 'MEDIUM',
+        desiredDate: payload.desiredDate ?? null,
+        status: payload.status ?? 'PLANNING',
+        optionCount: (vault?.entries ?? []).filter(
+          (candidate) =>
+            candidate.resourceType === 'PURCHASE_OPTION'
+            && candidate.operation === 'CREATE'
+            && candidate.dependencies.includes(entry.clientResourceId),
+        ).length,
+        bestNominalCost: null,
+        priceObservationCount: 0,
+        latestObservedPrice: null,
+        latestObservedOn: null,
+        historicalMinimum: null,
+        targetReached: null,
+        version: 0,
+      }
+    },
+  )
 
   return (
     <>
@@ -65,7 +122,7 @@ export default function WishlistPage() {
         <LoadingCards count={3} height={96} />
       ) : wishlist.isError ? (
         <ErrorState error={wishlist.error} onRetry={() => wishlist.refetch()} />
-      ) : wishlist.data && wishlist.data.length === 0 ? (
+      ) : wishlist.data && rows.length === 0 ? (
         <EmptyState
           title="Sua lista de desejos está vazia"
           description="Adicione um item que você pretende comprar, cadastre as opções de pagamento e deixe o Finora analisar qual vale mais a pena."
@@ -78,7 +135,7 @@ export default function WishlistPage() {
         />
       ) : wishlist.data ? (
         <ul className="wishlist-grid">
-          {wishlist.data.map((item) => (
+          {rows.map(({ item, pending }) => (
             <li key={item.id} className="card wishlist-card">
               <div className="wishlist-card-header">
                 <Heart size={16} aria-hidden="true" className="wishlist-heart" />
@@ -87,6 +144,7 @@ export default function WishlistPage() {
                 </Link>
               </div>
               <div className="wishlist-badges">
+                {pending && <PendingBadge state={pending} />}
                 <span className={`badge ${STATUS_BADGES[item.status]}`}>
                   {STATUS_LABELS[item.status]}
                 </span>

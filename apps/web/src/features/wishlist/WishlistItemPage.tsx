@@ -12,7 +12,13 @@ import PurchaseOptionForm from './PurchaseOptionForm'
 import ExecutePurchaseForm from './ExecutePurchaseDialog'
 import AnalysisPanel from './AnalysisPanel'
 import PriceHistorySection from './price-history/PriceHistorySection'
+import LocalPriceHistory from './price-history/LocalPriceHistory'
 import CaptureOptionPriceDialog from './price-history/CaptureOptionPriceDialog'
+import { useOptionalVault } from '../../offline/VaultProvider'
+import { UNSUPPORTED_OFFLINE_MESSAGE } from '../../offline/outbox/useOutbox'
+import PendingBadge from '../offline-sync/PendingBadge'
+import { localId } from '../../offline/outbox/projection'
+import { findLocalItemEntry, localItemDetail, projectOptions } from './offlineDetail'
 import {
   useAddOption,
   useDeleteOption,
@@ -37,13 +43,24 @@ export default function WishlistItemPage() {
   const navigate = useNavigate()
   const itemId = Number(params.id)
 
-  const item = useWishlistItem(itemId)
+  const vault = useOptionalVault()
+  const entries = vault?.entries ?? []
+  /**
+   * An item created offline has no server id, so the list gives it a negative
+   * one. That id has to lead somewhere: this page is where purchase options and
+   * price observations are added, and both are supposed to be able to name a
+   * parent that only exists in the queue.
+   */
+  const localEntry = findLocalItemEntry(entries, itemId)
+  const isLocalItem = localEntry !== null
+
+  const item = useWishlistItem(itemId, !isLocalItem)
   const hasOptions = (item.data?.options.length ?? 0) > 0
-  const analysis = usePurchaseAnalysis(itemId, hasOptions)
+  const analysis = usePurchaseAnalysis(itemId, hasOptions && !isLocalItem)
 
   const updateItem = useUpdateWishlistItem()
   const deleteItem = useDeleteWishlistItem()
-  const addOption = useAddOption(itemId)
+  const addOption = useAddOption(itemId, localEntry?.clientResourceId)
   const updateOption = useUpdateOption(itemId)
   const deleteOption = useDeleteOption(itemId)
 
@@ -70,15 +87,45 @@ export default function WishlistItemPage() {
     )
   }
 
-  if (item.isPending) {
+  if (!isLocalItem && item.isPending) {
     return <LoadingCards count={3} height={120} />
   }
 
-  if (item.isError) {
+  if (!isLocalItem && item.isError) {
     return <ErrorState error={item.error} onRetry={() => item.refetch()} />
   }
 
-  const data = item.data
+  const data = localEntry ? localItemDetail(entries, localEntry) : item.data
+  if (!data) {
+    return (
+      <EmptyState
+        title="Item não encontrado"
+        action={
+          <Link className="btn btn-secondary" to="/wishlist">
+            Voltar para a lista
+          </Link>
+        }
+      />
+    )
+  }
+
+  // Server-backed rows carry whatever the queue holds for them; a local item's
+  // options come straight out of the queue and are all pending by definition.
+  const optionRows = localEntry
+    ? data.options.map((option) => ({ item: option, pending: 'CREATED' as const }))
+    : projectOptions(data.options, entries, itemId)
+
+  /** Negative option id → the identity the server will resolve it by. */
+  const optionClientResourceIds: Record<number, string> = {}
+  for (const entry of entries) {
+    if (entry.resourceType === 'PURCHASE_OPTION' && entry.operation === 'CREATE') {
+      optionClientResourceIds[localId(entry.clientResourceId)] = entry.clientResourceId
+    }
+  }
+  const offlineParents = {
+    itemClientResourceId: localEntry?.clientResourceId,
+    optionClientResourceIds,
+  }
 
   function handleUpdate(request: WishlistItemRequest) {
     updateItem.mutate(
@@ -142,6 +189,14 @@ export default function WishlistItemPage() {
       />
 
       <div className="wishlist-detail-facts card">
+        {isLocalItem && (
+          <div>
+            <span className="stat-footnote">Sincronização</span>
+            <p>
+              <PendingBadge state="CREATED" />
+            </p>
+          </div>
+        )}
         <div>
           <span className="stat-footnote">Status</span>
           <p>{STATUS_LABELS[data.status]}</p>
@@ -194,17 +249,25 @@ export default function WishlistItemPage() {
           </button>
         </div>
 
-        {data.options.length === 0 ? (
+        {optionRows.length === 0 ? (
           <EmptyState
             title="Nenhuma opção de compra cadastrada"
             description="Cadastre as ofertas que você encontrou (à vista e parcelado) para o Finora comparar custos, valor presente e impacto no seu caixa."
           />
         ) : (
           <ul className="option-list">
-            {data.options.map((option) => (
+            {optionRows.map(({ item: option, pending }) => (
               <li key={option.id} className="card option-row">
                 <div className="option-info">
-                  <span className="option-merchant">{option.merchant}</span>
+                  <span className="option-merchant">
+                    {option.merchant}
+                    {pending && (
+                      <>
+                        {' '}
+                        <PendingBadge state={pending} />
+                      </>
+                    )}
+                  </span>
                   <span className="stat-footnote">
                     {option.kind === 'CASH'
                       ? `À vista · ${formatBRL(option.basePrice)}`
@@ -226,6 +289,10 @@ export default function WishlistItemPage() {
                     type="button"
                     className="btn btn-secondary"
                     data-offline-blocked="true"
+                    // An option that only exists in the queue has no server
+                    // values to capture, and no id to capture them against.
+                    disabled={option.id < 0}
+                    title={option.id < 0 ? UNSUPPORTED_OFFLINE_MESSAGE : undefined}
                     onClick={() => setCapturingOption(option)}
                   >
                     <Tag size={15} aria-hidden="true" />
@@ -238,6 +305,10 @@ export default function WishlistItemPage() {
                       type="button"
                       className="btn btn-secondary"
                       data-offline-blocked="true"
+                      disabled={option.id < 0 || isLocalItem}
+                      title={
+                        option.id < 0 || isLocalItem ? UNSUPPORTED_OFFLINE_MESSAGE : undefined
+                      }
                       onClick={() => {
                         executePurchase.reset()
                         setExecutingOption(option)
@@ -275,13 +346,32 @@ export default function WishlistItemPage() {
         )}
       </section>
 
-      <PriceHistorySection itemId={itemId} options={data.options} />
+      {localEntry ? (
+        <LocalPriceHistory
+          itemId={itemId}
+          options={data.options}
+          offline={offlineParents}
+          entries={entries}
+          itemClientResourceId={localEntry.clientResourceId}
+        />
+      ) : (
+        <PriceHistorySection
+          itemId={itemId}
+          options={optionRows.map((row) => row.item)}
+          offline={offlineParents}
+        />
+      )}
 
       <section className="wishlist-detail-section" aria-label="Análise de compra">
         <div className="wishlist-detail-section-header">
           <h2>Análise de compra</h2>
         </div>
-        {!hasOptions ? (
+        {isLocalItem ? (
+          <p className="panel-empty card" style={{ padding: 'var(--space-4)' }}>
+            A análise é calculada pelo servidor e ficará disponível assim que este item for
+            sincronizado.
+          </p>
+        ) : !hasOptions ? (
           <p className="panel-empty card" style={{ padding: 'var(--space-4)' }}>
             A análise aparece assim que houver pelo menos uma opção de compra cadastrada.
           </p>

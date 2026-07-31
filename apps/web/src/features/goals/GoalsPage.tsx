@@ -8,6 +8,10 @@ import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
 import { formatBRL, formatDate, formatPercent, parseMoneyInput } from '../../lib/format'
+import { useOptionalVault } from '../../offline/VaultProvider'
+import { localId, projectList } from '../../offline/outbox/projection'
+import { UNSUPPORTED_OFFLINE_MESSAGE } from '../../offline/outbox/useOutbox'
+import PendingBadge from '../offline-sync/PendingBadge'
 import { useContributeToGoal, useCreateGoal, useDeleteGoal, useGoals, useUpdateGoal } from './api'
 import type { Goal, GoalRequest } from './types'
 import './goals.css'
@@ -126,6 +130,43 @@ export default function GoalsPage() {
 
   const busy = createMutation.isPending || updateMutation.isPending
   const submitError = editing ? updateMutation.error : createMutation.error
+  const vault = useOptionalVault()
+
+  /**
+   * The server's goals with the queue laid over them.
+   *
+   * Remaining and percentage are recomputed here, which is safe because both
+   * come from the two numbers the user just typed into the form — not from any
+   * other financial record. The suggested monthly contribution is dropped
+   * instead: that one depends on server-side date rules, and inventing it
+   * locally would put a number on screen the server never agreed to.
+   */
+  const rows = projectList(
+    goals.data ?? [],
+    vault?.entries ?? [],
+    'GOAL',
+    (base, entry) => {
+      if (entry.operation === 'DELETE') return base
+      const payload = entry.payload as Partial<GoalRequest>
+      const targetAmount = Number(payload.targetAmount ?? base?.targetAmount ?? 0)
+      const currentAmount = Number(payload.currentAmount ?? base?.currentAmount ?? 0)
+      const remainingAmount = Math.max(targetAmount - currentAmount, 0)
+      const percentAchieved = targetAmount > 0 ? (currentAmount / targetAmount) * 100 : 0
+      const archived = payload.archived ?? base?.status === 'ARCHIVED'
+      return {
+        id: base?.id ?? localId(entry.clientResourceId),
+        name: String(payload.name ?? base?.name ?? entry.label),
+        targetAmount,
+        currentAmount,
+        remainingAmount,
+        percentAchieved,
+        targetDate: payload.targetDate ?? base?.targetDate ?? null,
+        status: archived ? ('ARCHIVED' as const) : ('IN_PROGRESS' as const),
+        suggestedMonthlyContribution: null,
+        version: base?.version ?? 0,
+      }
+    },
+  )
 
   return (
     <>
@@ -144,7 +185,7 @@ export default function GoalsPage() {
         <LoadingCards count={3} height={120} />
       ) : goals.isError ? (
         <ErrorState error={goals.error} onRetry={() => goals.refetch()} />
-      ) : goals.data && goals.data.length === 0 ? (
+      ) : goals.data && rows.length === 0 ? (
         <EmptyState
           title="Nenhuma meta criada"
           description="Crie metas como reserva de emergência ou uma viagem e registre aportes ao longo do tempo."
@@ -157,16 +198,17 @@ export default function GoalsPage() {
         />
       ) : goals.data ? (
         <ul className="goal-grid">
-          {goals.data.map((goal) => (
+          {rows.map(({ item: goal, pending }) => (
             <li key={goal.id} className={`card goal-card ${goal.status === 'ARCHIVED' ? 'goal-archived' : ''}`}>
               <div className="goal-header">
                 <h2 className="goal-name">{goal.name}</h2>
-                {goal.status === 'COMPLETED' && (
+                {pending && <PendingBadge state={pending} />}
+                {!pending && goal.status === 'COMPLETED' && (
                   <span className="badge badge-positive">
                     <CheckCircle2 size={13} aria-hidden="true" /> Concluída
                   </span>
                 )}
-                {goal.status === 'ARCHIVED' && (
+                {!pending && goal.status === 'ARCHIVED' && (
                   <span className="badge badge-neutral">Arquivada</span>
                 )}
               </div>
@@ -200,6 +242,11 @@ export default function GoalsPage() {
                   type="button"
                   className="btn btn-secondary"
                   data-offline-blocked="true"
+                  // A goal that only exists in the queue has no server id to
+                  // contribute against, so the control stays out of reach until
+                  // the creation has actually been applied.
+                  disabled={goal.id < 0}
+                  title={goal.id < 0 ? UNSUPPORTED_OFFLINE_MESSAGE : undefined}
                   onClick={() => openContribute(goal)}
                 >
                   <PiggyBank size={15} aria-hidden="true" />

@@ -76,11 +76,73 @@ function invalidatePriceHistory(client: ReturnType<typeof useQueryClient>, itemI
   if (analysis) client.invalidateQueries({ queryKey: ['wishlist', itemId, 'analysis'] })
 }
 
-export function useCreatePriceSnapshot(itemId: number) {
+function snapshotPayload(
+  request: PriceSnapshotUpdateRequest,
+  item: { serverId?: number; clientResourceId?: string },
+  purchaseOption: { serverId?: number; clientResourceId?: string } | null,
+): Record<string, unknown> {
+  return {
+    item,
+    ...(purchaseOption ? { purchaseOption } : {}),
+    merchant: request.merchant,
+    paymentKind: request.paymentKind,
+    basePrice: request.basePrice,
+    ...(request.shipping != null ? { shipping: request.shipping } : {}),
+    ...(request.fees != null ? { fees: request.fees } : {}),
+    ...(request.installmentCount != null ? { installmentCount: request.installmentCount } : {}),
+    ...(request.installmentAmount != null
+      ? { installmentAmount: request.installmentAmount }
+      : {}),
+    observedOn: request.observedOn,
+    ...(request.offerUrl ? { offerUrl: request.offerUrl } : {}),
+    ...(request.notes ? { notes: request.notes } : {}),
+  }
+}
+
+/**
+ * Offline references to a parent that may not exist on the server yet.
+ *
+ * Both are client resource ids, set only when the item or the option was itself
+ * created offline. The queue resolves them to server ids as the parents apply.
+ */
+export interface OfflineSnapshotParents {
+  itemClientResourceId?: string
+  optionClientResourceId?: string
+}
+
+export function useCreatePriceSnapshot(itemId: number, parents: OfflineSnapshotParents = {}) {
   const client = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: (request: PriceSnapshotRequest) =>
-      api.post<PriceSnapshot>(`/wishlist/${itemId}/price-snapshots`, request),
+    mutationFn: async (request: PriceSnapshotRequest): Promise<PriceSnapshot | QueuedMutation> => {
+      if (outbox.enabled) {
+        const item = parents.itemClientResourceId
+          ? { clientResourceId: parents.itemClientResourceId }
+          : { serverId: itemId }
+        const purchaseOption = parents.optionClientResourceId
+          ? { clientResourceId: parents.optionClientResourceId }
+          : request.purchaseOptionId != null
+            ? { serverId: request.purchaseOptionId }
+            : null
+        return outbox.enqueue({
+          resourceType: 'PRICE_SNAPSHOT',
+          operation: 'CREATE',
+          // The snapshot endpoint already treats clientRequestId as an
+          // owner-scoped idempotency key, so it doubles as this resource's
+          // stable client identity rather than adding a second UUID that would
+          // have to be kept in step with it.
+          clientResourceId: request.clientRequestId,
+          baseVersion: null,
+          payload: snapshotPayload(request, item, purchaseOption),
+          dependencies: [
+            parents.itemClientResourceId,
+            parents.optionClientResourceId,
+          ].filter((value): value is string => value != null),
+          label: `${request.merchant} · ${request.observedOn}`,
+        })
+      }
+      return api.post<PriceSnapshot>(`/wishlist/${itemId}/price-snapshots`, request)
+    },
     onSuccess: (_data, request) => invalidatePriceHistory(client, itemId, request.updateLinkedOption),
   })
 }
@@ -96,25 +158,67 @@ export function useCaptureOptionPrice(itemId: number, optionId: number) {
 
 export function useUpdatePriceSnapshot(itemId: number) {
   const client = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: ({ id, request }: { id: number; request: PriceSnapshotUpdateRequest }) =>
-      api.put<PriceSnapshot>(`/wishlist/${itemId}/price-snapshots/${id}`, request),
+    mutationFn: async ({
+      id,
+      request,
+      version,
+    }: {
+      id: number
+      request: PriceSnapshotUpdateRequest
+      version?: number
+    }): Promise<PriceSnapshot | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'PRICE_SNAPSHOT',
+          operation: 'UPDATE',
+          clientResourceId: String(id),
+          serverId: id,
+          baseVersion: version ?? 0,
+          payload: snapshotPayload(request, { serverId: itemId }, null),
+          label: `${request.merchant} · ${request.observedOn}`,
+        })
+      }
+      return api.put<PriceSnapshot>(`/wishlist/${itemId}/price-snapshots/${id}`, request)
+    },
     onSuccess: () => invalidatePriceHistory(client, itemId, false),
   })
 }
 
 export function useDeletePriceSnapshot(itemId: number) {
   const client = useQueryClient()
+  const outbox = useOfflineOutbox()
   return useMutation({
-    mutationFn: (id: number) => api.delete(`/wishlist/${itemId}/price-snapshots/${id}`),
+    mutationFn: async (
+      snapshot: { id: number; merchant: string; observedOn: string; version?: number },
+    ): Promise<void | QueuedMutation> => {
+      if (outbox.enabled) {
+        return outbox.enqueue({
+          resourceType: 'PRICE_SNAPSHOT',
+          operation: 'DELETE',
+          clientResourceId: String(snapshot.id),
+          serverId: snapshot.id,
+          baseVersion: snapshot.version ?? 0,
+          payload: {},
+          label: `${snapshot.merchant} · ${snapshot.observedOn}`,
+        })
+      }
+      return api.delete(`/wishlist/${itemId}/price-snapshots/${snapshot.id}`)
+    },
     onSuccess: () => invalidatePriceHistory(client, itemId, false),
   })
 }
 
-export function useWishlistItem(id: number) {
+/**
+ * @param enabled false for an item that exists only in the offline queue: it
+ *   has no server id, so fetching it would ask the API for a negative one
+ */
+export function useWishlistItem(id: number, enabled = true) {
   return useQuery({
     queryKey: ['wishlist', id],
     queryFn: () => api.get<WishlistItemDetail>(`/wishlist/${id}`),
+    enabled,
   })
 }
 

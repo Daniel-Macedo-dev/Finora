@@ -57,14 +57,21 @@ public final class PriceHistoryDtos {
             BigDecimal basePrice, BigDecimal shipping, BigDecimal fees,
             BigDecimal nominalCost, Integer installmentCount,
             BigDecimal installmentAmount, LocalDate observedOn,
-            String offerUrl, String notes) {
+            String offerUrl, String notes,
+            /**
+             * Optimistic version. Snapshots have carried one since V13; it is
+             * exposed here so an offline edit can send the version the user
+             * actually saw instead of guessing at zero.
+             */
+            long version) {
         static SnapshotResponse from(PriceSnapshot snapshot) {
             return new SnapshotResponse(snapshot.getId(), snapshot.getPurchaseOptionId(),
                     snapshot.getPurchaseOptionId() != null, snapshot.getSeriesKey(),
                     snapshot.getMerchant(), snapshot.getKind(), snapshot.getBasePrice(),
                     snapshot.getShipping(), snapshot.getFees(), snapshot.getNominalCost(),
                     snapshot.getInstallmentCount(), snapshot.getInstallmentAmount(),
-                    snapshot.getObservedOn(), snapshot.getOfferUrl(), snapshot.getNotes());
+                    snapshot.getObservedOn(), snapshot.getOfferUrl(), snapshot.getNotes(),
+                    snapshot.getVersion());
         }
     }
 

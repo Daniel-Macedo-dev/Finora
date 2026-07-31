@@ -7,15 +7,28 @@ import { EmptyState, ErrorState, LoadingCards } from '../../../components/states
 import { formatBRL, formatDate } from '../../../lib/format'
 import { useCreatePriceSnapshot, useDeletePriceSnapshot, usePriceHistory,
   usePriceHistoryChart, usePriceHistorySummary, useUpdatePriceSnapshot } from '../api'
+import { useOfflineOutbox } from '../../../offline/outbox/useOutbox'
 import type { PriceSnapshot, PurchaseOption, PurchaseOptionKind } from '../types'
 import { createRequestId } from './requestId'
 import './priceHistory.css'
 
 const PriceHistoryChart = lazy(() => import('./PriceHistoryChart'))
 
-interface Props { itemId: number; options: PurchaseOption[] }
+/**
+ * Client identities for parents that may not exist on the server yet.
+ *
+ * `itemClientResourceId` is set when the item itself was created offline;
+ * `optionClientResourceIds` maps the negative ids the queue gives locally
+ * created options back to the identity the server will resolve them by.
+ */
+export interface OfflineParents {
+  itemClientResourceId?: string
+  optionClientResourceIds?: Record<number, string>
+}
 
-export default function PriceHistorySection({ itemId, options }: Props) {
+interface Props { itemId: number; options: PurchaseOption[]; offline?: OfflineParents }
+
+export default function PriceHistorySection({ itemId, options, offline }: Props) {
   const [page, setPage] = useState(0)
   const [merchant, setMerchant] = useState('')
   const [from, setFrom] = useState('')
@@ -79,9 +92,9 @@ export default function PriceHistorySection({ itemId, options }: Props) {
         <span>Página {page + 1} de {history.data.totalPages}</span><button className="btn btn-secondary" disabled={page + 1 >= history.data.totalPages} onClick={() => setPage(page + 1)}>Próxima</button></nav>
     </>}
 
-    <SnapshotDialog key={`${editing?.id ?? 'new'}-${formOpen}`} itemId={itemId} options={options} open={formOpen || editing !== null} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
+    <SnapshotDialog key={`${editing?.id ?? 'new'}-${formOpen}`} itemId={itemId} options={options} offline={offline} open={formOpen || editing !== null} initial={editing} onClose={() => { setFormOpen(false); setEditing(null) }} />
     <ConfirmDialog open={deleting !== null} title="Excluir observação" message={`Excluir a observação de ${deleting?.merchant ?? ''} em ${deleting ? formatDate(deleting.observedOn) : ''}? A opção atual não será alterada.`}
-      confirmLabel="Excluir observação" danger busy={remove.isPending} onCancel={() => setDeleting(null)} onConfirm={() => deleting && remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })} />
+      confirmLabel="Excluir observação" danger busy={remove.isPending} onCancel={() => setDeleting(null)} onConfirm={() => deleting && remove.mutate(deleting, { onSuccess: () => setDeleting(null) })} />
   </section>
 }
 
@@ -97,11 +110,18 @@ export function PriceSummary({ data }: { data: import('../types').PriceHistorySu
     {data.targetReached !== null && <p className={`price-target ${data.targetReached ? 'reached' : ''}`}>{data.targetReached ? 'Preço alvo atingido' : `Preço alvo ainda não atingido${data.distanceToTarget !== null ? ` · faltam ${formatBRL(data.distanceToTarget)}` : ''}`}{data.latestObservedBestCost === null ? ' · com base na melhor opção atual' : ''}</p>}</>
 }
 
-function SnapshotDialog({ itemId, options, open, initial, onClose }: { itemId: number; options: PurchaseOption[]; open: boolean; initial: PriceSnapshot | null; onClose: () => void }) {
-  const create = useCreatePriceSnapshot(itemId); const update = useUpdatePriceSnapshot(itemId)
+export function SnapshotDialog({ itemId, options, offline, open, initial, onClose }: { itemId: number; options: PurchaseOption[]; offline?: OfflineParents; open: boolean; initial: PriceSnapshot | null; onClose: () => void }) {
+  const outbox = useOfflineOutbox()
   const requestId = useRef<string | null>(null)
   const linked = initial?.purchaseOptionId ?? null
   const [optionId, setOptionId] = useState<string>(linked?.toString() ?? '')
+  const create = useCreatePriceSnapshot(itemId, {
+    itemClientResourceId: offline?.itemClientResourceId,
+    optionClientResourceId: optionId
+      ? offline?.optionClientResourceIds?.[Number(optionId)]
+      : undefined,
+  })
+  const update = useUpdatePriceSnapshot(itemId)
   const selected = options.find((o) => o.id === Number(optionId))
   const [merchant, setMerchant] = useState(initial?.merchant ?? selected?.merchant ?? '')
   const [kind, setKind] = useState<PurchaseOptionKind>(initial?.paymentKind ?? selected?.kind ?? 'CASH')
@@ -116,13 +136,16 @@ function SnapshotDialog({ itemId, options, open, initial, onClose }: { itemId: n
   const [updateOption, setUpdateOption] = useState(false)
   const busy = create.isPending || update.isPending
   function choose(value: string) { setOptionId(value); const option = options.find((o) => o.id === Number(value)); if (option) { setMerchant(option.merchant); setKind(option.kind); setBasePrice(String(option.basePrice)); setShipping(String(option.shipping)); setFees(String(option.fees)); setCount(String(option.installmentCount ?? '')); setAmount(String(option.installmentAmount ?? '')) } }
-  return <Dialog open={open} title={initial ? 'Editar observação' : 'Registrar preço'} onClose={onClose} wide><form onSubmit={(e) => { e.preventDefault(); const common = { purchaseOptionId: optionId ? Number(optionId) : null, merchant, paymentKind: kind, basePrice: Number(basePrice), shipping: Number(shipping || 0), fees: Number(fees || 0), installmentCount: kind === 'INSTALLMENT' ? Number(count) : null, installmentAmount: kind === 'INSTALLMENT' ? Number(amount) : null, observedOn, offerUrl: offerUrl || null, notes: notes || null }; if (initial) update.mutate({ id: initial.id, request: common }, { onSuccess: onClose }); else { requestId.current ??= createRequestId(); create.mutate({ ...common, clientRequestId: requestId.current, updateLinkedOption: updateOption }, { onSuccess: onClose }) } }}>
+  return <Dialog open={open} title={initial ? 'Editar observação' : 'Registrar preço'} onClose={onClose} wide><form onSubmit={(e) => { e.preventDefault(); const common = { purchaseOptionId: optionId && Number(optionId) > 0 ? Number(optionId) : null, merchant, paymentKind: kind, basePrice: Number(basePrice), shipping: Number(shipping || 0), fees: Number(fees || 0), installmentCount: kind === 'INSTALLMENT' ? Number(count) : null, installmentAmount: kind === 'INSTALLMENT' ? Number(amount) : null, observedOn, offerUrl: offerUrl || null, notes: notes || null }; if (initial) update.mutate({ id: initial.id, request: common, version: initial.version }, { onSuccess: onClose }); else { requestId.current ??= createRequestId(); create.mutate({ ...common, clientRequestId: requestId.current, updateLinkedOption: updateOption }, { onSuccess: onClose }) } }}>
     <label className="form-field">Associar a uma opção atual<select value={optionId} onChange={(e) => choose(e.target.value)}><option value="">Sem associação</option>{options.map((o) => <option key={o.id} value={o.id}>{o.merchant} · {formatBRL(o.nominalCost)}</option>)}</select></label>
     <div className="price-form-grid"><label className="form-field">Loja<input required maxLength={150} value={merchant} onChange={(e) => setMerchant(e.target.value)} /></label><label className="form-field">Pagamento<select value={kind} onChange={(e) => setKind(e.target.value as PurchaseOptionKind)}><option value="CASH">À vista</option><option value="INSTALLMENT">Parcelado</option></select></label>
       <label className="form-field">Preço<input required inputMode="decimal" type="number" min="0.01" step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} /></label><label className="form-field">Frete<input inputMode="decimal" type="number" min="0" step="0.01" value={shipping} onChange={(e) => setShipping(e.target.value)} /></label><label className="form-field">Taxas<input inputMode="decimal" type="number" min="0" step="0.01" value={fees} onChange={(e) => setFees(e.target.value)} /></label>
       {kind === 'INSTALLMENT' && <><label className="form-field">Parcelas<input required type="number" min="1" max="120" value={count} onChange={(e) => setCount(e.target.value)} /></label><label className="form-field">Valor da parcela<input required inputMode="decimal" type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></label></>}<label className="form-field">Data<input required type="date" value={observedOn} onChange={(e) => setObservedOn(e.target.value)} /></label></div>
     <label className="form-field">Link da oferta<input type="url" placeholder="https://" value={offerUrl} onChange={(e) => setOfferUrl(e.target.value)} /></label><label className="form-field">Observações<textarea maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
-    {!initial && optionId && <label className="price-update-option"><input type="checkbox" checked={updateOption} onChange={(e) => setUpdateOption(e.target.checked)} /> Salvar no histórico e atualizar a opção atual</label>}
+    {/* Updating the linked option copies values into a resource whose server
+        state nobody can see from here, so it stays online-only. */}
+    {!initial && optionId && !outbox.enabled && <label className="price-update-option"><input type="checkbox" checked={updateOption} onChange={(e) => setUpdateOption(e.target.checked)} /> Salvar no histórico e atualizar a opção atual</label>}
+    {outbox.enabled && <p className="stat-footnote">A observação ficará na fila e será enviada ao servidor quando a conexão voltar. A opção atual não será alterada.</p>}
     {(create.isError || update.isError) && <p className="form-error" role="alert">{(create.error ?? update.error)?.message}</p>}<FormActions busy={busy} submitLabel={updateOption ? 'Salvar e atualizar opção' : 'Salvar no histórico'} onCancel={onClose} />
   </form></Dialog>
 }

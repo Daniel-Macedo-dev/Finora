@@ -123,6 +123,8 @@ export interface PriceSnapshot {
   observedOn: string
   offerUrl: string | null
   notes: string | null
+  /** Optimistic version; an offline edit sends the one the user actually saw. */
+  version: number
 }
 
 export interface PriceSnapshotRequest {

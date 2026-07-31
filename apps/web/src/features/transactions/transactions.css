@@ -61,9 +61,3 @@
 .tx-pending {
   background: var(--surface-subtle, transparent);
 }
-
-.stale-totals-warning {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--ink-secondary);
-}

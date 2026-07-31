@@ -12,6 +12,9 @@ import { currentMonth } from '../../lib/month'
 import { formatBRL, formatPercent } from '../../lib/format'
 import { parseMoneyInput } from '../../lib/format'
 import { useCategories } from '../shared/api'
+import { useOptionalVault } from '../../offline/VaultProvider'
+import { localId, projectList } from '../../offline/outbox/projection'
+import PendingBadge, { StaleTotalsWarning } from '../offline-sync/PendingBadge'
 import { useBudgets, useCreateBudget, useDeleteBudget, useUpdateBudget } from './api'
 import type { Budget, BudgetStatus } from './types'
 import './budgets.css'
@@ -43,10 +46,18 @@ export default function BudgetsPage() {
   const createMutation = useCreateBudget()
   const updateMutation = useUpdateBudget()
   const deleteMutation = useDeleteBudget()
+  const vault = useOptionalVault()
 
-  const usedCategoryIds = new Set(
-    (budgets.data?.budgets ?? []).map((budget) => budget.category.id),
-  )
+  // A category with a budget already queued offline counts as used: offering it
+  // again would queue a second budget for the same month and turn a form the
+  // user could have got right into a uniqueness conflict at replay time.
+  const usedCategoryIds = new Set([
+    ...(budgets.data?.budgets ?? []).map((budget) => budget.category.id),
+    ...(vault?.entries ?? [])
+      .filter((entry) => entry.resourceType === 'BUDGET' && entry.operation === 'CREATE')
+      .map((entry) => (entry.payload as { categoryId?: number }).categoryId)
+      .filter((id): id is number => id != null),
+  ])
   const availableCategories = (categories.data ?? []).filter(
     (category) =>
       category.active &&
@@ -105,6 +116,43 @@ export default function BudgetsPage() {
   const submitError = editing ? updateMutation.error : createMutation.error
   const data = budgets.data
 
+  /**
+   * The server's budgets with the queue laid over them.
+   *
+   * Consumption and status are deliberately *not* recomputed for a pending row:
+   * they depend on every transaction of the month, which may itself be queued.
+   * The row shows the limit the user chose and says the rest is still to come,
+   * rather than showing a healthy bar for a category that is already overspent.
+   */
+  const rows = projectList(
+    (data?.budgets ?? []).filter((budget) => budget.month === month),
+    vault?.entries ?? [],
+    'BUDGET',
+    (base, entry) => {
+      if (entry.operation === 'DELETE') return base
+      const payload = entry.payload as { month?: string; categoryId?: number; limitAmount?: number }
+      if (payload.month && payload.month !== month) return null
+      const category =
+        base?.category
+        ?? (categories.data ?? []).find((candidate) => candidate.id === payload.categoryId)
+        ?? { id: payload.categoryId ?? 0, name: 'Categoria', type: 'EXPENSE' as const }
+      if (!base) {
+        return {
+          id: localId(entry.clientResourceId),
+          month: payload.month ?? month,
+          category,
+          limitAmount: Number(payload.limitAmount ?? 0),
+          consumedAmount: 0,
+          remainingAmount: Number(payload.limitAmount ?? 0),
+          percentUsed: 0,
+          status: 'HEALTHY' as const,
+          version: 0,
+        }
+      }
+      return { ...base, limitAmount: Number(payload.limitAmount ?? base.limitAmount), category }
+    },
+  )
+
   return (
     <>
       <PageHeader
@@ -125,7 +173,7 @@ export default function BudgetsPage() {
         <LoadingCards count={3} height={88} />
       ) : budgets.isError ? (
         <ErrorState error={budgets.error} onRetry={() => budgets.refetch()} />
-      ) : data && data.budgets.length === 0 ? (
+      ) : data && rows.length === 0 ? (
         <EmptyState
           title="Nenhum orçamento para este mês"
           description="Crie limites por categoria para acompanhar quanto do planejado já foi consumido."
@@ -138,6 +186,7 @@ export default function BudgetsPage() {
         />
       ) : data ? (
         <>
+          <StaleTotalsWarning pendingCount={vault?.counts.total ?? 0} />
           <div className="card budget-summary">
             <div>
               <span className="stat-footnote">Total consumido</span>
@@ -157,17 +206,21 @@ export default function BudgetsPage() {
           </div>
 
           <ul className="budget-list">
-            {data.budgets.map((budget) => {
+            {rows.map(({ item: budget, pending }) => {
               const meta = STATUS_META[budget.status]
               const StatusIcon = meta.icon
               return (
                 <li key={budget.id} className="card budget-row">
                   <div className="budget-row-header">
                     <span className="budget-category">{budget.category.name}</span>
-                    <span className={`badge ${meta.badge}`}>
-                      <StatusIcon size={13} aria-hidden="true" />
-                      {meta.label}
-                    </span>
+                    {pending ? (
+                      <PendingBadge state={pending} />
+                    ) : (
+                      <span className={`badge ${meta.badge}`}>
+                        <StatusIcon size={13} aria-hidden="true" />
+                        {meta.label}
+                      </span>
+                    )}
                     <span className="budget-actions">
                       <button
                         type="button"
@@ -187,26 +240,35 @@ export default function BudgetsPage() {
                       </button>
                     </span>
                   </div>
-                  <div
-                    className="budget-track"
-                    role="img"
-                    aria-label={`${budget.category.name}: ${formatPercent(budget.percentUsed)} do limite consumido`}
-                  >
-                    <div
-                      className={`budget-fill budget-fill-${budget.status.toLowerCase()}`}
-                      style={{ width: `${Math.min(budget.percentUsed, 100)}%` }}
-                    />
-                  </div>
-                  <div className="budget-row-footer">
-                    <span>
-                      {formatBRL(budget.consumedAmount)} de {formatBRL(budget.limitAmount)}
-                    </span>
-                    <span>
-                      {budget.remainingAmount >= 0
-                        ? `Restam ${formatBRL(budget.remainingAmount)}`
-                        : `${formatBRL(Math.abs(budget.remainingAmount))} acima do limite`}
-                    </span>
-                  </div>
+                  {pending ? (
+                    <p className="budget-pending-note">
+                      Limite de {formatBRL(budget.limitAmount)}. O consumo e o status serão
+                      calculados pelo servidor depois da sincronização.
+                    </p>
+                  ) : (
+                    <>
+                      <div
+                        className="budget-track"
+                        role="img"
+                        aria-label={`${budget.category.name}: ${formatPercent(budget.percentUsed)} do limite consumido`}
+                      >
+                        <div
+                          className={`budget-fill budget-fill-${budget.status.toLowerCase()}`}
+                          style={{ width: `${Math.min(budget.percentUsed, 100)}%` }}
+                        />
+                      </div>
+                      <div className="budget-row-footer">
+                        <span>
+                          {formatBRL(budget.consumedAmount)} de {formatBRL(budget.limitAmount)}
+                        </span>
+                        <span>
+                          {budget.remainingAmount >= 0
+                            ? `Restam ${formatBRL(budget.remainingAmount)}`
+                            : `${formatBRL(Math.abs(budget.remainingAmount))} acima do limite`}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </li>
               )
             })}

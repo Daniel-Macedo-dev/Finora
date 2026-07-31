@@ -68,6 +68,14 @@
   background: var(--negative);
 }
 
+/* Replaces the progress track while a budget is queued: consumption depends on
+   the month's transactions, which may themselves be waiting in the queue. */
+.budget-pending-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
 .budget-row-footer {
   display: flex;
   justify-content: space-between;

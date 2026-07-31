@@ -1,4 +1,5 @@
 import { PENDING_LABELS, type PendingState } from '../../offline/outbox/projection'
+import './offline-sync.css'
 
 /**
  * The label a row carries while it differs from the server.
