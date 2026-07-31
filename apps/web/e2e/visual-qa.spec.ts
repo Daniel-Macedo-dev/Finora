@@ -443,3 +443,213 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
   expect(itemId).toBeGreaterThan(0)
   expect(cardId).toBeGreaterThan(0)
 })
+
+/* ---------- offline synchronization ---------- */
+
+const OFFLINE_PASSWORD = 'senha-offline-visual-qa'
+
+async function shot(page: Page, name: string, viewport: (typeof VIEWPORTS)[0], theme: string) {
+  await page.setViewportSize({ width: viewport.width, height: viewport.height })
+  await page.screenshot({ path: `${OUT}/${viewport.name}/sync-${name}-${theme}.png`, fullPage: true })
+}
+
+/**
+ * Every state the synchronization centre can be in, at all four widths in both
+ * themes.
+ *
+ * Kept separate from the main capture because it needs an unlocked vault and a
+ * disconnected browser — conditions the rest of the suite must not run under.
+ */
+test('captura os estados de sincronização offline', async ({ page, context }) => {
+  test.setTimeout(1_800_000)
+  const identity = await registerViaUi(page)
+
+  await page.goto('/settings')
+  await page.getByLabel('Senha offline (mínimo de 12 caracteres)').fill(OFFLINE_PASSWORD)
+  await page.getByLabel('Confirmar senha offline').fill(OFFLINE_PASSWORD)
+  await page.getByRole('button', { name: 'Ativar acesso offline neste dispositivo' }).click()
+  await expect(page.getByText('Acesso offline ativado neste dispositivo.')).toBeVisible({
+    timeout: 20_000,
+  })
+
+  // A transaction that exists on the server, so a version conflict is reachable.
+  await page.goto('/transactions')
+  await page.getByRole('button', { name: 'Nova transação' }).first().click()
+  await page.getByLabel('Descrição', { exact: true }).fill('Disputada no servidor')
+  await page.getByLabel('Valor (R$)', { exact: true }).fill('10,00')
+  await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
+  await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
+  await expect(page.getByText('Disputada no servidor')).toBeVisible()
+
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme })
+    await page.addInitScript((value) => localStorage.setItem('finora.theme', value), theme)
+
+    // Empty centre, still online and unlocked.
+    await page.goto('/offline-sync')
+    await page.waitForLoadState('networkidle')
+    for (const viewport of VIEWPORTS) await shot(page, 'empty', viewport, theme)
+
+    // Offline with an unlocked vault.
+    await context.setOffline(true)
+    await page.goto('/transactions')
+    await page.getByLabel('Senha offline').fill(OFFLINE_PASSWORD)
+    await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible({ timeout: 20_000 })
+
+    // One pending creation, with a deliberately long description so the row and
+    // the shell badge are exercised at their worst case.
+    await page.getByRole('button', { name: 'Nova transação' }).click()
+    await page
+      .getByLabel('Descrição', { exact: true })
+      .fill('Compra de supermercado com um nome longo o suficiente para testar o recorte da linha')
+    await page.getByLabel('Valor (R$)', { exact: true }).fill('142,55')
+    await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
+    await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
+    await expect(page.getByText('Criado offline').first()).toBeVisible()
+
+    // Pending row + stale-totals warning + shell badge, on the list itself.
+    for (const viewport of VIEWPORTS) await shot(page, 'pending-row', viewport, theme)
+
+    // A pending deletion, which stays visible rather than disappearing.
+    await page.getByRole('button', { name: 'Excluir Disputada no servidor' }).click()
+    await page.getByRole('button', { name: 'Excluir' }).last().click()
+    await expect(page.getByText('Exclusão pendente')).toBeVisible()
+    for (const viewport of VIEWPORTS) await shot(page, 'pending-delete', viewport, theme)
+
+    // A dependent chain: item, then an option under it.
+    await page.goto('/wishlist')
+    await page.getByRole('button', { name: 'Novo item' }).first().click()
+    await page.getByLabel('Nome do item').fill('Notebook criado offline')
+    await page.getByRole('button', { name: 'Adicionar item' }).click()
+    await page.getByRole('link', { name: 'Notebook criado offline' }).first().click()
+    await page.getByRole('button', { name: 'Nova opção' }).click()
+    await page.getByLabel('Loja / vendedor').fill('Loja com nome bastante longo para o layout')
+    await page.getByLabel('Preço à vista (R$)').fill('3500,00')
+    await page.getByRole('button', { name: 'Adicionar opção' }).click()
+    await expect(page.getByText('Criado offline').first()).toBeVisible()
+    for (const viewport of VIEWPORTS) await shot(page, 'local-item-option', viewport, theme)
+
+    await page.goto('/offline-sync')
+    for (const viewport of VIEWPORTS) await shot(page, 'dependent-queue', viewport, theme)
+
+    // Locked vault while encrypted work is still queued.
+    await page.goto('/settings')
+    await page.getByRole('button', { name: 'Bloquear dados offline' }).click()
+    await page.goto('/offline-sync')
+    for (const viewport of VIEWPORTS) await shot(page, 'locked-with-pending', viewport, theme)
+
+    await page.goto('/transactions')
+    await page.getByLabel('Senha offline').fill(OFFLINE_PASSWORD)
+    await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible({ timeout: 20_000 })
+
+    // Logout warning while unsynchronized work exists.
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await expect(
+      page.getByRole('heading', { name: 'Sair com alterações offline pendentes' }),
+    ).toBeVisible()
+    for (const viewport of VIEWPORTS) await shot(page, 'logout-warning', viewport, theme)
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+
+    // Destructive discard confirmation.
+    await page.goto('/offline-sync')
+    await page.getByRole('button', { name: /Descartar:/ }).first().click()
+    for (const viewport of VIEWPORTS) await shot(page, 'discard-confirm', viewport, theme)
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+
+    await context.setOffline(false)
+
+    // A permanent rejection with a long message: actionable, not a retry loop.
+    await page.route('**/api/offline-sync/mutations', async (route) => {
+      const response = await route.fetch()
+      const body = await response.json()
+      body.results = body.results.map((result: Record<string, unknown>) => ({
+        ...result,
+        status: 'REJECTED',
+        error: {
+          code: 'CATEGORY_TYPE_MISMATCH',
+          detail:
+            'A categoria escolhida não aceita esse tipo de lançamento. Edite a alteração '
+            + 'escolhendo uma categoria compatível ou descarte-a para manter o que está no servidor.',
+        },
+      }))
+      await route.fulfill({ response, json: body })
+    })
+    await page.goto('/offline-sync')
+    await page.getByRole('button', { name: 'Sincronizar agora' }).click()
+    await expect(page.getByText('Falha').first()).toBeVisible({ timeout: 20_000 })
+    for (const viewport of VIEWPORTS) await shot(page, 'permanent-failure', viewport, theme)
+    await page.unroute('**/api/offline-sync/mutations')
+
+    // A retryable failure: the server is simply unavailable.
+    await page.route('**/api/offline-sync/mutations', (route) =>
+      route.fulfill({ status: 503, body: '{}' }),
+    )
+    await page.reload()
+    await page.getByRole('button', { name: 'Sincronizar agora' }).click()
+    await expect(page.getByText(/Não foi possível concluir agora|Falha temporária/)).toBeVisible({
+      timeout: 20_000,
+    })
+    for (const viewport of VIEWPORTS) await shot(page, 'retryable-failure', viewport, theme)
+    await page.unroute('**/api/offline-sync/mutations')
+
+    // A version conflict, with the readable server/local comparison open.
+    await page.goto('/transactions')
+    await page.getByRole('button', { name: 'Editar Disputada no servidor' }).click()
+    await page.getByLabel('Valor (R$)', { exact: true }).fill('25,00')
+    await page.getByRole('button', { name: /Salvar/ }).first().click()
+    await page.route('**/api/offline-sync/mutations', async (route) => {
+      const response = await route.fetch()
+      const body = await response.json()
+      body.results = body.results.map((result: Record<string, unknown>) => ({
+        ...result,
+        status: 'CONFLICT',
+        conflict: {
+          conflictType: 'VERSION_MISMATCH',
+          localBaseVersion: 0,
+          serverVersion: 3,
+          serverSnapshot: { description: 'Disputada no servidor', amount: 80, date: '2026-07-30' },
+          resolutionOptions: ['KEEP_SERVER', 'APPLY_LOCAL', 'EDIT_AND_RETRY', 'DISCARD_LOCAL'],
+          detail: 'Esta transação foi alterada em outro dispositivo depois da sua edição offline.',
+        },
+      }))
+      await route.fulfill({ response, json: body })
+    })
+    await page.goto('/offline-sync')
+    await page.getByRole('button', { name: 'Sincronizar agora' }).click()
+    await expect(page.getByText('Conflito').first()).toBeVisible({ timeout: 20_000 })
+    for (const viewport of VIEWPORTS) await shot(page, 'conflict', viewport, theme)
+
+    await page.getByRole('button', { name: /Resolver conflito/ }).first().click()
+    await expect(page.getByRole('columnheader', { name: 'Valor salvo no servidor' })).toBeVisible()
+    for (const viewport of VIEWPORTS) await shot(page, 'conflict-comparison', viewport, theme)
+    await page.unroute('**/api/offline-sync/mutations')
+
+    // Reset for the next theme pass: discard everything and start clean.
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await page.getByRole('button', { name: 'Descartar alterações e sair' }).click()
+    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
+    if (theme === 'light') {
+      await page.goto('/login')
+      await page.getByLabel('E-mail').fill(identity.email)
+      await page.getByLabel('Senha', { exact: true }).fill(identity.password)
+      await page.getByRole('button', { name: 'Entrar' }).click()
+      await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
+      await page.goto('/settings')
+      await page.getByLabel('Senha offline (mínimo de 12 caracteres)').fill(OFFLINE_PASSWORD)
+      await page.getByLabel('Confirmar senha offline').fill(OFFLINE_PASSWORD)
+      await page.getByRole('button', { name: 'Ativar acesso offline neste dispositivo' }).click()
+      await expect(page.getByText('Acesso offline ativado neste dispositivo.')).toBeVisible({
+        timeout: 20_000,
+      })
+      await page.goto('/transactions')
+      await page.getByRole('button', { name: 'Nova transação' }).click()
+      await page.getByLabel('Descrição', { exact: true }).fill('Disputada no servidor')
+      await page.getByLabel('Valor (R$)', { exact: true }).fill('10,00')
+      await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
+      await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
+      await expect(page.getByText('Disputada no servidor')).toBeVisible()
+    }
+  }
+})
