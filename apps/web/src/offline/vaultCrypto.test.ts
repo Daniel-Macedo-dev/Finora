@@ -6,6 +6,7 @@ import {
   needsMigration,
   PBKDF2_ITERATIONS,
   resealVault,
+  reopenVault,
   unlockVault,
   VAULT_SCHEMA_VERSION,
   VaultError,
@@ -134,6 +135,24 @@ describe('offline vault cryptography', () => {
     const { payload: decrypted } = await unlockVault(updated, password)
     expect(decrypted.outbox).toEqual([])
     expect(updated.createdAt).toBe(encrypted.createdAt)
+  })
+
+  it('reopens a record another tab rewrote, without the password', async () => {
+    const { session } = await createVault(payload, password)
+    // What a second tab sees: the same stored record, changed by the first.
+    const rewritten = await resealVault({ ...payload, outbox: [] }, session)
+    const reopened = await reopenVault(rewritten, session)
+    expect(reopened.outbox).toEqual([])
+    expect(reopened.owner).toEqual(payload.owner)
+  })
+
+  it('fails closed when reopening with a key that does not open the record', async () => {
+    const { encrypted } = await createVault(payload, password)
+    const other = await createVault(payload, 'outra-senha-offline-longa')
+    await expect(reopenVault(encrypted, other.session)).rejects.toBeInstanceOf(VaultError)
+    await expect(
+      reopenVault({ ...encrypted, vaultSchemaVersion: VAULT_SCHEMA_VERSION + 1 }, other.session),
+    ).rejects.toBeInstanceOf(VaultError)
   })
 
   it('fails closed for an unknown future schema', async () => {

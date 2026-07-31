@@ -270,6 +270,37 @@ export function resealVault(payload: VaultPayload, session: VaultSession): Promi
   return seal(payload, session, session.createdAt)
 }
 
+/**
+ * Reads a record with a key this tab already holds.
+ *
+ * Two tabs share one stored vault but each keeps its own decrypted copy in
+ * memory, so a queue drained in one leaves the other showing work that is
+ * already gone. This is how the second one catches up without asking for the
+ * offline password again — the same authenticated decryption as `unlockVault`,
+ * minus the derivation, and it still fails closed on a record this key cannot
+ * open or a schema it does not understand.
+ */
+export async function reopenVault(
+  vault: EncryptedVault,
+  session: VaultSession,
+): Promise<VaultPayload> {
+  try {
+    if (vault.vaultSchemaVersion > VAULT_SCHEMA_VERSION || vault.vaultSchemaVersion < 1) {
+      throw new VaultError()
+    }
+    const iv = base64ToBytes(vault.iv)
+    if (iv.byteLength !== 12) throw new VaultError()
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      session.key,
+      base64ToBytes(vault.ciphertext),
+    )
+    return validatePayload(JSON.parse(new TextDecoder().decode(plaintext)))
+  } catch {
+    throw new VaultError()
+  }
+}
+
 /** An empty V2 payload for a freshly enabled vault. */
 export function emptyPayload(
   owner: VaultOwner,

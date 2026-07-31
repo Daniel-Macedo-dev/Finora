@@ -14,6 +14,7 @@ import {
   createVault,
   emptyPayload,
   needsMigration,
+  reopenVault,
   resealVault,
   unlockVault,
   type VaultPayload,
@@ -91,6 +92,8 @@ interface VaultContextValue {
   lock(): void
   remove(): Promise<void>
   reconcileOnline(user: AuthUser | null): boolean
+  /** Re-reads the stored vault after another tab changed it. No-op when locked. */
+  resync(): Promise<void>
   /** Queues one supported mutation. Returns null when it cancelled out. */
   queue(request: QueueRequest): Promise<OutboxEntry | null>
   replay(): Promise<ReplayOutcome | null>
@@ -187,6 +190,27 @@ export function VaultProvider({
     },
     [setDecrypted],
   )
+
+  /**
+   * Re-reads the stored vault with the key this tab already holds.
+   *
+   * Called when another tab reports that the queue moved. Silently does nothing
+   * when this tab is locked or the record cannot be opened: a failure here is a
+   * stale view, not a reason to drop the user out of an unlocked session.
+   */
+  const resync = useCallback(async () => {
+    const active = session.current
+    if (!active) return
+    try {
+      const stored = await loadVault()
+      if (!stored) return
+      setDecrypted(await reopenVault(stored, active))
+      setUpdatedAt(stored.updatedAt)
+      setSize(encryptedSize(stored))
+    } catch {
+      // Keep showing what we have.
+    }
+  }, [setDecrypted])
 
   const write = useCallback(
     async (user: AuthUser, password: string, createdAt?: string) => {
@@ -534,6 +558,7 @@ export function VaultProvider({
       lock,
       remove,
       reconcileOnline,
+      resync,
       queue,
       replay,
       retry,
@@ -557,6 +582,7 @@ export function VaultProvider({
       replay,
       replaying,
       resolve,
+      resync,
       retry,
       reviseAndRetry,
       setAutoSync,

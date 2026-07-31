@@ -56,6 +56,14 @@ export function useReplayTriggers(): void {
   }, [vault])
 
   // Another tab finishing a run means this one's view is stale, not that it
-  // should start its own.
-  useEffect(() => onSyncEvent(() => undefined), [])
+  // should start its own: the queue is shared, so the right response is to
+  // re-read it, never to send the same mutations a second time.
+  useEffect(() => {
+    if (!vault) return
+    return onSyncEvent((event) => {
+      if (event.type === 'REPLAY_FINISHED' || event.type === 'QUEUE_CHANGED') {
+        void vault.resync()
+      }
+    })
+  }, [vault])
 }
