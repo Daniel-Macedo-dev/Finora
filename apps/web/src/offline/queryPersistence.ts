@@ -93,7 +93,14 @@ export async function fetchOfflineDataset(queryClient: QueryClient, month: strin
   const requests: Array<[readonly unknown[], string]> = [
     [['dashboard', month], `/dashboard?month=${month}`],
     [['accounts'], '/accounts'],
+    // All three keys, because `useCategories(type)` caches per type and the
+    // forms that queue offline ask for a type: the transaction form for the
+    // type being entered, the budget and wishlist forms for EXPENSE. Caching
+    // only the untyped list left every one of those selects empty offline, and
+    // a category is required, so nothing could be queued at all.
     [['categories', 'all'], '/categories'],
+    [['categories', 'EXPENSE'], '/categories?type=EXPENSE'],
+    [['categories', 'INCOME'], '/categories?type=INCOME'],
     [['transactions', { month, page: 0 }], `/transactions?month=${month}&page=0&size=20`],
     [['credit-cards'], '/credit-cards'],
     [['budgets', month], `/budgets?month=${month}`],
