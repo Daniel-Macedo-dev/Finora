@@ -1,4 +1,4 @@
-import type { OutboxEntry } from '../../offline/outbox/types'
+import type { OutboxEntry, ResourceMapping } from '../../offline/outbox/types'
 import { localId, projectList, type Projected } from '../../offline/outbox/projection'
 import type {
   PurchaseOption,
@@ -32,6 +32,25 @@ export function findLocalItemEntry(
         && localId(entry.clientResourceId) === itemId,
     ) ?? null
   )
+}
+
+/**
+ * The server id a negative local id turned into, once replay assigned one.
+ *
+ * Without this, someone sitting on a locally created item's page when it
+ * synchronizes would be left addressing an id that stopped meaning anything.
+ */
+export function mappedServerId(
+  mappings: readonly ResourceMapping[],
+  localItemId: number,
+): number | null {
+  if (localItemId >= 0) return null
+  const mapping = mappings.find(
+    (candidate) =>
+      candidate.resourceType === 'WISHLIST_ITEM'
+      && localId(candidate.clientResourceId) === localItemId,
+  )
+  return mapping?.serverId ?? null
 }
 
 function optionFrom(base: PurchaseOption | null, entry: OutboxEntry): PurchaseOption | null {

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { localId } from '../../offline/outbox/projection'
 import type { OutboxEntry } from '../../offline/outbox/types'
 import type { PurchaseOption } from './types'
-import { findLocalItemEntry, localItemDetail, projectOptions } from './offlineDetail'
+import {
+  findLocalItemEntry,
+  localItemDetail,
+  mappedServerId,
+  projectOptions,
+} from './offlineDetail'
 
 function entry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
   return {
@@ -92,6 +97,33 @@ describe('offline wishlist item detail', () => {
   it('does not attach an option queued against a different item', () => {
     const foreign = { ...optionEntry, dependencies: ['item-2'] }
     expect(localItemDetail([entry(), foreign], entry()).options).toHaveLength(0)
+  })
+})
+
+describe('following an item once the server accepts it', () => {
+  const mapping = {
+    resourceType: 'WISHLIST_ITEM' as const,
+    clientResourceId: 'item-1',
+    serverId: 91,
+    serverVersion: 0,
+    mappedAt: '2026-07-01T00:00:00.000Z',
+  }
+
+  it('resolves the local id to the id replay assigned', () => {
+    expect(mappedServerId([mapping], localId('item-1'))).toBe(91)
+  })
+
+  it('returns nothing while the creation is still unmapped', () => {
+    expect(mappedServerId([], localId('item-1'))).toBeNull()
+  })
+
+  it('never redirects a server id', () => {
+    expect(mappedServerId([mapping], 5)).toBeNull()
+  })
+
+  it('ignores a mapping for a different resource type', () => {
+    const budget = { ...mapping, resourceType: 'BUDGET' as const }
+    expect(mappedServerId([budget], localId('item-1'))).toBeNull()
   })
 })
 

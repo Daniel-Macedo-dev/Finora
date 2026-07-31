@@ -191,6 +191,52 @@ class OfflineSyncDomainTest extends OfflineSyncTestSupport {
     }
 
     @Test
+    void aSnapshotExposesTheVersionAnOfflineEditHasToSendBack() throws Exception {
+        UUID itemId = UUID.randomUUID();
+        UUID snapshotId = UUID.randomUUID();
+        JsonNode created = syncResults(user,
+                create(UUID.randomUUID(), "WISHLIST_ITEM", itemId, """
+                        {"name":"Notebook","priority":"HIGH"}
+                        """),
+                create(UUID.randomUUID(), "PRICE_SNAPSHOT", snapshotId, """
+                        {"item":{"clientResourceId":"%s"},"merchant":"Loja",
+                         "paymentKind":"CASH","basePrice":100.00,"observedOn":"2026-07-20"}
+                        """.formatted(itemId)));
+        long serverItemId = created.get(0).get("resourceId").asLong();
+        long serverSnapshotId = created.get(1).get("resourceId").asLong();
+
+        // Without this field on the response, an offline edit has nothing to
+        // send as baseVersion and would guess at zero.
+        mockMvc.perform(get("/api/wishlist/{id}/price-snapshots", serverItemId)
+                        .cookie(user.session()).param("page", "0").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].version").value(0));
+
+        JsonNode edited = syncResults(user, update(UUID.randomUUID(), "PRICE_SNAPSHOT",
+                serverSnapshotId, 0, """
+                {"item":{"serverId":%d},"merchant":"Loja","paymentKind":"CASH",
+                 "basePrice":90.00,"observedOn":"2026-07-20"}
+                """.formatted(serverItemId)));
+        assertThat(edited.get(0).get("status").stringValue()).isEqualTo("APPLIED");
+        assertThat(edited.get(0).get("version").asLong()).isEqualTo(1);
+
+        // The version the client last saw is now stale, and the server says so
+        // instead of overwriting the newer observation.
+        JsonNode stale = syncResults(user, update(UUID.randomUUID(), "PRICE_SNAPSHOT",
+                serverSnapshotId, 0, """
+                {"item":{"serverId":%d},"merchant":"Loja","paymentKind":"CASH",
+                 "basePrice":80.00,"observedOn":"2026-07-20"}
+                """.formatted(serverItemId)));
+        assertThat(stale.get(0).get("status").stringValue()).isEqualTo("CONFLICT");
+        assertThat(stale.get(0).get("conflict").get("conflictType").stringValue())
+                .isEqualTo("VERSION_MISMATCH");
+
+        mockMvc.perform(get("/api/wishlist/{id}/price-snapshots", serverItemId)
+                        .cookie(user.session()).param("page", "0").param("size", "20"))
+                .andExpect(jsonPath("$.content[0].basePrice").value(90.00));
+    }
+
+    @Test
     void aSnapshotPayloadCannotSmuggleAnOptionUpdate() throws Exception {
         UUID itemId = UUID.randomUUID();
         UUID optionId = UUID.randomUUID();

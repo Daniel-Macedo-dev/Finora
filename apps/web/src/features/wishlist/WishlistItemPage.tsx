@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Pencil, ShoppingCart, Tag, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
@@ -18,7 +18,12 @@ import { useOptionalVault } from '../../offline/VaultProvider'
 import { UNSUPPORTED_OFFLINE_MESSAGE } from '../../offline/outbox/useOutbox'
 import PendingBadge from '../offline-sync/PendingBadge'
 import { localId } from '../../offline/outbox/projection'
-import { findLocalItemEntry, localItemDetail, projectOptions } from './offlineDetail'
+import {
+  findLocalItemEntry,
+  localItemDetail,
+  mappedServerId,
+  projectOptions,
+} from './offlineDetail'
 import {
   useAddOption,
   useDeleteOption,
@@ -54,7 +59,21 @@ export default function WishlistItemPage() {
   const localEntry = findLocalItemEntry(entries, itemId)
   const isLocalItem = localEntry !== null
 
-  const item = useWishlistItem(itemId, !isLocalItem)
+  /**
+   * Once replay assigns the real id, follow it.
+   *
+   * Without this, someone who stayed on this page while the queue drained would
+   * be left addressing a local id that no longer refers to anything, and the
+   * successful synchronization would look like the item had been lost.
+   */
+  const syncedId = mappedServerId(vault?.mappings ?? [], itemId)
+  useEffect(() => {
+    if (!isLocalItem && syncedId !== null) {
+      navigate(`/wishlist/${syncedId}`, { replace: true })
+    }
+  }, [isLocalItem, navigate, syncedId])
+
+  const item = useWishlistItem(itemId, !isLocalItem && syncedId === null)
   const hasOptions = (item.data?.options.length ?? 0) > 0
   const analysis = usePurchaseAnalysis(itemId, hasOptions && !isLocalItem)
 
@@ -87,7 +106,7 @@ export default function WishlistItemPage() {
     )
   }
 
-  if (!isLocalItem && item.isPending) {
+  if (!isLocalItem && (item.isPending || syncedId !== null)) {
     return <LoadingCards count={3} height={120} />
   }
 

@@ -37,7 +37,12 @@ import {
 } from './outbox/queue'
 import { replayOnce, type ReplayOutcome, type SendBatch } from './outbox/replay'
 import { broadcast, withReplayLock } from './outbox/coordination'
-import { newId, type OutboxEntry, type ResolutionOption } from './outbox/types'
+import {
+  newId,
+  type OutboxEntry,
+  type ResolutionOption,
+  type ResourceMapping,
+} from './outbox/types'
 import { sendMutations } from './outbox/transport'
 
 export type VaultState =
@@ -67,6 +72,14 @@ interface VaultContextValue {
   error: string | null
   /** Active queue entries; empty whenever the vault is locked. */
   entries: OutboxEntry[]
+  /**
+   * Client resource id → server id, for resources the server has now accepted.
+   *
+   * Screens addressing an offline-created resource by its local id need this to
+   * follow it once replay assigns the real one, instead of leaving the user on
+   * a page whose id stopped meaning anything.
+   */
+  mappings: ResourceMapping[]
   counts: VaultCounts
   lastSyncAt: string | null
   autoSync: boolean
@@ -509,6 +522,7 @@ export function VaultProvider({
       size,
       error,
       entries,
+      mappings: payload?.resourceMappings ?? [],
       counts,
       lastSyncAt: payload?.syncPreferences.lastSyncAt ?? null,
       autoSync: payload?.syncPreferences.autoSync ?? true,
