@@ -18,7 +18,6 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -189,7 +188,16 @@ public class OfflineSyncService {
                 payload.get("result"));
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * The owner-scoped receipt lookup, always by the pair.
+     *
+     * <p>Deliberately carries no {@code @Transactional}: every caller is inside
+     * this same bean, so the proxy would never apply it and the annotation would
+     * promise a boundary that does not exist. The repository call opens its own,
+     * which is all a single read needs — and reading it <em>outside</em> the
+     * mutation's transaction is the point, since the receipt this is looking for
+     * may have been committed by a different request entirely.
+     */
     Optional<MutationReceipt> findReceipt(Long userId, java.util.UUID clientMutationId) {
         return receipts.findByUserIdAndClientMutationId(userId, clientMutationId);
     }
