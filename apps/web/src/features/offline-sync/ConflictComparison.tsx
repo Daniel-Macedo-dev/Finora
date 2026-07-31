@@ -1,4 +1,5 @@
 import { formatBRL, formatDate } from '../../lib/format'
+import { useAccounts, useCategories } from '../shared/api'
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../shared/types'
 import type { OutboxEntry, SyncResourceType } from '../../offline/outbox/types'
 
@@ -94,6 +95,9 @@ const FIELDS: Record<SyncResourceType, FieldSpec[]> = {
   ],
 }
 
+/** Payload keys holding a server id that has a human name elsewhere. */
+const REFERENCE_FIELDS = new Set(['categoryId', 'accountId'])
+
 function read(source: Record<string, unknown> | null, path: string): unknown {
   if (!source) return undefined
   return path.split('.').reduce<unknown>((value, key) => {
@@ -105,13 +109,27 @@ function read(source: Record<string, unknown> | null, path: string): unknown {
 }
 
 export default function ConflictComparison({ entry }: { entry: OutboxEntry }) {
+  // The queued payload stores references as ids, because that is what the
+  // server resolves. Showing "5" next to "Alimentação" would both read as
+  // nonsense and mark every referenced field as changed, so the ids are
+  // resolved back to names here, from the same lists the forms used.
+  const categories = useCategories()
+  const accounts = useAccounts()
+  const names = new Map<string, string>()
+  for (const category of categories.data ?? []) names.set(`categoryId:${category.id}`, category.name)
+  for (const account of accounts.data ?? []) names.set(`accountId:${account.id}`, account.name)
+
   const conflict = entry.conflict
   if (!conflict) return null
   const snapshot = conflict.serverSnapshot
   const fields = FIELDS[entry.resourceType]
 
   const rows = fields.map((field) => {
-    const localValue = field.format(read(entry.payload, field.local))
+    const raw = read(entry.payload, field.local)
+    const resolved = REFERENCE_FIELDS.has(field.local) && raw != null
+      ? names.get(`${field.local}:${String(raw)}`)
+      : undefined
+    const localValue = resolved ?? field.format(raw)
     const serverValue = snapshot
       ? field.format(read(snapshot, field.server ?? field.local))
       : '—'
