@@ -61,12 +61,13 @@ export function useUpdateGoal() {
       version?: number
     }): Promise<Goal | QueuedMutation> => {
       if (outbox.enabled) {
+        const local = outbox.localResourceId(id)
         return outbox.enqueue({
           resourceType: 'GOAL',
           operation: 'UPDATE',
-          clientResourceId: String(id),
-          serverId: id,
-          baseVersion: version ?? 0,
+          clientResourceId: local ?? String(id),
+          ...(local ? {} : { serverId: id }),
+          baseVersion: local ? null : (version ?? 0),
           payload: toPayload(request),
           label: request.name,
         })
@@ -101,12 +102,15 @@ export function useDeleteGoal() {
   return useMutation({
     mutationFn: async (goal: Goal): Promise<void | QueuedMutation> => {
       if (outbox.enabled) {
+        // A row still waiting in the queue is addressed by the identity it was
+        // created with, never by its placeholder id.
+        const local = outbox.localResourceId(goal.id)
         return outbox.enqueue({
           resourceType: 'GOAL',
           operation: 'DELETE',
-          clientResourceId: String(goal.id),
-          serverId: goal.id,
-          baseVersion: goal.version ?? 0,
+          clientResourceId: local ?? String(goal.id),
+          ...(local ? {} : { serverId: goal.id }),
+          baseVersion: local ? null : (goal.version ?? 0),
           payload: {},
           label: goal.name,
         })

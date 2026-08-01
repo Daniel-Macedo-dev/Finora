@@ -88,12 +88,13 @@ export function useUpdateTransaction() {
       clientResourceId,
     }: UpdateTransactionInput): Promise<Transaction | QueuedMutation> => {
       if (outbox.enabled) {
+        const local = clientResourceId ?? outbox.localResourceId(id)
         return outbox.enqueue({
           resourceType: 'TRANSACTION',
           operation: 'UPDATE',
-          clientResourceId: clientResourceId ?? String(id),
-          ...(clientResourceId ? {} : { serverId: id }),
-          baseVersion: version ?? 0,
+          clientResourceId: local ?? String(id),
+          ...(local ? {} : { serverId: id }),
+          baseVersion: local ? null : (version ?? 0),
           payload: toPayload(request),
           label: request.description,
         })
@@ -110,12 +111,15 @@ export function useDeleteTransaction() {
   return useMutation({
     mutationFn: async (transaction: Transaction): Promise<void | QueuedMutation> => {
       if (outbox.enabled) {
+        // A row still waiting in the queue is addressed by the identity it was
+        // created with, never by its placeholder id.
+        const local = outbox.localResourceId(transaction.id)
         return outbox.enqueue({
           resourceType: 'TRANSACTION',
           operation: 'DELETE',
-          clientResourceId: String(transaction.id),
-          serverId: transaction.id,
-          baseVersion: transaction.version ?? 0,
+          clientResourceId: local ?? String(transaction.id),
+          ...(local ? {} : { serverId: transaction.id }),
+          baseVersion: local ? null : (transaction.version ?? 0),
           payload: {},
           label: transaction.description,
         })

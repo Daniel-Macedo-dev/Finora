@@ -170,12 +170,13 @@ export function useUpdatePriceSnapshot(itemId: number) {
       version?: number
     }): Promise<PriceSnapshot | QueuedMutation> => {
       if (outbox.enabled) {
+        const local = outbox.localResourceId(id)
         return outbox.enqueue({
           resourceType: 'PRICE_SNAPSHOT',
           operation: 'UPDATE',
-          clientResourceId: String(id),
-          serverId: id,
-          baseVersion: version ?? 0,
+          clientResourceId: local ?? String(id),
+          ...(local ? {} : { serverId: id }),
+          baseVersion: local ? null : (version ?? 0),
           payload: snapshotPayload(request, { serverId: itemId }, null),
           label: `${request.merchant} · ${request.observedOn}`,
         })
@@ -194,12 +195,15 @@ export function useDeletePriceSnapshot(itemId: number) {
       snapshot: { id: number; merchant: string; observedOn: string; version?: number },
     ): Promise<void | QueuedMutation> => {
       if (outbox.enabled) {
+        // A row still waiting in the queue is addressed by the identity it was
+        // created with, never by its placeholder id.
+        const local = outbox.localResourceId(snapshot.id)
         return outbox.enqueue({
           resourceType: 'PRICE_SNAPSHOT',
           operation: 'DELETE',
-          clientResourceId: String(snapshot.id),
-          serverId: snapshot.id,
-          baseVersion: snapshot.version ?? 0,
+          clientResourceId: local ?? String(snapshot.id),
+          ...(local ? {} : { serverId: snapshot.id }),
+          baseVersion: local ? null : (snapshot.version ?? 0),
           payload: {},
           label: `${snapshot.merchant} · ${snapshot.observedOn}`,
         })
@@ -288,12 +292,13 @@ export function useUpdateWishlistItem() {
       version?: number
     }): Promise<WishlistItemDetail | QueuedMutation> => {
       if (outbox.enabled) {
+        const local = outbox.localResourceId(id)
         return outbox.enqueue({
           resourceType: 'WISHLIST_ITEM',
           operation: 'UPDATE',
-          clientResourceId: String(id),
-          serverId: id,
-          baseVersion: version ?? 0,
+          clientResourceId: local ?? String(id),
+          ...(local ? {} : { serverId: id }),
+          baseVersion: local ? null : (version ?? 0),
           payload: itemPayload(request),
           label: request.name,
         })
@@ -314,12 +319,15 @@ export function useDeleteWishlistItem() {
       version?: number
     }): Promise<void | QueuedMutation> => {
       if (outbox.enabled) {
+        // A row still waiting in the queue is addressed by the identity it was
+        // created with, never by its placeholder id.
+        const local = outbox.localResourceId(item.id)
         return outbox.enqueue({
           resourceType: 'WISHLIST_ITEM',
           operation: 'DELETE',
-          clientResourceId: String(item.id),
-          serverId: item.id,
-          baseVersion: item.version ?? 0,
+          clientResourceId: local ?? String(item.id),
+          ...(local ? {} : { serverId: item.id }),
+          baseVersion: local ? null : (item.version ?? 0),
           payload: {},
           label: item.name,
         })
@@ -397,12 +405,13 @@ export function useUpdateOption(itemId: number) {
       version?: number
     }): Promise<PurchaseOption | QueuedMutation> => {
       if (outbox.enabled) {
+        const local = outbox.localResourceId(optionId)
         return outbox.enqueue({
           resourceType: 'PURCHASE_OPTION',
           operation: 'UPDATE',
-          clientResourceId: String(optionId),
-          serverId: optionId,
-          baseVersion: version ?? 0,
+          clientResourceId: local ?? String(optionId),
+          ...(local ? {} : { serverId: optionId }),
+          baseVersion: local ? null : (version ?? 0),
           payload: optionPayload(request, { serverId: itemId }),
           label: request.merchant,
         })
@@ -423,12 +432,15 @@ export function useDeleteOption(itemId: number) {
       version?: number
     }): Promise<void | QueuedMutation> => {
       if (outbox.enabled) {
+        // A row still waiting in the queue is addressed by the identity it was
+        // created with, never by its placeholder id.
+        const local = outbox.localResourceId(option.id)
         return outbox.enqueue({
           resourceType: 'PURCHASE_OPTION',
           operation: 'DELETE',
-          clientResourceId: String(option.id),
-          serverId: option.id,
-          baseVersion: option.version ?? 0,
+          clientResourceId: local ?? String(option.id),
+          ...(local ? {} : { serverId: option.id }),
+          baseVersion: local ? null : (option.version ?? 0),
           payload: {},
           label: option.merchant,
         })

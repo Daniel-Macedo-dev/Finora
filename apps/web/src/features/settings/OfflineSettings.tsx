@@ -85,7 +85,12 @@ export default function OfflineSettings() {
             Sincronizar automaticamente ao reconectar
           </label>
           <Link to="/offline-sync" className="btn btn-secondary">Abrir central de sincronização</Link>
-          <button type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
+          {/* Allowed offline: locking discards a key held in memory and touches
+              nothing on the server. Left to the blanket rule this button was
+              disabled with a tooltip saying the action needs a connection —
+              which is false, and contradicted by the shell offering the very
+              same action a few pixels away. */}
+          <button data-offline-allowed="true" type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
           <button
             type="button"
             className="btn btn-danger"

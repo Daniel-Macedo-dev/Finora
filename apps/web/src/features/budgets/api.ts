@@ -72,12 +72,13 @@ export function useUpdateBudget() {
       Budget | QueuedMutation
     > => {
       if (outbox.enabled) {
+        const local = outbox.localResourceId(id)
         return outbox.enqueue({
           resourceType: 'BUDGET',
           operation: 'UPDATE',
-          clientResourceId: String(id),
-          serverId: id,
-          baseVersion: version ?? 0,
+          clientResourceId: local ?? String(id),
+          ...(local ? {} : { serverId: id }),
+          baseVersion: local ? null : (version ?? 0),
           payload: toPayload(request),
           label: label(request, categoryName),
         })
@@ -94,12 +95,15 @@ export function useDeleteBudget() {
   return useMutation({
     mutationFn: async (budget: Budget): Promise<void | QueuedMutation> => {
       if (outbox.enabled) {
+        // A row still waiting in the queue is addressed by the identity it was
+        // created with, never by its placeholder id.
+        const local = outbox.localResourceId(budget.id)
         return outbox.enqueue({
           resourceType: 'BUDGET',
           operation: 'DELETE',
-          clientResourceId: String(budget.id),
-          serverId: budget.id,
-          baseVersion: budget.version ?? 0,
+          clientResourceId: local ?? String(budget.id),
+          ...(local ? {} : { serverId: budget.id }),
+          baseVersion: local ? null : (budget.version ?? 0),
           payload: {},
           label: `${budget.category.name} · ${budget.month}`,
         })

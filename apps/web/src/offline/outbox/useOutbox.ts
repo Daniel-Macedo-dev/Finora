@@ -1,4 +1,5 @@
 import { useOptionalVault } from '../VaultProvider'
+import { localId } from './projection'
 import type { QueueRequest } from './queue'
 import { newId } from './types'
 
@@ -32,6 +33,23 @@ export function useOfflineOutbox() {
     enabled,
     /** Fresh identity for a resource being created offline. */
     newResourceId: newId,
+    /**
+     * The client resource id behind a row that exists only in the queue.
+     *
+     * Rows created offline are keyed by a synthetic negative id, because the
+     * server has not named them yet. Addressing one by that id would queue a
+     * mutation against a resource nobody has ever heard of, and — worse — would
+     * hide it from compaction, so creating and then deleting the same row
+     * offline would send both instead of cancelling out. Ordinary rows have a
+     * real server id and get null.
+     */
+    localResourceId(id: number): string | null {
+      if (id >= 0) return null
+      const created = (vault?.entries ?? []).find(
+        (entry) => entry.operation === 'CREATE' && localId(entry.clientResourceId) === id,
+      )
+      return created?.clientResourceId ?? null
+    },
     async enqueue(request: QueueRequest): Promise<QueuedMutation> {
       if (!vault) throw new Error('A cópia offline não está disponível.')
       const entry = await vault.queue(request)
