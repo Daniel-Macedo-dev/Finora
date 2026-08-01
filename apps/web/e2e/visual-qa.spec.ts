@@ -561,7 +561,7 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
     await context.setOffline(false)
 
     // A permanent rejection with a long message: actionable, not a retry loop.
-    await page.route('**/api/offline-sync/mutations', async (route) => {
+    await context.route('**/api/offline-sync/mutations', async (route) => {
       const response = await route.fetch()
       const body = await response.json()
       body.results = body.results.map((result: Record<string, unknown>) => ({
@@ -580,10 +580,10 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
     await expect(page.getByText('Falha').first()).toBeVisible({ timeout: 20_000 })
     for (const viewport of VIEWPORTS) await shot(page, 'permanent-failure', viewport, theme)
-    await page.unroute('**/api/offline-sync/mutations')
+    await context.unroute('**/api/offline-sync/mutations')
 
     // A retryable failure: the server is simply unavailable.
-    await page.route('**/api/offline-sync/mutations', (route) =>
+    await context.route('**/api/offline-sync/mutations', (route) =>
       route.fulfill({ status: 503, body: '{}' }),
     )
     await page.reload()
@@ -592,14 +592,14 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
       timeout: 20_000,
     })
     for (const viewport of VIEWPORTS) await shot(page, 'retryable-failure', viewport, theme)
-    await page.unroute('**/api/offline-sync/mutations')
+    await context.unroute('**/api/offline-sync/mutations')
 
     // A version conflict, with the readable server/local comparison open.
     await page.goto('/transactions')
     await page.getByRole('button', { name: 'Editar Disputada no servidor' }).click()
     await page.getByLabel('Valor (R$)', { exact: true }).fill('25,00')
     await page.getByRole('button', { name: /Salvar/ }).first().click()
-    await page.route('**/api/offline-sync/mutations', async (route) => {
+    await context.route('**/api/offline-sync/mutations', async (route) => {
       const response = await route.fetch()
       const body = await response.json()
       body.results = body.results.map((result: Record<string, unknown>) => ({
@@ -624,7 +624,7 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
     await page.getByRole('button', { name: /Resolver conflito/ }).first().click()
     await expect(page.getByRole('columnheader', { name: 'Valor salvo no servidor' })).toBeVisible()
     for (const viewport of VIEWPORTS) await shot(page, 'conflict-comparison', viewport, theme)
-    await page.unroute('**/api/offline-sync/mutations')
+    await context.unroute('**/api/offline-sync/mutations')
 
     // Reset for the next theme pass: discard everything and start clean.
     await page.getByRole('button', { name: 'Sair da conta' }).click()

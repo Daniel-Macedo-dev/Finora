@@ -96,6 +96,48 @@ async function createTransactionOffline(page: Page, description: string, amount:
   // A category is required, and offline it can only come from the cached list.
   await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
   await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
+  // The helper owns its own outcome: without this, a form that silently failed
+  // to submit only surfaces much later as an empty queue somewhere else.
+  await expect(page.getByRole('link', { name: /alteração\(ões\) offline/ })).toBeVisible({
+    timeout: 20_000,
+  })
+}
+
+/**
+ * Turns "sincronizar automaticamente ao reconectar" on or off through the real
+ * settings control.
+ *
+ * Reconnecting is itself a replay trigger, which is correct product behaviour
+ * and is covered by its own scenarios. The few cases below need the *first*
+ * attempt to be one the test controls — a lost response, or two tabs pressing
+ * sync at the same instant — so they switch the automatic attempt off exactly
+ * as a user would, and switch it back on afterwards.
+ */
+async function setAutoReplay(page: Page, enabled: boolean): Promise<void> {
+  await visit(page, '/settings')
+  const toggle = page.getByLabel('Sincronizar automaticamente ao reconectar')
+  // The box is controlled by the vault, and the vault only changes once the
+  // preference has been re-encrypted and written. So the click is followed by a
+  // wait on the settled value rather than by setChecked, which reads back the
+  // reverted box before the write lands.
+  if ((await toggle.isChecked()) !== enabled) await toggle.click()
+  await expect(toggle).toBeChecked({ checked: enabled, timeout: 20_000 })
+}
+
+/**
+ * Re-takes the offline snapshot through the real settings control.
+ *
+ * The encrypted copy is written when offline access is enabled and refreshed
+ * only when the user asks — that is the documented contract, and the settings
+ * screen says so. A row created online after the copy was taken therefore does
+ * not exist offline until this runs, so any journey that edits such a row
+ * offline has to ask for the copy first, exactly as a person would.
+ */
+async function refreshOfflineCopy(page: Page): Promise<void> {
+  await visit(page, '/settings')
+  await page.getByLabel('Senha offline para atualizar').fill(OFFLINE_PASSWORD)
+  await page.getByRole('button', { name: 'Atualizar dados offline' }).click()
+  await expect(page.getByText('Dados offline atualizados.')).toBeVisible({ timeout: 20_000 })
 }
 
 async function reconnect(context: BrowserContext, page: Page) {
@@ -186,7 +228,11 @@ test.describe.serial('Fila de mutações offline', () => {
 
   test('cofre bloqueado nunca sincroniza e mantém a fila criptografada', async () => {
     await visit(page, '/settings')
-    await page.getByRole('button', { name: 'Bloquear dados offline' }).click()
+    // Scoped: the offline context strip offers the same action by the same name.
+    await page
+      .getByLabel('Aplicativo e acesso offline')
+      .getByRole('button', { name: 'Bloquear dados offline' })
+      .click()
     // Deliberately not `visit`: this navigation must stay locked. Offline and
     // locked, the unlock screen stands in front of the whole app — the queue is
     // not merely hidden from this page, it is unreachable until the key is
@@ -232,33 +278,52 @@ test.describe.serial('Fila de mutações offline', () => {
   test('resposta perdida é reenviada sem duplicar o efeito', async () => {
     await goOfflineAndUnlock(context, page)
     await createTransactionOffline(page, 'Resposta perdida', '13,00')
+    // The attempt that loses its answer has to be this test's, not the one
+    // reconnecting fires on its own.
+    await setAutoReplay(page, false)
     await context.setOffline(false)
 
     // The server commits, then the reply is thrown away — exactly the ambiguity
     // the client cannot resolve on its own.
+    const attempts: string[] = []
     let dropped = false
-    await page.route('**/api/offline-sync/mutations', async (route) => {
+    await context.route('**/api/offline-sync/mutations', async (route) => {
       if (!dropped) {
         dropped = true
+        attempts.push('drop')
         await route.fetch()
         await route.abort('connectionreset')
         return
       }
+      attempts.push('continue')
       await route.continue()
     })
 
     await visit(page, '/offline-sync')
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
-    // First attempt looks like a network failure to the client.
-    await expect(page.getByText('Resposta perdida')).toBeVisible()
+    // Exactly one attempt leaves, and it is the one whose answer is discarded.
+    await expect.poll(() => attempts, { timeout: 20_000 }).toEqual(['drop'])
+    // It looks like a network failure to the client, so the work stays queued
+    // and actionable. Exact, because the row's own discard button repeats it.
+    await expect(page.getByText('Resposta perdida', { exact: true })).toBeVisible()
+    await expect(page.getByText('Falha temporária')).toBeVisible()
 
-    await page.getByRole('button', { name: /Tentar novamente/ }).click()
+    await page.getByRole('button', { name: /^Tentar novamente:/ }).click()
+    // The discarded answer looked like an unreachable API, so the app says so
+    // and refuses to send until the connection is proven again. The shell's own
+    // banner is that proof, and nothing can be replayed before it.
+    await expect(page.getByRole('button', { name: 'Sincronizar agora' })).toBeDisabled()
+    await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Sincronizar agora' })).toBeEnabled({
+      timeout: 20_000,
+    })
     await syncNow(page)
-    await page.unroute('**/api/offline-sync/mutations')
+    await context.unroute('**/api/offline-sync/mutations')
 
     await visit(page, '/transactions')
     // Exactly one, because the server recognised its own receipt.
     await expect(page.getByText('Resposta perdida')).toHaveCount(1)
+    await setAutoReplay(page, true)
   })
 
   test('criar e excluir offline não gera nenhuma escrita no servidor', async () => {
@@ -267,7 +332,14 @@ test.describe.serial('Fila de mutações offline', () => {
     await expect(page.getByText('Efêmera')).toBeVisible()
 
     await page.getByRole('button', { name: 'Excluir Efêmera' }).click()
-    await page.getByRole('button', { name: 'Excluir' }).last().click()
+    // Scoped to the confirmation: every row also has an "Excluir <descrição>".
+    await page
+      .getByRole('dialog', { name: 'Excluir transação' })
+      .getByRole('button', { name: 'Excluir', exact: true })
+      .click()
+    // Compaction cancels the pair outright, so the queue empties immediately —
+    // there is nothing left for the server to be told about.
+    await expect(page.getByRole('link', { name: /alteração\(ões\) offline/ })).toHaveCount(0)
 
     await reconnect(context, page)
     await expect(page.getByRole('heading', { name: 'Nenhuma alteração pendente' })).toBeVisible()
@@ -298,12 +370,14 @@ test.describe.serial('Fila de mutações offline', () => {
 
   test('ações de cartão e fatura continuam indisponíveis offline', async () => {
     await visit(page, '/credit-cards')
-    await expect(page.getByRole('heading', { name: 'Conteúdo indisponível offline' }))
-      .toBeVisible()
-      .catch(async () => {
-        const blocked = page.locator('#main-content button').first()
-        if (await blocked.count()) await expect(blocked).toBeDisabled()
-      })
+    // Cards are readable offline and writable nowhere near it: the shell says
+    // read-only in so many words, and every action on the page is inert.
+    await expect(page.getByText('Modo offline (somente leitura)')).toBeVisible()
+    // Every action on the page, not merely the obvious one: the only control
+    // left alive is the shell's own "lock the offline copy".
+    await expect(
+      page.locator("#main-content button:not([data-offline-allowed='true']):not([disabled])"),
+    ).toHaveCount(0)
   })
 
   test('importação de extrato continua exigindo conexão', async () => {
@@ -325,12 +399,20 @@ test.describe.serial('Fila de mutações offline', () => {
     // Cancelling keeps the work exactly where it was.
     await page.getByRole('button', { name: 'Cancelar' }).click()
     await visit(page, '/offline-sync')
-    await expect(page.getByText('Pendente ao sair')).toBeVisible()
+    await expect(page.getByText('Pendente ao sair', { exact: true })).toBeVisible()
   })
 
   test('descarte confirmado remove o cofre e a fila', async () => {
+    // Back online but deliberately not synchronized: the discard has to be
+    // reachable with the server available, which is precisely when losing the
+    // queue would be a choice rather than an accident.
+    await setAutoReplay(page, false)
     await context.setOffline(false)
-    await visit(page, '/dashboard')
+    // Through the sync centre, because coming back online leaves the copy
+    // locked and only that screen offers the way back into it. The warning is
+    // driven by what the queue actually holds, so it has to be readable.
+    await visit(page, '/offline-sync')
+    await expect(page.getByText('Pendente ao sair', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Sair da conta' }).click()
     await page.getByRole('button', { name: 'Descartar alterações e sair' }).click()
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
@@ -391,7 +473,7 @@ test.describe.serial('Conflitos e dependências offline', () => {
     await page.getByLabel('Preço à vista (R$)').fill('3500,00')
     await page.getByRole('button', { name: 'Adicionar opção' }).click()
 
-    await expect(page.getByText('Loja offline')).toBeVisible()
+    await expect(page.getByLabel('Opções de compra').getByText('Loja offline')).toBeVisible()
     await expect(page.getByText('Criado offline').first()).toBeVisible()
     // The analysis is the server's, and it says so rather than inventing one.
     await expect(page.getByText(/assim que este item for sincronizado/)).toBeVisible()
@@ -426,21 +508,30 @@ test.describe.serial('Conflitos e dependências offline', () => {
     await expect(page.getByText('Criado offline')).toHaveCount(0)
 
     // The children landed under the parent the server assigned, not a new one.
+    // Scoped to the options list: once the option exists on the server the
+    // price-history filter offers it by name too, and both matches are correct.
     await page.getByRole('link', { name: 'Notebook offline' }).first().click()
-    await expect(page.getByText('Loja offline')).toBeVisible()
-    await expect(page.getByRole('cell', { name: 'Loja offline' })).toBeVisible()
+    const options = page.getByLabel('Opções de compra')
+    await expect(options.getByText('Loja offline')).toHaveCount(1)
+    await expect(options.getByText('Loja offline')).toBeVisible()
+    // Exact: the row's edit and delete controls name the merchant too.
+    await expect(page.getByRole('cell', { name: 'Loja offline', exact: true })).toBeVisible()
   })
 
   test('edição offline sobre valor alterado no servidor vira conflito', async ({ browser }) => {
     // Create a transaction online, edit it offline, and change it from another
     // context in between — the ordinary "two devices" case.
     await visit(page, '/transactions')
-    await page.getByRole('button', { name: 'Nova transação' }).click()
+    // Header and empty state both offer it; either opens the same form.
+    await page.getByRole('button', { name: 'Nova transação' }).first().click()
     await page.getByLabel('Descrição', { exact: true }).fill('Disputada')
     await page.getByLabel('Valor (R$)', { exact: true }).fill('10,00')
     await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
     await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
     await expect(page.getByText('Disputada')).toBeVisible()
+    // It was created after the offline copy was taken, so the copy has to be
+    // asked for again before it can be edited without a connection.
+    await refreshOfflineCopy(page)
 
     await goOfflineAndUnlock(context, page)
     await visit(page, '/transactions')
@@ -452,10 +543,14 @@ test.describe.serial('Conflitos e dependências offline', () => {
     // Another session moves the server value on.
     const other = await browser.newContext({ locale: 'pt-BR' })
     const otherPage = await other.newPage()
-    await visit(otherPage, '/login')
+    // A fresh context has no vault, so this is a plain navigation.
+    await otherPage.goto('/login')
     await otherPage.getByLabel('E-mail').fill(identity.email)
     await otherPage.getByLabel('Senha', { exact: true }).fill(identity.password)
     await otherPage.getByRole('button', { name: 'Entrar' }).click()
+    // Wait for the session to actually exist: navigating while the login POST
+    // is still in flight cancels it and lands back on /login.
+    await expect(otherPage.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
     await visit(otherPage, '/transactions')
     await otherPage.getByRole('button', { name: 'Editar Disputada' }).click()
     await otherPage.getByLabel('Valor (R$)', { exact: true }).fill('80,00')
@@ -502,10 +597,14 @@ test.describe.serial('Conflitos e dependências offline', () => {
 
     const other = await browser.newContext({ locale: 'pt-BR' })
     const otherPage = await other.newPage()
-    await visit(otherPage, '/login')
+    // A fresh context has no vault, so this is a plain navigation.
+    await otherPage.goto('/login')
     await otherPage.getByLabel('E-mail').fill(identity.email)
     await otherPage.getByLabel('Senha', { exact: true }).fill(identity.password)
     await otherPage.getByRole('button', { name: 'Entrar' }).click()
+    // Wait for the session to actually exist: navigating while the login POST
+    // is still in flight cancels it and lands back on /login.
+    await expect(otherPage.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
     await visit(otherPage, '/transactions')
     await otherPage.getByRole('button', { name: 'Editar Disputada' }).click()
     await otherPage.getByLabel('Valor (R$)', { exact: true }).fill('99,00')
@@ -539,7 +638,7 @@ test.describe.serial('Conflitos e dependências offline', () => {
 
     await context.setOffline(false)
     // The server refuses this one for a reason the client cannot fix by retrying.
-    await page.route('**/api/offline-sync/mutations', async (route) => {
+    await context.route('**/api/offline-sync/mutations', async (route) => {
       const response = await route.fetch()
       const body = await response.json()
       body.results = body.results.map((result: Record<string, unknown>) => ({
@@ -554,7 +653,7 @@ test.describe.serial('Conflitos e dependências offline', () => {
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
     await expect(page.getByText('Categoria incompatível.')).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText('Falha').first()).toBeVisible()
-    await page.unroute('**/api/offline-sync/mutations')
+    await context.unroute('**/api/offline-sync/mutations')
 
     // The user can still discard it — it never retries itself into a loop.
     await page.getByRole('button', { name: /Descartar:/ }).first().click()
@@ -569,7 +668,7 @@ test.describe.serial('Conflitos e dependências offline', () => {
 
     let failures = 0
     const seenIds = new Set<string>()
-    await page.route('**/api/offline-sync/mutations', async (route) => {
+    await context.route('**/api/offline-sync/mutations', async (route) => {
       const body = route.request().postDataJSON() as {
         mutations: { clientMutationId: string }[]
       }
@@ -584,10 +683,10 @@ test.describe.serial('Conflitos e dependências offline', () => {
 
     await visit(page, '/offline-sync')
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
-    await expect(page.getByText('Servidor instável')).toBeVisible()
-    await page.getByRole('button', { name: /Tentar novamente/ }).click()
+    await expect(page.getByText('Servidor instável', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /^Tentar novamente:/ }).click()
     await syncNow(page)
-    await page.unroute('**/api/offline-sync/mutations')
+    await context.unroute('**/api/offline-sync/mutations')
 
     // One identity across both attempts: that is what lets the server dedupe.
     expect(seenIds.size).toBe(1)
@@ -606,16 +705,23 @@ test.describe('Duas abas do mesmo dono', () => {
 
     await goOfflineAndUnlock(context, first)
     await createTransactionOffline(first, 'Duas abas', '31,00')
+    // Without this, reconnecting drains the queue before the second tab even
+    // exists and there is no race left to observe.
+    await setAutoReplay(first, false)
     await context.setOffline(false)
 
     const second = await context.newPage()
     await visit(second, '/offline-sync')
     await expect(second.getByRole('heading', { name: 'Sincronização offline' })).toBeVisible()
+    await expect(second.getByText('Duas abas', { exact: true })).toBeVisible()
 
-    // Count what actually reaches the endpoint from either tab.
+    // Count what actually reaches the endpoint from either tab, and hold the
+    // first batch open long enough that the second tab really does press sync
+    // while a replay is in flight — that is the race the lock exists for.
     let batches = 0
     await context.route('**/api/offline-sync/mutations', async (route) => {
       batches += 1
+      if (batches === 1) await new Promise((resolve) => setTimeout(resolve, 2_000))
       await route.continue()
     })
 
@@ -635,8 +741,10 @@ test.describe('Duas abas do mesmo dono', () => {
     await expect(first.getByText('Duas abas')).toHaveCount(1)
     expect(batches).toBeGreaterThan(0)
 
-    // The second tab converges on the same empty queue.
-    await second.reload()
+    // The second tab converges on the same empty queue on its own. Deliberately
+    // without a reload: a reload would drop the in-memory key and land on the
+    // unlock screen, and it is the broadcast — not a refresh — that is supposed
+    // to keep the other tab honest.
     await expect(second.getByRole('heading', { name: 'Nenhuma alteração pendente' })).toBeVisible({
       timeout: 20_000,
     })
