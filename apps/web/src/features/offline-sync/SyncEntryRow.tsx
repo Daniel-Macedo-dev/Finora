@@ -29,6 +29,18 @@ const STATUS_LABELS: Record<OutboxStatus, string> = {
   DISCARDED: 'Descartado',
 }
 
+/** Warning for anything needing a decision, positive for done, neutral for waiting. */
+const STATUS_TONES: Record<OutboxStatus, string> = {
+  PENDING: 'badge-neutral',
+  BLOCKED: 'badge-neutral',
+  SYNCING: 'badge-neutral',
+  CONFLICT: 'badge-warning',
+  FAILED_RETRYABLE: 'badge-warning',
+  FAILED_PERMANENT: 'badge-warning',
+  APPLIED: 'badge-positive',
+  DISCARDED: 'badge-neutral',
+}
+
 const RESOLUTION_LABELS: Record<ResolutionOption, string> = {
   KEEP_SERVER: 'Manter o do servidor',
   APPLY_LOCAL: 'Aplicar minha alteração',
@@ -75,7 +87,11 @@ export default function SyncEntryRow({
             {timestamp(entry.createdAt)}
           </p>
         </div>
-        <span className={`badge sync-status sync-status-${entry.status.toLowerCase()}`}>
+        {/* The same three tones the domain screens use. The status class this
+            once built by hand had no rule behind it anywhere, so every state
+            rendered identically on the one screen whose job is to tell them
+            apart. Colour still only reinforces the label. */}
+        <span className={`badge ${STATUS_TONES[entry.status]}`}>
           {STATUS_LABELS[entry.status]}
         </span>
       </div>

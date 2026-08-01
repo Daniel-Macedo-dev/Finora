@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { formatBRL, formatDate } from '../../lib/format'
 import { useAccounts, useCategories } from '../shared/api'
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../shared/types'
@@ -115,9 +116,12 @@ export default function ConflictComparison({ entry }: { entry: OutboxEntry }) {
   // resolved back to names here, from the same lists the forms used.
   const categories = useCategories()
   const accounts = useAccounts()
-  const names = new Map<string, string>()
-  for (const category of categories.data ?? []) names.set(`categoryId:${category.id}`, category.name)
-  for (const account of accounts.data ?? []) names.set(`accountId:${account.id}`, account.name)
+  const names = useMemo(() => {
+    const resolved = new Map<string, string>()
+    for (const category of categories.data ?? []) resolved.set(`categoryId:${category.id}`, category.name)
+    for (const account of accounts.data ?? []) resolved.set(`accountId:${account.id}`, account.name)
+    return resolved
+  }, [accounts.data, categories.data])
 
   const conflict = entry.conflict
   if (!conflict) return null

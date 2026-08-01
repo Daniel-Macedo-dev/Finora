@@ -11,7 +11,7 @@ import { formatBRL, formatDate, formatPercent, parseMoneyInput } from '../../lib
 import { useOptionalVault } from '../../offline/VaultProvider'
 import { localId, projectList } from '../../offline/outbox/projection'
 import { UNSUPPORTED_OFFLINE_MESSAGE } from '../../offline/outbox/useOutbox'
-import PendingBadge from '../offline-sync/PendingBadge'
+import PendingBadge, { StaleTotalsWarning } from '../offline-sync/PendingBadge'
 import { useContributeToGoal, useCreateGoal, useDeleteGoal, useGoals, useUpdateGoal } from './api'
 import type { Goal, GoalRequest } from './types'
 import './goals.css'
@@ -197,6 +197,11 @@ export default function GoalsPage() {
           }
         />
       ) : goals.data ? (
+        <>
+          {/* Progress is the server's currentAmount measured against a target
+              that may itself be waiting in the queue, so the percentage belongs
+              to neither state until the queue drains. */}
+          <StaleTotalsWarning pendingCount={vault?.counts.total ?? 0} />
         <ul className="goal-grid">
           {rows.map(({ item: goal, pending }) => (
             <li key={goal.id} className={`card goal-card ${goal.status === 'ARCHIVED' ? 'goal-archived' : ''}`}>
@@ -274,6 +279,7 @@ export default function GoalsPage() {
             </li>
           ))}
         </ul>
+        </>
       ) : null}
 
       <Dialog

@@ -69,7 +69,11 @@
   --positive-soft: #ddf2e4;
   --negative: #c23434;
   --negative-soft: #fbe4e4;
-  --warning: #a86a00;
+  /* Dark enough to clear 4.5:1 on the soft fill, the surface and the page.
+     Badges are 12px, which is normal text for WCAG however bold it is, and the
+     queue paints "Conflito" and "Falha" in this colour — the two words the
+     reader most needs. The previous #a86a00 measured 3.94:1 on the fill. */
+  --warning: #8f5a00;
   --warning-soft: #fdf0d7;
   --info: #21618f;
   --info-soft: #e0edf7;

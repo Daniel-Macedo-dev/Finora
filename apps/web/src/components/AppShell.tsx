@@ -220,10 +220,25 @@ export default function AppShell() {
       })
     }
     disableMutations()
-    const observer = new MutationObserver(disableMutations)
+    // Coalesced into a frame, and the observer is detached while the sweep
+    // writes: without this, every keystroke in a filter or refetch of a long
+    // list re-scans the whole subtree, and the sweep's own disabled/title
+    // writes feed straight back into the observer that scheduled it.
+    let scheduled = 0
     const main = document.getElementById('main-content')
-    if (main) observer.observe(main, { childList: true, subtree: true })
+    const observe = () => main && observer.observe(main, { childList: true, subtree: true })
+    const observer = new MutationObserver(() => {
+      if (scheduled) return
+      scheduled = requestAnimationFrame(() => {
+        scheduled = 0
+        observer.disconnect()
+        disableMutations()
+        observe()
+      })
+    })
+    observe()
     return () => {
+      if (scheduled) cancelAnimationFrame(scheduled)
       observer.disconnect()
       document.querySelectorAll<HTMLButtonElement>("#main-content button[data-offline-disabled='true']").forEach((button) => {
         button.disabled = false
