@@ -664,6 +664,10 @@ test.describe.serial('Conflitos e dependências offline', () => {
   test('falha temporária é reenviada com a mesma identidade', async () => {
     await goOfflineAndUnlock(context, page)
     await createTransactionOffline(page, 'Servidor instável', '11,00')
+    // Both attempts here are this test's. A 503 leaves the entry retryable, so
+    // the automatic trigger keeps re-firing as it falls due and re-renders the
+    // row — detaching the retry button mid-click on a slower machine.
+    await setAutoReplay(page, false)
     await context.setOffline(false)
 
     let failures = 0
@@ -690,6 +694,7 @@ test.describe.serial('Conflitos e dependências offline', () => {
 
     // One identity across both attempts: that is what lets the server dedupe.
     expect(seenIds.size).toBe(1)
+    await setAutoReplay(page, true)
   })
 })
 
