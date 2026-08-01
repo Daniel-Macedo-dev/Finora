@@ -209,6 +209,31 @@ Segunda release: multiusuário com autenticação por sessão. Ainda de uso loca
 
 Direções futuras em [`docs/roadmap.md`](docs/roadmap.md).
 
+## Endpoints de sincronização offline
+
+Exige sessão e CSRF como qualquer outra escrita. O proprietário vem da sessão —
+o corpo não tem onde nomear um usuário. Contrato completo em
+[`docs/offline-sync.md`](docs/offline-sync.md).
+
+### POST /api/offline-sync/mutations
+
+Reenvia um lote de mutações registradas offline.
+
+- Body: `{ mutations: [{ clientMutationId: uuid, resourceType, operation,
+  target: { serverId?: number, clientResourceId?: uuid }, baseVersion?: number,
+  payload: object }] }`
+- Limites: 25 operações por lote, 64 KiB por payload, 512 KiB somados. O
+  `Content-Length` declarado é recusado antes de o corpo ser lido.
+- Retorno: `{ results: [{ clientMutationId, resourceType, operation, status,
+  clientResourceId, resourceId, version, result, conflict, error }] }` — um
+  resultado por mutação, na ordem de envio.
+- `status` por operação: `APPLIED`, `ALREADY_APPLIED` (recibo reconhecido, sem
+  reaplicar efeito), `CONFLICT` (traz o valor do servidor e as resoluções
+  possíveis) e `REJECTED` (traz `code` e `detail`).
+- Erros: `200` mesmo com mutações recusadas — o status é por operação;
+  `401` sem sessão; `403` sem CSRF; `422` com `code` quando o lote inteiro é
+  inválido (`SYNC_BATCH_TOO_LARGE`, `SYNC_BATCH_PAYLOAD_TOO_LARGE`).
+
 ## Endpoints de notificações
 
 Todos exigem sessão; mutações também exigem CSRF. O usuário é sempre derivado

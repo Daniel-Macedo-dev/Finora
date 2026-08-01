@@ -47,6 +47,23 @@ public class OfflineSyncController {
         this.service = service;
     }
 
+    /**
+     * Replays one batch of queued mutations for the authenticated owner.
+     *
+     * <p>Each mutation is answered individually and in submission order, so a
+     * 200 says the batch was processed — not that it succeeded. A caller must
+     * read every {@code status} to know what happened.
+     *
+     * @param http    inspected only for the declared body size, refused before
+     *                the body is read
+     * @param request at most 25 mutations, 64 KiB each and 512 KiB in total
+     * @return one result per input mutation, carrying the assigned server id
+     *         and version on success, the server's snapshot on a conflict, or a
+     *         typed error when a domain rule refused it
+     * @throws SyncBatchRejectedException when the batch as a whole is
+     *         unacceptable — too many operations, or a payload beyond the
+     *         limits — answered as 422 with a {@code code}
+     */
     @PostMapping("/mutations")
     public MutationBatchResponse replay(HttpServletRequest http,
                                         @Valid @RequestBody MutationBatchRequest request) {
