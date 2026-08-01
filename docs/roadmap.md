@@ -47,20 +47,44 @@ promessa de implementação — é direção.
 > PWA, instalabilidade e modo offline seguro foram **concluídos** — shell
 > instalável, Service Worker sem cache de API e cofre IndexedDB criptografado e
 > owner-isolated. Ver [pwa-offline.md](pwa-offline.md).
->
-> **Fila de mutações offline, idempotência e resolução de conflitos** foi
-> **concluída** — CRUD offline para transações comuns, orçamentos, metas, itens da
-> lista de desejos, opções de compra e observações manuais de preço, com fila
-> criptografada, compactação, ordenação por dependência, recibos duráveis
-> owner-scoped, versões otimistas, conflitos tipados resolvidos pelo usuário e
-> central de sincronização. Fluxos com auditoria própria — extratos, cartões,
-> faturas, recorrentes, aportes, execução de compra e captura de preço — continuam
-> exigindo conexão **por decisão**, não por omissão. Ver
-> [offline-sync.md](offline-sync.md).
+
+## Etapa em andamento
+
+**Fila de mutações offline, idempotência e resolução de conflitos.**
+
+O comportamento está implementado e verificado: CRUD offline para transações
+comuns, orçamentos, metas, itens da lista de desejos, opções de compra e
+observações manuais de preço, com fila criptografada, compactação, ordenação por
+dependência, recibos duráveis owner-scoped, versões otimistas, conflitos tipados
+resolvidos pelo usuário e central de sincronização. Fluxos com auditoria
+própria — extratos, cartões, faturas, recorrentes, aportes, execução de compra e
+captura de preço — continuam exigindo conexão **por decisão**, não por omissão.
+Ver [offline-sync.md](offline-sync.md).
+
+Verificação verde hoje: backend `test` e `verify` (377 testes), lint, typecheck,
+testes unitários, build e verificação de PWA no frontend, `scripts/verify.ps1`,
+a suíte focada `offline-sync.spec.ts` (29 de 29) e a suíte E2E completa
+(117 aprovados, 3 pulados, nenhuma falha).
+
+**Falta para concluir: o QA visual.** A suíte de captura roda e produz dez dos
+doze estados autorais, apenas no tema claro; conflito e comparação aberta ainda
+não foram capturados, e o tema escuro não chegou a rodar. A inspeção das
+capturas encontrou defeitos na própria suíte — quadros tirados durante a
+transição de layout, sobre esqueletos de carregamento — corrigidos mas ainda não
+reverificados de ponta a ponta. Enquanto isso não fechar, a etapa não é dada por
+concluída.
+
+Pendência conhecida do produto, registrada e não corrigida nesta etapa: sair da
+conta com o cofre **bloqueado** apaga a cópia local sem aviso, porque a contagem
+de pendências é ilegível enquanto o cofre está fechado. Como a chave só vive em
+memória, qualquer recarregamento leva a esse estado. Fechar isso exige um
+marcador em texto claro no registro criptografado — muda o formato do cofre e
+sua fronteira de metadados, então é decisão de uma etapa própria, não um remendo
+no fim desta.
 
 ## Próxima grande etapa
 
-**Multi-moeda**.
+Fechar o QA visual da fila offline. **Multi-moeda** só entra depois disso.
 
 ## Depois disso
 

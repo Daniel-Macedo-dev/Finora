@@ -368,9 +368,26 @@ ordenação e ciclos), `replay.test.ts` (aplicação, já aplicado, perda de con
 backoff, recusa permanente, conflito, dependência e lote limitado),
 `projection.test.ts` (sobreposição pendente sem reescrever o retrato do servidor) e
 `VaultProvider.test.tsx` (ciclo real de habilitar, enfileirar, persistir, bloquear,
-desbloquear, resolver e remover). `offline-sync.spec.ts` contém 24 jornadas
+desbloquear, resolver e remover). `offline-sync.spec.ts` contém 29 jornadas
 Chromium, incluindo perda de resposta simulada abortando a resposta depois do
 commit, conflito entre dois contextos reais e isolamento entre donos.
+
+Uma armadilha que custou caro e vale registrar: o Service Worker registra rotas
+`NetworkOnly` para `/api` em **todos** os métodos, então um lote de replay é
+emitido *pelo worker*, não pela página — e `page.route` não enxerga requisição de
+service worker. Toda interceptação do endpoint de sincronização precisa ser
+`context.route`. Com `page.route` a interceptação simplesmente não acontecia, e o
+cenário passava ou falhava conforme o worker já tivesse assumido aquela
+navegação.
+
+Reconectar dispara um replay por si só. Os cenários que precisam controlar a
+primeira tentativa desligam **"sincronizar automaticamente ao reconectar"** pelo
+próprio checkbox de configurações, em vez de disputar corrida com ele.
+
+A cópia offline é um retrato do momento em que foi criada. Uma linha criada no
+servidor depois disso não existe offline até o usuário pedir a cópia de novo —
+jornadas que editam offline uma linha criada online precisam de
+"Atualizar dados offline" antes.
 
 O histórico de preços acrescenta migração populada V12→V13, lifecycle e posse
 via MockMvc, regressão da análise e corridas com threads/Testcontainers. Vitest
