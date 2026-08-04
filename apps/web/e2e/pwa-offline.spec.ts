@@ -107,8 +107,15 @@ test.describe.serial('PWA e acesso offline seguro', () => {
     await context.setOffline(false)
     await page.goto('/dashboard')
     await expect(page.getByText(/^Modo offline/)).toHaveCount(0, { timeout: 20_000 })
+
+    // Reconnecting reloads, which drops the in-memory key, so the copy is
+    // locked by the time this runs — its queue is unreadable and signing out
+    // says so rather than deleting on the assumption that it is empty.
     await page.getByRole('button', { name: 'Sair da conta' }).click()
-    await expect(page).toHaveURL(/\/login/)
+    await expect(page.getByRole('heading', { name: 'A cópia offline está bloqueada' })).toBeVisible()
+    await page.getByRole('button', { name: 'Descartar cópia e sair' }).click()
+    await page.getByRole('button', { name: 'Excluir e sair definitivamente' }).click()
+    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
     const exists = await page.evaluate(async () => new Promise<boolean>((resolve) => {
       const request = indexedDB.open('finora-offline-vault')
       request.onsuccess = () => {

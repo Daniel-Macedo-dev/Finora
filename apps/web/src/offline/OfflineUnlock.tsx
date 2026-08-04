@@ -2,34 +2,20 @@ import { useState, type FormEvent } from 'react'
 import { LockKeyhole, Trash2 } from 'lucide-react'
 import { useVault } from './VaultProvider'
 import VaultDeletionDialog from './VaultDeletionDialog'
+import { useVaultRemoval } from './useVaultRemoval'
 import './offline.css'
 
 export default function OfflineUnlock() {
   const vault = useVault()
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [confirmingRemoval, setConfirmingRemoval] = useState(false)
-  const [removing, setRemoving] = useState(false)
-  const [removalFailed, setRemovalFailed] = useState<string | null>(null)
+  const removal = useVaultRemoval(
+    'A cópia offline não pôde ser excluída deste dispositivo. Tente novamente.',
+  )
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     try { await vault.unlock(password, false) } catch { setPassword('') }
-  }
-
-  async function removeVault() {
-    setRemoving(true)
-    setRemovalFailed(null)
-    try {
-      await vault.remove()
-      setConfirmingRemoval(false)
-    } catch {
-      setRemovalFailed(
-        'A cópia offline não pôde ser excluída deste dispositivo. Tente novamente.',
-      )
-    } finally {
-      setRemoving(false)
-    }
   }
 
   return (
@@ -54,24 +40,24 @@ export default function OfflineUnlock() {
         <button
           type="button"
           className="btn btn-danger"
-          disabled={vault.destructiveRisk === 'BUSY' || removing}
-          onClick={() => { setRemovalFailed(null); setConfirmingRemoval(true) }}
+          disabled={removal.settling || removal.removing}
+          onClick={removal.ask}
         >
           <Trash2 size={16} aria-hidden="true" /> Excluir cópia local
         </button>
       </section>
       <VaultDeletionDialog
-        open={confirmingRemoval}
-        risk={vault.destructiveRisk}
+        open={removal.confirming}
+        risk={removal.risk}
         counts={vault.counts}
         intent="DISABLE_OFFLINE"
-        busy={removing}
-        failure={removalFailed}
-        onCancel={() => { setConfirmingRemoval(false); setRemovalFailed(null) }}
+        busy={removal.removing}
+        failure={removal.failure}
+        onCancel={removal.dismiss}
         // No connection here, so there is nowhere to review: the unlock form is
         // already on this screen and closing the dialog returns to it.
-        onReview={() => setConfirmingRemoval(false)}
-        onConfirm={() => void removeVault()}
+        onReview={removal.dismiss}
+        onConfirm={() => void removal.remove()}
       />
     </main>
   )

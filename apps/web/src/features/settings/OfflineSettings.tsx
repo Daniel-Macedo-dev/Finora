@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useCurrentUser } from '../auth/api'
 import { useVault } from '../../offline/VaultProvider'
 import VaultDeletionDialog from '../../offline/VaultDeletionDialog'
+import { useVaultRemoval } from '../../offline/useVaultRemoval'
 import { usePwa } from '../../pwa/PwaProvider'
 
 export default function OfflineSettings() {
@@ -15,32 +16,14 @@ export default function OfflineSettings() {
   const [showPassword, setShowPassword] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [confirmingRemoval, setConfirmingRemoval] = useState(false)
-  const [removing, setRemoving] = useState(false)
-  const [removalFailed, setRemovalFailed] = useState<string | null>(null)
-
-  const settling = vault.destructiveRisk === 'BUSY'
-
-  async function removeVault() {
-    setRemoving(true)
-    setRemovalFailed(null)
-    try {
-      await vault.remove()
-      setConfirmingRemoval(false)
-      // No success message on purpose: removing the vault clears the query
-      // cache, which remounts this screen and would throw the message away
-      // mid-sentence. The status list above says "Desativada" and the enable
-      // form comes back — both survive the remount, which a toast does not.
-    } catch {
-      // Never reported as done when the record is still there.
-      setRemovalFailed(
-        'A cópia offline não pôde ser excluída deste dispositivo. Ela continua bloqueada aqui. '
-        + 'Tente novamente.',
-      )
-    } finally {
-      setRemoving(false)
-    }
-  }
+  // No success message on purpose: removing the vault clears the query cache,
+  // which remounts this screen and would throw the message away mid-sentence.
+  // The status list above says "Desativada" and the enable form comes back —
+  // both survive the remount, which a toast does not.
+  const removal = useVaultRemoval(
+    'A cópia offline não pôde ser excluída deste dispositivo. Ela continua bloqueada aqui. '
+    + 'Tente novamente.',
+  )
 
   async function enable(event: FormEvent) {
     event.preventDefault()
@@ -126,13 +109,13 @@ export default function OfflineSettings() {
           <button
             type="button"
             className="btn btn-danger"
-            disabled={settling || removing}
-            aria-describedby={settling ? 'disable-offline-settling' : undefined}
-            onClick={() => { setRemovalFailed(null); setConfirmingRemoval(true) }}
+            disabled={removal.settling || removal.removing}
+            aria-describedby={removal.settling ? 'disable-offline-settling' : undefined}
+            onClick={removal.ask}
           >
             Desativar e excluir cópia local
           </button>
-          {settling && (
+          {removal.settling && (
             <span id="disable-offline-settling" role="status" className="settings-note">
               Verificando a cópia offline deste dispositivo…
             </span>
@@ -140,15 +123,15 @@ export default function OfflineSettings() {
         </div>
       )}
       <VaultDeletionDialog
-        open={confirmingRemoval}
-        risk={vault.destructiveRisk}
+        open={removal.confirming}
+        risk={removal.risk}
         counts={vault.counts}
         intent="DISABLE_OFFLINE"
-        busy={removing}
-        failure={removalFailed}
-        onCancel={() => { setConfirmingRemoval(false); setRemovalFailed(null) }}
-        onReview={() => { setConfirmingRemoval(false); navigate('/offline-sync') }}
-        onConfirm={() => void removeVault()}
+        busy={removal.removing}
+        failure={removal.failure}
+        onCancel={removal.dismiss}
+        onReview={() => { removal.dismiss(); navigate('/offline-sync') }}
+        onConfirm={() => void removal.remove()}
       />
       {feedback && <p role="status" className="settings-feedback">{feedback}</p>}
     </section>

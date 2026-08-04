@@ -63,6 +63,18 @@ export default function VaultDeletionDialog({
   // the ordinary "this deletes the local copy" confirmation and no second step.
   const singleStep = risk === 'KNOWN_SAFE'
 
+  /** The two sentences every variant ends on, and the one it may have to add. */
+  const closing = (
+    <>
+      <p className="vault-risk-text">Os dados já enviados ao servidor não são apagados.</p>
+      {failure && (
+        <p role="alert" className="field-error">
+          {failure}
+        </p>
+      )}
+    </>
+  )
+
   if (final || singleStep) {
     return (
       <Dialog
@@ -74,12 +86,7 @@ export default function VaultDeletionDialog({
         {!singleStep && (
           <p className="vault-risk-text vault-risk-final">Essa ação não pode ser desfeita.</p>
         )}
-        <p className="vault-risk-text">Os dados já enviados ao servidor não são apagados.</p>
-        {failure && (
-          <p role="alert" className="field-error">
-            {failure}
-          </p>
-        )}
+        {closing}
         <div className="form-footer vault-risk-footer">
           <button
             type="button"
@@ -105,12 +112,7 @@ export default function VaultDeletionDialog({
           {paragraph}
         </p>
       ))}
-      <p className="vault-risk-text">Os dados já enviados ao servidor não são apagados.</p>
-      {failure && (
-        <p role="alert" className="field-error">
-          {failure}
-        </p>
-      )}
+      {closing}
       <div className="form-footer vault-risk-footer">
         {/* Focus starts here on purpose: the destructive button must never be
             one stray Enter away from being pressed. */}

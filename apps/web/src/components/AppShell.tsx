@@ -27,6 +27,7 @@ import { useConnection } from '../offline/connection'
 import { usePwa } from '../pwa/PwaProvider'
 import { useVault } from '../offline/VaultProvider'
 import VaultDeletionDialog from '../offline/VaultDeletionDialog'
+import { useVaultRemoval } from '../offline/useVaultRemoval'
 import OfflineUnavailable from '../offline/OfflineUnavailable'
 import { UNSUPPORTED_OFFLINE_MESSAGE } from '../offline/outbox/useOutbox'
 import SyncIndicator from '../features/offline-sync/SyncIndicator'
@@ -63,12 +64,10 @@ export function UserPanel() {
   const vault = useVault()
   const logout = useLogout()
   const navigate = useNavigate()
-  const [confirmingLogout, setConfirmingLogout] = useState(false)
-  const [removing, setRemoving] = useState(false)
-  const [removalFailed, setRemovalFailed] = useState<string | null>(null)
-
-  const risk = vault.destructiveRisk
-  const settling = risk === 'BUSY'
+  const removal = useVaultRemoval(
+    'Sua sessão foi encerrada, mas a cópia offline deste dispositivo não pôde ser excluída. '
+    + 'Ela continua bloqueada aqui. Tente novamente.',
+  )
 
   const user = currentUser.data ?? vault.owner
   if (!user) {
@@ -85,24 +84,11 @@ export function UserPanel() {
    * would report a deletion that did not happen.
    */
   function signOut() {
-    setRemoving(true)
-    setRemovalFailed(null)
     logout.mutate(undefined, {
       onSettled: () => {
-        void vault
-          .remove()
-          .then(() => {
-            setConfirmingLogout(false)
-            navigate('/login', { replace: true })
-          })
-          .catch(() => {
-            setRemovalFailed(
-              'Sua sessão foi encerrada, mas a cópia offline deste dispositivo não pôde ser '
-              + 'excluída. Ela continua bloqueada aqui. Tente novamente.',
-            )
-            setConfirmingLogout(true)
-          })
-          .finally(() => setRemoving(false))
+        void removal.remove().then((removed) => {
+          if (removed) navigate('/login', { replace: true })
+        })
       },
     })
   }
@@ -115,13 +101,12 @@ export function UserPanel() {
    * hold unique work, because assuming the opposite is unrecoverable.
    */
   function handleLogout() {
-    if (settling) return
-    if (risk === 'NO_LOCAL_COPY' || risk === 'KNOWN_SAFE') {
+    if (removal.settling) return
+    if (removal.risk === 'NO_LOCAL_COPY' || removal.risk === 'KNOWN_SAFE') {
       signOut()
       return
     }
-    setRemovalFailed(null)
-    setConfirmingLogout(true)
+    removal.ask()
   }
 
   return (
@@ -142,32 +127,29 @@ export function UserPanel() {
         type="button"
         className="btn btn-ghost btn-icon"
         onClick={handleLogout}
-        disabled={logout.isPending || removing || settling}
+        disabled={logout.isPending || removal.removing || removal.settling}
         aria-label="Sair da conta"
-        aria-describedby={settling ? 'logout-settling' : undefined}
+        aria-describedby={removal.settling ? 'logout-settling' : undefined}
         title="Sair"
       >
         <LogOut size={16} aria-hidden="true" />
       </button>
-      {settling && (
+      {removal.settling && (
         <span id="logout-settling" role="status" className="visually-hidden">
           Verificando a cópia offline deste dispositivo antes de permitir sair.
         </span>
       )}
 
       <VaultDeletionDialog
-        open={confirmingLogout}
-        risk={risk}
+        open={removal.confirming}
+        risk={removal.risk}
         counts={vault.counts}
         intent="LOGOUT"
-        busy={removing}
-        failure={removalFailed}
-        onCancel={() => {
-          setConfirmingLogout(false)
-          setRemovalFailed(null)
-        }}
+        busy={removal.removing}
+        failure={removal.failure}
+        onCancel={removal.dismiss}
         onReview={() => {
-          setConfirmingLogout(false)
+          removal.dismiss()
           navigate('/offline-sync')
         }}
         onConfirm={signOut}
