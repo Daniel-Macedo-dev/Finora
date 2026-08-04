@@ -1,18 +1,43 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCurrentUser } from '../auth/api'
 import { useVault } from '../../offline/VaultProvider'
+import VaultDeletionDialog from '../../offline/VaultDeletionDialog'
 import { usePwa } from '../../pwa/PwaProvider'
 
 export default function OfflineSettings() {
   const currentUser = useCurrentUser()
   const vault = useVault()
   const pwa = usePwa()
+  const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [removalFailed, setRemovalFailed] = useState<string | null>(null)
+
+  const settling = vault.destructiveRisk === 'BUSY'
+
+  async function removeVault() {
+    setRemoving(true)
+    setRemovalFailed(null)
+    try {
+      await vault.remove()
+      setConfirmingRemoval(false)
+      setFeedback('Acesso offline desativado e cópia local excluída deste dispositivo.')
+    } catch {
+      // Never reported as done when the record is still there.
+      setRemovalFailed(
+        'A cópia offline não pôde ser excluída deste dispositivo. Ela continua bloqueada aqui. '
+        + 'Tente novamente.',
+      )
+    } finally {
+      setRemoving(false)
+    }
+  }
 
   async function enable(event: FormEvent) {
     event.preventDefault()
@@ -43,7 +68,9 @@ export default function OfflineSettings() {
         <div><dt>Cópia offline</dt><dd>{vault.state === 'ABSENT' ? 'Desativada' : vault.state === 'LOCKED' ? 'Bloqueada' : vault.state.startsWith('UNLOCKED') ? 'Desbloqueada' : vault.state === 'CORRUPTED' ? 'Indisponível' : 'Verificando'}</dd></div>
         {vault.updatedAt && <div><dt>Última atualização</dt><dd>{new Date(vault.updatedAt).toLocaleString('pt-BR')}</dd></div>}
         {vault.size !== null && <div><dt>Tamanho criptografado</dt><dd>{Math.ceil(vault.size / 1024)} KB</dd></div>}
-        <div><dt>Alterações offline pendentes</dt><dd>{vault.counts.total}</dd></div>
+        {/* Zero would be a lie while the copy is locked: the queue lives inside
+            the ciphertext, so "none" and "unreadable" are different answers. */}
+        <div><dt>Alterações offline pendentes</dt><dd>{vault.destructiveRisk === 'UNKNOWN_LOCKED' ? 'Desconhecido (cópia bloqueada)' : vault.destructiveRisk === 'UNKNOWN_CORRUPTED' ? 'Desconhecido (cópia ilegível)' : vault.counts.total}</dd></div>
         <div><dt>Última sincronização</dt><dd>{vault.lastSyncAt ? new Date(vault.lastSyncAt).toLocaleString('pt-BR') : 'Ainda não sincronizado'}</dd></div>
       </dl>
       {/* Never claim "tudo sincronizado" while a conflict or a failure is
@@ -91,23 +118,35 @@ export default function OfflineSettings() {
               which is false, and contradicted by the shell offering the very
               same action a few pixels away. */}
           <button data-offline-allowed="true" type="button" className="btn btn-secondary" onClick={vault.lock}>Bloquear dados offline</button>
+          {/* Same guard as signing out, for the same reason: this button deletes
+              the same record, and a locked copy is no more inspectable here. */}
           <button
             type="button"
             className="btn btn-danger"
-            onClick={() => {
-              // Removing the vault destroys queued work the server has never
-              // seen, so the confirmation has to say so in those terms.
-              const message = vault.hasPendingWork
-                ? `Há ${vault.counts.total} alteração(ões) offline que ainda não chegaram ao servidor. `
-                  + 'Excluir a cópia local apaga essas alterações definitivamente. Continuar?'
-                : 'Desativar o acesso offline e excluir a cópia local? Os dados do servidor não serão alterados.'
-              if (window.confirm(message)) void vault.remove()
-            }}
+            disabled={settling || removing}
+            aria-describedby={settling ? 'disable-offline-settling' : undefined}
+            onClick={() => { setRemovalFailed(null); setConfirmingRemoval(true) }}
           >
             Desativar e excluir cópia local
           </button>
+          {settling && (
+            <span id="disable-offline-settling" role="status" className="settings-note">
+              Verificando a cópia offline deste dispositivo…
+            </span>
+          )}
         </div>
       )}
+      <VaultDeletionDialog
+        open={confirmingRemoval}
+        risk={vault.destructiveRisk}
+        counts={vault.counts}
+        intent="DISABLE_OFFLINE"
+        busy={removing}
+        failure={removalFailed}
+        onCancel={() => { setConfirmingRemoval(false); setRemovalFailed(null) }}
+        onReview={() => { setConfirmingRemoval(false); navigate('/offline-sync') }}
+        onConfirm={() => void removeVault()}
+      />
       {feedback && <p role="status" className="settings-feedback">{feedback}</p>}
     </section>
   )

@@ -17,6 +17,7 @@ interface DialogProps {
  */
 export default function Dialog({ open, title, onClose, children, wide }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const opener = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const dialog = ref.current
@@ -24,9 +25,27 @@ export default function Dialog({ open, title, onClose, children, wide }: DialogP
       return
     }
     if (open && !dialog.open) {
+      opener.current = document.activeElement as HTMLElement | null
       dialog.showModal()
     } else if (!open && dialog.open) {
       dialog.close()
+    }
+  }, [open])
+
+  // Closing unmounts the <dialog> before the platform can run its own focus
+  // restoration, so without this the caret lands on <body> and a keyboard user
+  // loses their place — right after being asked about something destructive,
+  // which is the worst moment to be dropped at the top of the page.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    return () => {
+      const target = opener.current
+      opener.current = null
+      if (target?.isConnected) {
+        target.focus()
+      }
     }
   }, [open])
 

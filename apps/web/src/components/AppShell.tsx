@@ -1,7 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LoadingCards } from './states'
-import Dialog from './Dialog'
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -27,6 +26,7 @@ import './AppShell.css'
 import { useConnection } from '../offline/connection'
 import { usePwa } from '../pwa/PwaProvider'
 import { useVault } from '../offline/VaultProvider'
+import VaultDeletionDialog from '../offline/VaultDeletionDialog'
 import OfflineUnavailable from '../offline/OfflineUnavailable'
 import { UNSUPPORTED_OFFLINE_MESSAGE } from '../offline/outbox/useOutbox'
 import SyncIndicator from '../features/offline-sync/SyncIndicator'
@@ -57,39 +57,71 @@ function BrandMark() {
   )
 }
 
-function UserPanel() {
+/** Exported so the destructive sign-out path can be tested on its own. */
+export function UserPanel() {
   const currentUser = useCurrentUser()
   const vault = useVault()
   const logout = useLogout()
   const navigate = useNavigate()
   const [confirmingLogout, setConfirmingLogout] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [removalFailed, setRemovalFailed] = useState<string | null>(null)
+
+  const risk = vault.destructiveRisk
+  const settling = risk === 'BUSY'
 
   const user = currentUser.data ?? vault.owner
   if (!user) {
     return null
   }
 
+  /**
+   * Ends the session and deletes the local copy, in that order.
+   *
+   * The deletion runs whichever way the server call went — a logout the user
+   * confirmed must not leave decrypted data on the device because the network
+   * happened to be down — but it is still allowed to fail loudly. Navigating to
+   * the login screen while the encrypted record is demonstrably still there
+   * would report a deletion that did not happen.
+   */
   function signOut() {
+    setRemoving(true)
+    setRemovalFailed(null)
     logout.mutate(undefined, {
-      // Local cleanup runs whichever way the server call went: a failed
-      // logout request must not leave decrypted data behind on the device.
       onSettled: () => {
-        void vault.remove().finally(() => navigate('/login', { replace: true }))
+        void vault
+          .remove()
+          .then(() => {
+            setConfirmingLogout(false)
+            navigate('/login', { replace: true })
+          })
+          .catch(() => {
+            setRemovalFailed(
+              'Sua sessão foi encerrada, mas a cópia offline deste dispositivo não pôde ser '
+              + 'excluída. Ela continua bloqueada aqui. Tente novamente.',
+            )
+            setConfirmingLogout(true)
+          })
+          .finally(() => setRemoving(false))
       },
     })
   }
 
   /**
-   * Logging out deletes the local encrypted copy — including anything the
-   * server has never seen. That is not a decision to make on the user's behalf
-   * behind a generic "Sair", so unsynchronized work turns it into a question.
+   * Signing out deletes the local encrypted copy — including anything the
+   * server has never seen. Whether there is anything to lose is a question the
+   * application can only answer while the copy is readable, so everything else
+   * goes through the warning: an unreadable copy is treated as one that may
+   * hold unique work, because assuming the opposite is unrecoverable.
    */
   function handleLogout() {
-    if (vault.hasPendingWork) {
-      setConfirmingLogout(true)
+    if (settling) return
+    if (risk === 'NO_LOCAL_COPY' || risk === 'KNOWN_SAFE') {
+      signOut()
       return
     }
-    signOut()
+    setRemovalFailed(null)
+    setConfirmingLogout(true)
   }
 
   return (
@@ -103,56 +135,43 @@ function UserPanel() {
           <span className="user-email">{user.email}</span>
         </span>
       </NavLink>
+      {/* Disabled only while the vault state is still settling: deleting a copy
+          the application has not finished looking at is a guess, and the one
+          guess that cannot be taken back. */}
       <button
         type="button"
         className="btn btn-ghost btn-icon"
         onClick={handleLogout}
-        disabled={logout.isPending}
+        disabled={logout.isPending || removing || settling}
         aria-label="Sair da conta"
+        aria-describedby={settling ? 'logout-settling' : undefined}
         title="Sair"
       >
         <LogOut size={16} aria-hidden="true" />
       </button>
+      {settling && (
+        <span id="logout-settling" role="status" className="visually-hidden">
+          Verificando a cópia offline deste dispositivo antes de permitir sair.
+        </span>
+      )}
 
-      <Dialog
+      <VaultDeletionDialog
         open={confirmingLogout}
-        title="Sair com alterações offline pendentes"
-        onClose={() => setConfirmingLogout(false)}
-      >
-        <p style={{ color: 'var(--ink-secondary)' }}>
-          Há {vault.counts.total} alteração(ões) offline que ainda não chegaram ao servidor
-          {vault.counts.conflicts > 0 && `, sendo ${vault.counts.conflicts} em conflito`}
-          {vault.counts.permanent > 0 && ` e ${vault.counts.permanent} com falha`}. Sair da conta
-          apaga a cópia local criptografada deste dispositivo, e essas alterações não existem em
-          nenhum outro lugar.
-        </p>
-        <div className="form-footer">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setConfirmingLogout(false)}
-          >
-            Cancelar
-          </button>
-          <NavLink
-            to="/offline-sync"
-            className="btn btn-primary"
-            onClick={() => setConfirmingLogout(false)}
-          >
-            Sincronizar agora
-          </NavLink>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={() => {
-              setConfirmingLogout(false)
-              signOut()
-            }}
-          >
-            Descartar alterações e sair
-          </button>
-        </div>
-      </Dialog>
+        risk={risk}
+        counts={vault.counts}
+        intent="LOGOUT"
+        busy={removing}
+        failure={removalFailed}
+        onCancel={() => {
+          setConfirmingLogout(false)
+          setRemovalFailed(null)
+        }}
+        onReview={() => {
+          setConfirmingLogout(false)
+          navigate('/offline-sync')
+        }}
+        onConfirm={signOut}
+      />
     </div>
   )
 }

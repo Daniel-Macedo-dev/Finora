@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api'
 import type { AuthUser, LoginRequest, RegisterRequest } from './types'
-import { deleteVault } from '../../offline/vaultStorage'
 import { setOfflineUnlocked } from '../../offline/session'
 
 export const AUTH_ME_KEY = ['auth', 'me'] as const
@@ -51,15 +50,23 @@ export function useRegister() {
   })
 }
 
+/**
+ * Ends the server session and drops everything derived from it.
+ *
+ * Deliberately does not delete the encrypted offline vault. It used to, and
+ * that made deletion a side effect of signing out — invisible from the call
+ * site, unconditional, and impossible to gate on whether the copy might still
+ * hold work the server never received. Destroying that copy is now an explicit,
+ * separately confirmed act by whoever asked for it (see VaultDeletionDialog).
+ */
 export function useLogout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => api.post<void>('/auth/logout'),
-    onSettled: async () => {
+    onSettled: () => {
       // Even if the request failed the local state must not keep stale data.
       setOfflineUnlocked(false)
       resetForNewIdentity(queryClient, null)
-      await deleteVault()
     },
   })
 }

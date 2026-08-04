@@ -51,16 +51,25 @@ export default function OfflineSyncPage() {
           description="Alterações feitas sem conexão e o estado de envio de cada uma."
         />
         <EmptyState
-          title="Cópia offline bloqueada"
+          title={
+            vault.state === 'CORRUPTED' ? 'Cópia offline ilegível' : 'Cópia offline bloqueada'
+          }
           description={
-            'As alterações pendentes continuam guardadas e criptografadas neste dispositivo. '
-            + 'Desbloqueie a cópia offline para vê-las e sincronizá-las.'
+            vault.state === 'CORRUPTED'
+              ? 'A cópia deste dispositivo não pôde ser lida com a senha informada. Tente de '
+                + 'novo: o Finora não consegue saber se ela guarda alterações ainda não enviadas '
+                + 'enquanto ela não abrir.'
+              : 'Quaisquer alterações pendentes continuam guardadas e criptografadas neste '
+                + 'dispositivo. Desbloqueie a cópia offline para vê-las e sincronizá-las.'
           }
         />
         {/* The unlock screen only appears when the browser is offline, so
             without this there is no way back into the queue once the
-            connection returns — the one moment it can actually be sent. */}
-        {vault.state === 'LOCKED' && (
+            connection returns — the one moment it can actually be sent.
+            CORRUPTED is offered the same form: by far its most common cause is
+            a mistyped password, and refusing to let the user try again would
+            leave deleting the copy as the only way forward. */}
+        {(vault.state === 'LOCKED' || vault.state === 'CORRUPTED') && (
           <form
             className="card sync-unlock"
             onSubmit={(event) => {
@@ -86,7 +95,7 @@ export default function OfflineSyncPage() {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={password.length === 0 || vault.state !== 'LOCKED'}
+              disabled={password.length === 0}
             >
               Desbloquear cópia offline
             </button>

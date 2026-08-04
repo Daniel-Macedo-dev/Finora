@@ -1,0 +1,27 @@
+.vault-risk-text {
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-3);
+}
+
+/* The sentence the user must not be able to skim past. Weight and colour only
+   reinforce it — the text says the same thing on its own. */
+.vault-risk-final {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+/* Three actions side by side at 390px collapse into slivers with labels broken
+   mid-word. Stacked, each one reflows and reads as a separate decision. The
+   order is left untouched — visual order still matches DOM and tab order, so
+   "Cancelar" is the first thing reached in both. */
+@media (max-width: 480px) {
+  .vault-risk-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vault-risk-footer > .btn {
+    justify-content: center;
+    width: 100%;
+  }
+}

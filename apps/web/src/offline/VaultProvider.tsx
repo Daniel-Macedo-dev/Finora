@@ -45,6 +45,7 @@ import {
   type ResourceMapping,
 } from './outbox/types'
 import { sendMutations } from './outbox/transport'
+import { destructiveRiskOf, type DestructiveRisk } from './destructiveRisk'
 
 export type VaultState =
   | 'LOADING'
@@ -85,7 +86,16 @@ interface VaultContextValue {
   lastSyncAt: string | null
   autoSync: boolean
   replaying: boolean
+  /**
+   * Whether the queue is known to hold unsynchronized work.
+   *
+   * Knowledge, not safety: it is false while the vault is locked because the
+   * queue is unreadable then, not because it is empty. Anything about to delete
+   * the local copy must ask `destructiveRisk` instead.
+   */
   hasPendingWork: boolean
+  /** What is actually known about unsynchronized work, for destructive paths. */
+  destructiveRisk: DestructiveRisk
   enable(user: AuthUser, password: string): Promise<void>
   unlock(password: string, online: boolean): Promise<void>
   refresh(user: AuthUser, password: string): Promise<void>
@@ -306,6 +316,16 @@ export function VaultProvider({
     [write],
   )
 
+  /**
+   * Deletes the encrypted record.
+   *
+   * Rejects when IndexedDB refuses, and deliberately does not swallow that: the
+   * caller has just told the user their local copy is being destroyed, and the
+   * one thing worse than failing to delete it is reporting a deletion that did
+   * not happen. The key is dropped first either way — a failed removal must not
+   * leave decrypted data readable — so the record survives locked, which is
+   * exactly what the state then says.
+   */
   const remove = useCallback(async () => {
     lock()
     await deleteVault()
@@ -552,6 +572,7 @@ export function VaultProvider({
       autoSync: payload?.syncPreferences.autoSync ?? true,
       replaying,
       hasPendingWork: counts.total > 0,
+      destructiveRisk: destructiveRiskOf(state, counts.total),
       enable,
       unlock,
       refresh,
