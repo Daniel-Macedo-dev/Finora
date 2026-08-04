@@ -1051,8 +1051,22 @@ test.describe('Ações destrutivas com o cofre bloqueado', () => {
 
     // The user asked for the copy to go; a server that refused to hear about it
     // does not get to leave decrypted data on the device.
-    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
-    expect(await vaultRecordExists(page)).toBe(false)
+    await expect
+      .poll(() => vaultRecordExists(page), { timeout: 20_000 })
+      .toBe(false)
+
+    // The dialog closes because the deletion really happened — a failed removal
+    // keeps it open with an alert, and that is the difference being asserted.
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(
+      page.getByRole('heading', { name: 'Excluir a cópia offline e sair' }),
+    ).toBeHidden()
+
+    // Deliberately not asserting a landing route. The stubbed response never
+    // reached the server, so the session is still valid and the application is
+    // right to carry on inside it once /auth/me answers again — the request
+    // failing is exactly what "logout do servidor com falha" means. Asserting
+    // /login here passed locally only by outrunning that refetch.
     expect(mutationRequests).toBe(0)
 
     await context.unroute('**/api/auth/logout')
