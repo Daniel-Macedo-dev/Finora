@@ -1,5 +1,12 @@
 import { execSync } from 'node:child_process'
-import { expect, test, type Page } from '@playwright/test'
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test'
 import { registerViaUi } from './helpers.ts'
 
 /**
@@ -446,28 +453,120 @@ test('captura estados principais em todos os viewports', async ({ page }) => {
 
 /* ---------- offline synchronization ---------- */
 
+/**
+ * Every state the synchronization centre and its destructive dialogs can be in,
+ * at four widths in both themes.
+ *
+ * Split into four independently rerunnable groups per theme rather than one
+ * long pass. The single test this replaces took half an hour, and any locator
+ * that matched nothing spent the whole budget waiting: a run that had captured
+ * six states was indistinguishable from one still working, and rerunning the
+ * conflict states meant rebuilding the ten before them. Each group now owns its
+ * own account and its own browser context, so a failure names one group and
+ * costs one group.
+ */
+
 const OFFLINE_PASSWORD = 'senha-offline-visual-qa'
+const THEMES = ['light', 'dark'] as const
+type Theme = (typeof THEMES)[number]
 
 /**
- * Navigates and unlocks again when the load asks for it.
+ * Photographs one state at every width.
  *
- * The vault key lives only in memory, so every full navigation drops it. That
- * is the product's whole point, but it means a capture pass that walks between
- * screens has to re-enter the offline password each time — offline through the
- * unlock screen, online through the sync centre's own form.
+ * Nothing is shot on faith. The theme is read off the rendered document rather
+ * than trusted from the preference that was stored, the width is read back from
+ * the window rather than assumed from the resize, the state's own marker must
+ * be on screen, and no skeleton may remain — a frame of a loading placeholder
+ * is worse than a missing frame, because it still lands in the folder looking
+ * like evidence. Animations are awaited rather than slept through, so a capture
+ * never catches a dialog or a drawer halfway.
  */
-async function visitUnlocked(page: Page, path: string): Promise<void> {
-  await page.goto(path)
-  const locked = page.getByRole('heading', { name: 'Desbloquear dados offline' })
+async function captureState(page: Page, state: string, theme: Theme, ready: Locator): Promise<void> {
+  for (const viewport of VIEWPORTS) {
+    const where = `${state} @ ${viewport.name} / ${theme}`
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+
+    await expect(page.locator('html'), where).toHaveAttribute('data-theme', theme)
+    await expect(ready.first(), where).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('.skeleton'), where).toHaveCount(0, { timeout: 15_000 })
+    expect(await page.evaluate(() => window.innerWidth), where).toBe(viewport.width)
+
+    await page.evaluate(async () => {
+      await document.fonts.ready
+      // Bounded: an infinite animation would otherwise hold the capture open
+      // for as long as the test is allowed to run.
+      await Promise.race([
+        Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+        new Promise((resolve) => setTimeout(resolve, 1_500)),
+      ])
+    })
+
+    // Checked rather than looked for. Sideways scroll is the defect a thumbnail
+    // hides best — a contact sheet of a 390px frame looks identical whether the
+    // content fits or runs 40px past the edge — and asking the layout directly
+    // covers every state, width and theme instead of the ones someone zoomed in
+    // on.
+    const overflow = await page.evaluate(() => {
+      const root = document.documentElement
+      const dialog = document.querySelector('dialog[open]')
+      return {
+        page: root.scrollWidth - root.clientWidth,
+        dialog: dialog ? dialog.scrollWidth - dialog.clientWidth : 0,
+      }
+    })
+    expect(overflow.page, `rolagem horizontal da página em ${where}`).toBeLessThanOrEqual(1)
+    expect(overflow.dialog, `rolagem horizontal do diálogo em ${where}`).toBeLessThanOrEqual(1)
+
+    await page.screenshot({
+      path: `${OUT}/${viewport.name}/sync-${state}-${theme}.png`,
+      fullPage: true,
+    })
+  }
+
+  // Back to the widest before anything else is driven. VIEWPORTS ends at 390px,
+  // where the sign-out control lives inside a closed drawer and simply is not
+  // on screen for the next step to click.
+  await page.setViewportSize({ width: VIEWPORTS[0].width, height: VIEWPORTS[0].height })
+  expect(
+    await page.evaluate(() => window.innerWidth),
+    `viewport restaurado após ${state}`,
+  ).toBe(VIEWPORTS[0].width)
+}
+
+/**
+ * A context pinned to one theme.
+ *
+ * Both signals are set: the stored preference decides, and the emulated OS
+ * scheme agrees with it so nothing rendered from a media query disagrees with
+ * the rest of the page. Reduced motion is emulated too — the application
+ * honours it by collapsing every transition, which is what makes a capture
+ * reproducible instead of a race against an easing curve.
+ */
+async function themedContext(browser: Browser, theme: Theme): Promise<BrowserContext> {
+  const context = await browser.newContext({
+    locale: 'pt-BR',
+    colorScheme: theme,
+    reducedMotion: 'reduce',
+    viewport: { width: VIEWPORTS[0].width, height: VIEWPORTS[0].height },
+  })
+  await context.addInitScript((value) => {
+    localStorage.setItem('finora.theme', value as string)
+  }, theme)
+  return context
+}
+
+/** Unlocks through whichever form this screen offers, or does nothing. */
+async function unlockIfAsked(page: Page): Promise<void> {
+  const offlineScreen = page.getByRole('heading', { name: 'Desbloquear dados offline' })
   const shell = page.locator('#main-content')
   await Promise.race([
-    locked.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined),
+    offlineScreen.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined),
     shell.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined),
   ])
-  if (await locked.isVisible().catch(() => false)) {
+  if (await offlineScreen.isVisible().catch(() => false)) {
     await page.getByLabel('Senha offline').fill(OFFLINE_PASSWORD)
     await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
-    await expect(locked).toBeHidden({ timeout: 20_000 })
+    await expect(offlineScreen).toBeHidden({ timeout: 20_000 })
     return
   }
   const inPlace = page.getByRole('button', { name: 'Desbloquear cópia offline' })
@@ -479,85 +578,24 @@ async function visitUnlocked(page: Page, path: string): Promise<void> {
   }
 }
 
-async function shot(page: Page, name: string, viewport: (typeof VIEWPORTS)[0], theme: string) {
-  await page.setViewportSize({ width: viewport.width, height: viewport.height })
-  // Let the responsive layout settle before shooting. A resize crosses the
-  // shell's breakpoint and restarts its transition, and a screenshot taken on
-  // the next tick catches the navigation drawer sliding over content that is
-  // still skeletons — a frame that shows neither the layout nor the state, and
-  // is worthless as a QA artifact.
-  await page.locator('.skeleton').first().waitFor({ state: 'hidden', timeout: 10_000 })
-    .catch(() => undefined)
-  await page.waitForLoadState('networkidle').catch(() => undefined)
-  await page.waitForTimeout(400)
-  await page.screenshot({ path: `${OUT}/${viewport.name}/sync-${name}-${theme}.png`, fullPage: true })
+/**
+ * Navigates and unlocks again when the load asks for it.
+ *
+ * The key lives only in memory, so every full navigation drops it. That is the
+ * product's whole point, and it means a capture pass walking between screens
+ * re-enters the offline password each time.
+ */
+async function visitUnlocked(page: Page, path: string): Promise<void> {
+  await page.goto(path)
+  await unlockIfAsked(page)
 }
 
-/**
- * Empties the queue through the sync centre's own discard confirmation.
- *
- * Needed before the offline copy can be retaken: refreshing it refuses to
- * discard work the server has never seen, which is the right refusal.
- */
-async function discardQueue(page: Page): Promise<void> {
-  await visitUnlocked(page, '/offline-sync')
-  for (let guard = 0; guard < 25; guard += 1) {
-    const discard = page.getByRole('button', { name: /^Descartar:/ }).first()
-    if (!(await discard.isVisible().catch(() => false))) break
-    await discard.click()
-    await page.getByRole('button', { name: 'Descartar definitivamente' }).click()
-  }
-  await expect(page.getByRole('heading', { name: 'Nenhuma alteração pendente' })).toBeVisible({
-    timeout: 20_000,
-  })
-}
+/** Registers, puts one row on the server, and takes the offline copy. */
+async function seedOfflineAccount(page: Page): Promise<void> {
+  await registerViaUi(page)
 
-/**
- * Turns "sincronizar automaticamente ao reconectar" on or off.
- *
- * Must be called while offline, because that is the only condition under which
- * any route offers the unlock screen — online, only the sync centre does, and
- * the checkbox is inert while the copy is locked.
- */
-async function setAutoReplay(page: Page, enabled: boolean): Promise<void> {
-  await visitUnlocked(page, '/settings')
-  const toggle = page.getByLabel('Sincronizar automaticamente ao reconectar')
-  if ((await toggle.isChecked()) !== enabled) await toggle.click()
-  await expect(toggle).toBeChecked({ checked: enabled, timeout: 20_000 })
-}
-
-/**
- * Captures one state at every width, then returns the page to the widest.
- *
- * The restore is the point. VIEWPORTS ends at 390px, so a bare loop leaves the
- * page in the mobile layout and every following step drives a drawer instead of
- * the sidebar — the sign-out control simply is not on screen.
- */
-async function captureAll(page: Page, name: string, theme: string) {
-  for (const viewport of VIEWPORTS) await shot(page, name, viewport, theme)
-  await page.setViewportSize({ width: VIEWPORTS[0].width, height: VIEWPORTS[0].height })
-}
-
-/**
- * Every state the synchronization centre can be in, at all four widths in both
- * themes.
- *
- * Kept separate from the main capture because it needs an unlocked vault and a
- * disconnected browser — conditions the rest of the suite must not run under.
- */
-test('captura os estados de sincronização offline', async ({ page, context }) => {
-  // The pass as a whole is long — twelve states at four widths in two themes —
-  // but no single action should ever be. Without a per-action ceiling a locator
-  // that matches nothing simply waits out the whole budget, and a capture run
-  // that produced six states looks identical to one still working.
-  test.setTimeout(1_800_000)
-  page.setDefaultTimeout(20_000)
-  const identity = await registerViaUi(page)
-
-  // A transaction that exists on the server, so a pending deletion and a
-  // version conflict are both reachable. It has to exist before the offline
-  // copy is taken: the copy is a snapshot of that moment, and a row created
-  // afterwards is simply not in it until the user asks for a new one.
+  // The copy is a snapshot of this moment, so the row a conflict or a pending
+  // deletion will act on has to exist before it is taken.
   await page.goto('/transactions')
   await page.getByRole('button', { name: 'Nova transação' }).first().click()
   await page.getByLabel('Descrição', { exact: true }).fill('Disputada no servidor')
@@ -573,49 +611,74 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
   await expect(page.getByText('Acesso offline ativado neste dispositivo.')).toBeVisible({
     timeout: 20_000,
   })
+}
 
-  for (const theme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: theme })
-    await page.addInitScript((value) => localStorage.setItem('finora.theme', value), theme)
+/** Queues one creation from the transactions screen, offline. */
+async function queueTransaction(page: Page, description: string, amount: string): Promise<void> {
+  await page.getByRole('button', { name: 'Nova transação' }).first().click()
+  await page.getByLabel('Descrição', { exact: true }).fill(description)
+  await page.getByLabel('Valor (R$)', { exact: true }).fill(amount)
+  await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
+  await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
+  await expect(page.getByText('Criado offline').first()).toBeVisible({ timeout: 20_000 })
+}
 
-    // Empty centre, still online and unlocked. Unlocked explicitly: the
-    // navigation itself drops the key, and a locked centre is a different
-    // state, captured on its own further down.
+/**
+ * Turns automatic replay off through the real settings control.
+ *
+ * The failure and conflict states have to hold still to be photographed. Left
+ * on, the retry cycles every row back through "Sincronizando" seconds after it
+ * lands and the capture races it.
+ */
+async function setAutoReplay(page: Page, enabled: boolean): Promise<void> {
+  await visitUnlocked(page, '/settings')
+  const toggle = page.getByLabel('Sincronizar automaticamente ao reconectar')
+  if ((await toggle.isChecked()) !== enabled) await toggle.click()
+  await expect(toggle).toBeChecked({ checked: enabled, timeout: 20_000 })
+}
+
+/** Reloads into the state a reopened tab is always in: vault present, locked. */
+async function reloadLocked(page: Page, path: string): Promise<void> {
+  await page.goto(path)
+  await expect(page.locator('#main-content')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Sair da conta' })).toBeEnabled({ timeout: 20_000 })
+}
+
+for (const theme of THEMES) {
+  test(`sincronização offline: estados base e pendentes (${theme})`, async ({ browser }) => {
+    test.setTimeout(300_000)
+    const context = await themedContext(browser, theme)
+    const page = await context.newPage()
+    page.setDefaultTimeout(20_000)
+    await seedOfflineAccount(page)
+
+    // Empty centre, online and explicitly unlocked: the navigation itself drops
+    // the key, and a locked centre is a different state captured further down.
     await visitUnlocked(page, '/offline-sync')
-    await page.waitForLoadState('networkidle')
-    await captureAll(page, 'empty', theme)
+    await captureState(page, 'empty', theme, page.getByRole('heading', { name: 'Nenhuma alteração pendente' }))
 
-    // Offline with an unlocked vault.
     await context.setOffline(true)
-    await page.goto('/transactions')
-    await page.getByLabel('Senha offline').fill(OFFLINE_PASSWORD)
-    await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
+    await visitUnlocked(page, '/transactions')
     await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible({ timeout: 20_000 })
 
-    // One pending creation, with a deliberately long description so the row and
-    // the shell badge are exercised at their worst case.
-    await page.getByRole('button', { name: 'Nova transação' }).first().click()
-    await page
-      .getByLabel('Descrição', { exact: true })
-      .fill('Compra de supermercado com um nome longo o suficiente para testar o recorte da linha')
-    await page.getByLabel('Valor (R$)', { exact: true }).fill('142,55')
-    await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
-    await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
-    await expect(page.getByText('Criado offline').first()).toBeVisible()
+    // A deliberately long description, so the row, the shell badge and the
+    // mobile layout are all exercised at their worst case rather than their
+    // tidiest one.
+    await queueTransaction(
+      page,
+      'Compra de supermercado com um nome longo o suficiente para testar o recorte da linha',
+      '142,55',
+    )
+    await captureState(page, 'pending-row', theme, page.getByText('Criado offline').first())
 
-    // Pending row + stale-totals warning + shell badge, on the list itself.
-    await captureAll(page, 'pending-row', theme)
-
-    // A pending deletion, which stays visible rather than disappearing.
     await page.getByRole('button', { name: 'Excluir Disputada no servidor' }).click()
     await page
       .getByRole('dialog', { name: 'Excluir transação' })
       .getByRole('button', { name: 'Excluir', exact: true })
       .click()
-    await expect(page.getByText('Exclusão pendente')).toBeVisible()
-    await captureAll(page, 'pending-delete', theme)
+    await captureState(page, 'pending-delete', theme, page.getByText('Exclusão pendente'))
 
-    // A dependent chain: item, then an option under it.
+    // A dependent chain: an item, then an option that can only name it locally.
     await visitUnlocked(page, '/wishlist')
     await page.getByRole('button', { name: 'Novo item' }).first().click()
     await page.getByLabel('Nome do item').fill('Notebook criado offline')
@@ -625,63 +688,104 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
     await page.getByLabel('Loja / vendedor').fill('Loja com nome bastante longo para o layout')
     await page.getByLabel('Preço à vista (R$)').fill('3500,00')
     await page.getByRole('button', { name: 'Adicionar opção' }).click()
-    await expect(page.getByText('Criado offline').first()).toBeVisible()
-    await captureAll(page, 'local-item-option', theme)
+    await captureState(page, 'local-item-option', theme, page.getByText('Criado offline').first())
 
     await visitUnlocked(page, '/offline-sync')
-    await captureAll(page, 'dependent-queue', theme)
+    await captureState(page, 'dependent-queue', theme, page.getByText('Aguardando outro item').first())
 
-    // Locked vault while encrypted work is still queued.
-    await visitUnlocked(page, '/settings')
-    await page
-      .getByLabel('Aplicativo e acesso offline')
-      .getByRole('button', { name: 'Bloquear dados offline' })
-      .click()
-    await page.goto('/offline-sync')
-    await captureAll(page, 'locked-with-pending', theme)
+    await context.close()
+  })
 
-    await page.goto('/transactions')
-    await page.getByLabel('Senha offline').fill(OFFLINE_PASSWORD)
-    await page.getByRole('button', { name: 'Desbloquear', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible({ timeout: 20_000 })
+  test(`sincronização offline: estados de ações destrutivas (${theme})`, async ({ browser }) => {
+    test.setTimeout(300_000)
+    const context = await themedContext(browser, theme)
+    const page = await context.newPage()
+    page.setDefaultTimeout(20_000)
+    await seedOfflineAccount(page)
 
-    // Logout warning while unsynchronized work exists.
-    await page.getByRole('button', { name: 'Sair da conta' }).click()
-    await expect(
-      page.getByRole('heading', { name: 'Sair com alterações offline pendentes' }),
-    ).toBeVisible()
-    await captureAll(page, 'logout-warning', theme)
-    await page.getByRole('button', { name: 'Cancelar' }).click()
-
-    // Destructive discard confirmation.
-    await visitUnlocked(page, '/offline-sync')
-    await page.getByRole('button', { name: /Descartar:/ }).first().click()
-    await captureAll(page, 'discard-confirm', theme)
-    await page.getByRole('button', { name: 'Cancelar' }).click()
-
-    // The failure and conflict states have to hold still to be photographed.
-    // Left on, the automatic retry cycles every row back through "Sincronizando"
-    // seconds after it lands, and the capture races it.
+    await context.setOffline(true)
+    await visitUnlocked(page, '/transactions')
+    await queueTransaction(page, 'Alteração presa na cópia local', '73,00')
     await setAutoReplay(page, false)
     await context.setOffline(false)
 
-    // The retryable failure comes first, and the order is not cosmetic: a
-    // permanently rejected entry is no longer sendable, so capturing it first
-    // would leave nothing for the temporary failure to happen to.
+    // Locked, with encrypted work still queued inside it. This is the ordinary
+    // state of a reopened tab, and the one the warnings below exist for.
+    await reloadLocked(page, '/offline-sync')
+    await captureState(
+      page,
+      'locked-with-pending',
+      theme,
+      page.getByRole('heading', { name: 'Cópia offline bloqueada' }),
+    )
 
-    // A retryable failure: the server is simply unavailable.
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await captureState(
+      page,
+      'locked-logout-warning',
+      theme,
+      page.getByRole('heading', { name: 'A cópia offline está bloqueada' }),
+    )
+
+    await page.getByRole('button', { name: 'Descartar cópia e sair' }).click()
+    await captureState(page, 'destructive-final', theme, page.getByText('Essa ação não pode ser desfeita.'))
+    await page.getByRole('button', { name: 'Voltar' }).click()
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+
+    // The same decision with the queue readable, which is the one case that can
+    // state exact numbers.
+    await unlockIfAsked(page)
+    await expect(page.getByText('Alteração presa na cópia local', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    })
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await captureState(
+      page,
+      'logout-warning',
+      theme,
+      page.getByRole('heading', { name: 'Sair com alterações offline pendentes' }),
+    )
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+
+    await page.getByRole('button', { name: /^Descartar:/ }).first().click()
+    await captureState(
+      page,
+      'discard-confirm',
+      theme,
+      page.getByRole('heading', { name: 'Descartar alteração offline' }),
+    )
+
+    await context.close()
+  })
+
+  test(`sincronização offline: estados de falha (${theme})`, async ({ browser }) => {
+    test.setTimeout(300_000)
+    const context = await themedContext(browser, theme)
+    const page = await context.newPage()
+    page.setDefaultTimeout(20_000)
+    await seedOfflineAccount(page)
+
+    await context.setOffline(true)
+    await visitUnlocked(page, '/transactions')
+    await queueTransaction(page, 'Recusada pelo servidor', '58,90')
+    await setAutoReplay(page, false)
+    await context.setOffline(false)
+
+    // Order matters and is not cosmetic: a permanently rejected entry is no
+    // longer sendable, so capturing it first would leave nothing for the
+    // temporary failure to happen to.
     await context.route('**/api/offline-sync/mutations', (route) =>
       route.fulfill({ status: 503, body: '{}' }),
     )
     await visitUnlocked(page, '/offline-sync')
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
-    await expect(page.getByText(/Não foi possível concluir agora|Falha temporária/).first()).toBeVisible({
-      timeout: 20_000,
-    })
-    await captureAll(page, 'retryable-failure', theme)
+    // Exact, because "Falha" is a prefix of "Falha temporária": a loose match
+    // here is satisfied by the wrong badge and photographs the wrong state.
+    await captureState(page, 'retryable-failure', theme, page.getByText('Falha temporária', { exact: true }))
     await context.unroute('**/api/offline-sync/mutations')
 
-    // A permanent rejection with a long message: actionable, not a retry loop.
+    // A permanent rejection carrying a long, actionable message rather than a
+    // retry loop.
     await context.route('**/api/offline-sync/mutations', async (route) => {
       const response = await route.fetch()
       const body = await response.json()
@@ -699,42 +803,32 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
     })
     await visitUnlocked(page, '/offline-sync')
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
-    // Exact: "Falha" is a prefix of "Falha temporária", so a loose match is
-    // satisfied by the retryable state this one follows, and the capture fires
-    // before the rejection has even landed.
-    await expect(page.getByText('Falha', { exact: true }).first()).toBeVisible({ timeout: 20_000 })
-    await captureAll(page, 'permanent-failure', theme)
+    await captureState(page, 'permanent-failure', theme, page.getByText('Falha', { exact: true }))
     await context.unroute('**/api/offline-sync/mutations')
 
-    // A version conflict, with the readable server/local comparison open.
-    //
-    // Rebuilt from scratch rather than continued from the state above. The two
-    // failure captures rewrite the server's answer but still let the request
-    // through, so the server really did apply that batch — including the queued
-    // deletion. The row those states were built on no longer exists, and an
-    // edit made while online never reaches the queue at all.
-    await discardQueue(page)
-    await visitUnlocked(page, '/transactions')
-    await page.getByRole('button', { name: 'Nova transação' }).first().click()
-    await page.getByLabel('Descrição', { exact: true }).fill('Disputada no servidor')
-    await page.getByLabel('Valor (R$)', { exact: true }).fill('10,00')
-    await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
-    await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
-    await expect(page.getByText('Disputada no servidor')).toBeVisible()
+    await context.close()
+  })
 
-    // The copy predates the row, so it has to be taken again before the row can
-    // be edited without a connection.
-    await visitUnlocked(page, '/settings')
-    await page.getByLabel('Senha offline para atualizar').fill(OFFLINE_PASSWORD)
-    await page.getByRole('button', { name: 'Atualizar dados offline' }).click()
-    await expect(page.getByText('Dados offline atualizados.')).toBeVisible({ timeout: 20_000 })
+  test(`sincronização offline: estados de conflito (${theme})`, async ({ browser }) => {
+    test.setTimeout(300_000)
+    const context = await themedContext(browser, theme)
+    const page = await context.newPage()
+    page.setDefaultTimeout(20_000)
+    await seedOfflineAccount(page)
 
+    // Offline first, then the toggle: online, a navigation drops the in-memory
+    // key and only the sync centre offers a way back in, so the checkbox on the
+    // settings screen is inert. Offline, the unlock screen appears on any route.
     await context.setOffline(true)
+    await visitUnlocked(page, '/transactions')
+    await setAutoReplay(page, false)
+
+    // Edited offline, on a row the copy already contains.
     await visitUnlocked(page, '/transactions')
     await page.getByRole('button', { name: 'Editar Disputada no servidor' }).click()
     await page.getByLabel('Valor (R$)', { exact: true }).fill('25,00')
     await page.getByRole('button', { name: /Salvar/ }).first().click()
-    await expect(page.getByText('Pendente').first()).toBeVisible()
+    await expect(page.getByText('Pendente').first()).toBeVisible({ timeout: 20_000 })
     await context.setOffline(false)
 
     await context.route('**/api/offline-sync/mutations', async (route) => {
@@ -756,40 +850,17 @@ test('captura os estados de sincronização offline', async ({ page, context }) 
     })
     await visitUnlocked(page, '/offline-sync')
     await page.getByRole('button', { name: 'Sincronizar agora' }).click()
-    await expect(page.getByText('Conflito').first()).toBeVisible({ timeout: 20_000 })
-    await captureAll(page, 'conflict', theme)
+    await captureState(page, 'conflict', theme, page.getByText('Conflito', { exact: true }))
 
-    await page.getByRole('button', { name: /Resolver conflito/ }).first().click()
-    await expect(page.getByRole('columnheader', { name: 'Valor salvo no servidor' })).toBeVisible()
-    await captureAll(page, 'conflict-comparison', theme)
+    await page.getByRole('button', { name: /^Resolver conflito:/ }).first().click()
+    await captureState(
+      page,
+      'conflict-comparison',
+      theme,
+      page.getByRole('columnheader', { name: 'Valor salvo no servidor' }),
+    )
     await context.unroute('**/api/offline-sync/mutations')
 
-    // Reset for the next theme pass: discard everything and start clean.
-    await page.getByRole('button', { name: 'Sair da conta' }).click()
-    await page.getByRole('button', { name: 'Descartar alterações e sair' }).click()
-    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
-    if (theme === 'light') {
-      await page.goto('/login')
-      await page.getByLabel('E-mail').fill(identity.email)
-      await page.getByLabel('Senha', { exact: true }).fill(identity.password)
-      await page.getByRole('button', { name: 'Entrar' }).click()
-      await expect(page.getByRole('heading', { name: 'Visão geral' })).toBeVisible()
-      // Same order as the first pass: the row first, then the copy that has to
-      // contain it.
-      await page.goto('/transactions')
-      await page.getByRole('button', { name: 'Nova transação' }).first().click()
-      await page.getByLabel('Descrição', { exact: true }).fill('Disputada no servidor')
-      await page.getByLabel('Valor (R$)', { exact: true }).fill('10,00')
-      await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
-      await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
-      await expect(page.getByText('Disputada no servidor')).toBeVisible()
-      await page.goto('/settings')
-      await page.getByLabel('Senha offline (mínimo de 12 caracteres)').fill(OFFLINE_PASSWORD)
-      await page.getByLabel('Confirmar senha offline').fill(OFFLINE_PASSWORD)
-      await page.getByRole('button', { name: 'Ativar acesso offline neste dispositivo' }).click()
-      await expect(page.getByText('Acesso offline ativado neste dispositivo.')).toBeVisible({
-        timeout: 20_000,
-      })
-    }
-  }
-})
+    await context.close()
+  })
+}
