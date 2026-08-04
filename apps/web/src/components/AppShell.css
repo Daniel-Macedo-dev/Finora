@@ -16,6 +16,11 @@
   color: var(--ink-primary);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-sm);
+  /* The sync indicator and notification bell are fixed to the top right of the
+     viewport and stay there when a banner pushes the rest of the shell down, so
+     they land inside this strip instead of in the bar they were positioned for.
+     Reserving their width keeps them off the banner's own "Tentar novamente". */
+  padding-right: 9.5rem;
 }
 
 .update-banner { background: var(--info-soft); }
@@ -183,6 +188,9 @@
     margin-left: 0;
     flex-wrap: wrap;
     justify-content: flex-start;
+    /* Further from the edge here: below this breakpoint the overlay sits beside
+       the mobile menu button rather than at the very corner. */
+    padding-right: 11.5rem;
   }
   .mobile-topbar {
     display: flex;

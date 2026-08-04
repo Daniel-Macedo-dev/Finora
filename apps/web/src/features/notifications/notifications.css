@@ -24,7 +24,12 @@
 .notification-check { display: flex; align-items: center; gap: 8px; }
 .browser-permission { padding: 12px; margin-bottom: 16px; border-radius: 10px; background: var(--bg-subtle); }
 .mobile-topbar-actions { display: flex; align-items: center; gap: 4px; }
-.shell-notification-bell { position: fixed; z-index: 70; top: 18px; right: 24px; }
+/* Laid out as a row on purpose. The bell's wrapper is a block, so with the sync
+   indicator beside it this container wrapped and dropped the bell onto a second
+   line, on top of the page heading. It only happened while offline work was
+   pending -- the one condition under which the indicator renders at all, and
+   the whole of the offline sync experience. */
+.shell-notification-bell { position: fixed; z-index: 70; top: 18px; right: 24px; display: flex; align-items: center; gap: 8px; }
 .shell-notification-bell .notification-panel { right: 0; left: auto; }
 @media (max-width: 768px) { .shell-notification-bell { top: 9px; right: 58px; } .shell-notification-bell .notification-panel { position: fixed; top: 62px; right: 12px; left: auto; } .notification-toolbar { flex-direction: column; } .notification-preference-grid { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .notification-panel { right: 8px; left: 8px; width: auto; } .notification-panel .notification-actions { grid-template-columns: 1fr; } .notification-actions .btn { width: 100%; } }

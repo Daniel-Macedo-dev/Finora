@@ -156,10 +156,28 @@
     flex-direction: column;
   }
 
+  /* Three columns of 8rem do not fit in 390px, and the minimum pushed the
+     "alteração feita offline" column off the edge: the comparison scrolled
+     sideways inside its container, so the one column the user is deciding
+     about was the one they could not see, with its header clipped mid-word.
+     Fixed proportions instead — the values wrap onto two or three lines and
+     every column stays on screen, while the table keeps its real row and
+     column semantics. */
+  .sync-comparison-table {
+    table-layout: fixed;
+  }
+
   .sync-comparison-table th,
   .sync-comparison-table td {
-    /* Keeps the server/local columns legible rather than crushed. */
-    min-width: 8rem;
+    padding: var(--space-2);
+    overflow-wrap: anywhere;
+  }
+
+  /* Wide enough for the longest field name to break at its space rather than
+     mid-word: "FORMA DE PAGAMENTO", not "FORMA DE PAGAMEN / TO". */
+  .sync-comparison-table th:first-child,
+  .sync-comparison-table td:first-child {
+    width: 34%;
   }
 }
 

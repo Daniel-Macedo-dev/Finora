@@ -24,3 +24,23 @@
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+
+/* The sync indicator and the notification bell float over the top-right corner
+   of the viewport, in the same band as this header's own actions. Wherever the
+   content column reaches that corner they sit on top of it — visibly, and for a
+   pointer as well, since the overlay is above the page. So the header gives up
+   exactly as much room as the overlap needs and nothing more: on a screen wide
+   enough for the column to stop short of the corner, this resolves to zero.
+   Only above the sidebar breakpoint; below it the overlay lives in the mobile
+   top bar, which is a band of its own. */
+@media (min-width: 901px) {
+  .page-header {
+    padding-right: clamp(
+      0px,
+      calc(
+        var(--sidebar-width) + var(--page-max-width) + var(--space-6) * 2 + 7rem - 100vw
+      ),
+      7rem
+    );
+  }
+}

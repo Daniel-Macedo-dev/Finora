@@ -246,7 +246,12 @@ button {
 
 .btn-danger {
   background: var(--negative);
-  color: #fff;
+  /* Not #fff. The dark theme lightens --negative to #ef7070 so it stays legible
+     as text on a dark surface, and white on that is 2.9:1 — below AA on the one
+     button in the application that destroys data. --ink-inverse flips with the
+     theme exactly as .btn-primary already relies on, giving 5.5:1 in light and
+     5.7:1 in dark. */
+  color: var(--ink-inverse);
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -402,6 +407,13 @@ button {
 
 .table-wrap {
   overflow-x: auto;
+  /* Establishes the containing block for the .visually-hidden labels sitting in
+     the header cells. Absolutely positioned descendants are not clipped by an
+     ancestor's overflow unless that ancestor is their containing block, so
+     without this the 1px "Ações" label resolves against the page instead: at
+     390px the table scrolls correctly inside this wrapper while that one span
+     sits 39px past the right edge and drags the whole document sideways. */
+  position: relative;
 }
 
 table.data {
