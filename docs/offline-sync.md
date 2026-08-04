@@ -436,10 +436,68 @@ Bloquear preserva fila, mapeamentos e conflitos criptografados, para o replay
 imediatamente e limpa a chave e os dados decifrados da memória.
 
 Sair da conta apaga a cópia local — inclusive trabalho que o servidor nunca viu.
-Com pendências, isso vira uma pergunta explícita com a contagem, um caminho para
-sincronizar antes e uma confirmação destrutiva separada para descartar e sair. Se
-o usuário confirmar o descarte, a limpeza local acontece mesmo que o logout no
-servidor falhe. Desativar o acesso offline pede a mesma confirmação.
+Toda ação capaz de apagar o registro criptografado passa pelo mesmo diálogo:
+sair da conta, desativar o acesso offline e descartar uma cópia ilegível pela
+tela de desbloqueio.
+
+### O que o aplicativo sabe antes de apagar
+
+A chave de decifragem só existe em memória, então o estado normal depois de
+qualquer recarregamento é um cofre que existe, guarda texto cifrado e não pode
+ser aberto. Nesse estado a fila decifrada está vazia porque não há com o que
+decifrá-la — não porque ela esteja vazia. Tratar as duas coisas como iguais é o
+que permitia apagar semanas de trabalho offline atrás de um "Sair" genérico.
+
+O risco é derivado do estado que o provedor já tem, sem ler o armazenamento e sem
+decifrar nada:
+
+| Estado do cofre | Risco | Comportamento |
+| --- | --- | --- |
+| ausente | `NO_LOCAL_COPY` | sai normalmente; não há cópia local |
+| desbloqueado, fila vazia | `KNOWN_SAFE` | sai normalmente; desativar o acesso offline pede a confirmação comum, sem afirmar pendências |
+| desbloqueado, com pendências | `KNOWN_PENDING` | aviso preciso, com as contagens reais |
+| bloqueado | `UNKNOWN_LOCKED` | aviso conservador de incerteza |
+| ilegível | `UNKNOWN_CORRUPTED` | aviso conservador, explicando que o conteúdo não pôde ser verificado |
+| carregando ou desbloqueando | `BUSY` | ação destrutiva desabilitada, com aviso acessível de progresso |
+
+**Não existe marcador em texto claro.** Nenhuma contagem, nenhum booleano,
+nenhum identificador de mutação, tipo de recurso, dono, carimbo de tempo ou
+status sai de dentro do texto cifrado autenticado — fechar essa lacuna com um
+marcador legível teria movido a existência de trabalho pendente para fora da
+fronteira de criptografia. O formato do cofre continua o V2; não houve V3.
+
+**Um cofre bloqueado e vazio avisa à toa, e isso é a política.** O falso positivo
+custa um diálogo; o contrário custa alterações que não existem em nenhum outro
+lugar.
+
+### Os dois passos
+
+O primeiro aviso nunca apaga nada. Ele oferece cancelar, `Desbloquear e
+verificar` — que leva à central de sincronização e ao formulário de desbloqueio
+que já existe lá, sem criar um terceiro formulário de senha — e a ação
+destrutiva, que apenas abre a segunda confirmação. Só a segunda, que diz
+`Essa ação não pode ser desfeita.`, está ligada à exclusão.
+
+Cancelar, desbloquear e verificar, e o primeiro passo destrutivo preservam o
+registro criptografado intacto.
+
+Se o usuário confirmar, a limpeza local acontece mesmo que o logout no servidor
+falhe: uma saída que a pessoa pediu não pode deixar dados decifrados no
+dispositivo porque a rede caiu. Se a remoção do IndexedDB falhar, o diálogo diz
+isso e permanece aberto — o aplicativo nunca navega para o login relatando uma
+exclusão que não aconteceu.
+
+Em todos os casos a interface deixa explícito que **os dados já enviados ao
+servidor não são apagados**.
+
+### Cofre ilegível
+
+Um cofre que não decifra recebe o mesmo fluxo, com a diferença de que o texto
+explica que o conteúdo não pôde ser verificado — sem afirmar que há pendências.
+Desbloquear com sucesso não é exigido para apagar: quem perdeu a senha ainda
+precisa de um caminho de recuperação. Ele só é explícito e confirmado duas vezes.
+A central de sincronização também aceita nova tentativa de senha nesse estado,
+porque a causa mais comum de um cofre ilegível é uma senha digitada errada.
 
 Perder a senha offline ou corromper o cofre significa perder as alterações
 pendentes. A interface diz isso, e não sugere que elas existem no servidor.
@@ -491,4 +549,10 @@ pendências precisa.
 - totais derivados não incluem pendências (avisado na interface);
 - observações de preço offline são somente histórico;
 - não há mesclagem automática de conflitos, por decisão;
-- a cópia local pode ser removida pelo navegador ou pelo sistema operacional.
+- a cópia local pode ser removida pelo navegador ou pelo sistema operacional;
+- com o cofre bloqueado o aplicativo não sabe se há pendências e avisa como se
+  houvesse; um cofre bloqueado e vazio mostra o aviso à toa, por decisão;
+- se a exclusão local falhar depois de um logout confirmado, a sessão do servidor
+  já terminou e o registro criptografado permanece no dispositivo até que a
+  exclusão seja repetida. Outro dono não consegue lê-lo, mas também não consegue
+  criar a própria cópia offline nesse perfil de navegador antes de removê-lo.

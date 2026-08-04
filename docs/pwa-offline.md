@@ -67,9 +67,18 @@ de outro ser criado.
 Estados: `ABSENT`, `LOCKED`, `UNLOCKING`, `UNLOCKED_ONLINE`, `UNLOCKED_OFFLINE` e
 `CORRUPTED` (além do carregamento inicial). Bloquear limpa QueryClient e identidade
 descriptografada, mantendo apenas ciphertext. Há bloqueio por 15 minutos de
-inatividade e após cinco minutos em background. Logout limpa o QueryClient e tenta
-excluir o cofre mesmo se o logout do servidor falhar. Desativar exige confirmação e
-não altera o servidor.
+inatividade e após cinco minutos em background.
+
+Excluir o cofre deixou de ser um efeito colateral de sair da conta. Como a chave
+só vive em memória, um cofre que existe está quase sempre bloqueado, e nesse
+estado o aplicativo não consegue saber se a fila guarda trabalho que o servidor
+nunca recebeu — apagar por conta própria era apagar às cegas. Sair da conta,
+desativar o acesso offline e descartar uma cópia ilegível passam agora pelo mesmo
+diálogo, com aviso conservador e duas confirmações quando o conteúdo é
+desconhecido. Confirmada a exclusão, a limpeza local acontece mesmo se o logout
+no servidor falhar; se a remoção do IndexedDB falhar, isso é relatado em vez de
+silenciado. Nada disso altera o servidor. Ver
+[offline-sync.md](offline-sync.md).
 
 IndexedDB indisponível, transação abortada e quota excedida são apresentados como
 falha de armazenamento; atualização falha não apaga o registro anterior. O tamanho

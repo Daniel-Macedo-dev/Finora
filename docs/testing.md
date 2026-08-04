@@ -313,14 +313,35 @@ recorrentes, formulário, histórico de ocorrências, ocorrência com falha,
 diálogo de reagendamento, previsão com saldo negativo e seção de caixa futuro
 do dashboard — desktop e mobile, claro e escuro.
 
-Os estados de sincronização offline ficam em um segundo teste do mesmo arquivo,
-separado porque exige cofre desbloqueado e navegador desconectado — condições
-sob as quais o restante da suíte não pode rodar. Ele captura, nos quatro
-viewports e nos dois temas: central vazia, linha pendente com descrição longa,
-exclusão pendente, item e opção criados offline, fila com dependências, cofre
-bloqueado com trabalho pendente, aviso de saída, confirmação de descarte, falha
-permanente com mensagem longa, falha temporária, conflito e a comparação
-servidor/local aberta.
+Os estados de sincronização offline ficam separados no mesmo arquivo, porque
+exigem cofre desbloqueado e navegador desconectado — condições sob as quais o
+restante da suíte não pode rodar. São **quatro grupos por tema**, cada um com sua
+própria conta e seu próprio contexto de navegador, rerodáveis isoladamente:
+
+```powershell
+$env:VISUAL_QA = "1"
+npx playwright test e2e/visual-qa.spec.ts -g "sincronização offline"
+npx playwright test e2e/visual-qa.spec.ts -g "estados de conflito \(dark\)"
+Remove-Item Env:VISUAL_QA
+```
+
+| Grupo | Estados |
+| --- | --- |
+| base e pendentes | central vazia; linha pendente com descrição longa; exclusão pendente; item e opção criados offline; fila com dependências |
+| ações destrutivas | cofre bloqueado com trabalho pendente; aviso de saída bloqueado; confirmação destrutiva final; aviso de saída com pendências conhecidas; descarte de uma alteração da fila |
+| falhas | falha temporária; falha permanente com mensagem longa |
+| conflito | conflito; comparação servidor/local aberta |
+
+Os treze estados exigidos, mais o descarte de uma linha da fila, em quatro
+viewports (1440, 1280, 768, 390) e dois temas: **112 capturas**.
+
+Nada é fotografado no escuro. Antes de cada quadro o teste confere o tema no
+documento renderizado (não a preferência armazenada), lê a largura de volta da
+janela (não a assume do resize), exige o marcador do estado na tela, exige que
+nenhum esqueleto reste e espera as animações terminarem em vez de dormir um
+tempo fixo. Cada quadro também afirma que nem a página nem o diálogo aberto
+rolam na horizontal — a falha que uma miniatura esconde melhor. Uma falha nomeia
+o estado, o viewport e o tema.
 
 A entrega de notificações acrescenta migração PostgreSQL populada V11→V12,
 identidade estável de eventos, API/ownership/lifecycle, quatro testes reais de
@@ -368,9 +389,28 @@ ordenação e ciclos), `replay.test.ts` (aplicação, já aplicado, perda de con
 backoff, recusa permanente, conflito, dependência e lote limitado),
 `projection.test.ts` (sobreposição pendente sem reescrever o retrato do servidor) e
 `VaultProvider.test.tsx` (ciclo real de habilitar, enfileirar, persistir, bloquear,
-desbloquear, resolver e remover). `offline-sync.spec.ts` contém 29 jornadas
+desbloquear, resolver e remover). `offline-sync.spec.ts` contém 35 jornadas
 Chromium, incluindo perda de resposta simulada abortando a resposta depois do
 commit, conflito entre dois contextos reais e isolamento entre donos.
+
+`destructiveRisk.test.tsx` cobre a proteção das ações destrutivas com 22 casos:
+cofre ausente e cofre desbloqueado e vazio saem direto; cofre desbloqueado com
+pendências mostra as contagens exatas; cofre bloqueado — **inclusive quando sua
+fila cifrada está de fato vazia** — mostra sempre o aviso conservador e não
+inventa número nenhum; cofre ilegível avisa que o conteúdo não pôde ser
+verificado; `LOADING` e `UNLOCKING` desabilitam a saída destrutiva; cancelar,
+desbloquear e verificar e o primeiro passo destrutivo não chamam logout nem
+remoção; só a confirmação final remove; a limpeza local acontece com logout de
+servidor falho; uma remoção que falhou é relatada em vez de comemorada; desativar
+o acesso offline usa a mesma proteção; os dados do servidor nunca são descritos
+como apagados; e nenhum botão do diálogo compartilha nome acessível com outro.
+
+As seis jornadas de `Ações destrutivas com o cofre bloqueado` chegam ao estado
+recarregando a página, e não construindo-o: a chave só vive em memória, então uma
+carga comum é o que produz um cofre bloqueado guardando trabalho que o servidor
+nunca viu. Elas leem o registro criptografado direto do IndexedDB em vez de
+confiar na tela, provam que a fila **não** é enviada enquanto o diálogo está
+aberto, e usam `context.route` para simular o logout de servidor com falha.
 
 Uma armadilha que custou caro e vale registrar: o Service Worker registra rotas
 `NetworkOnly` para `/api` em **todos** os métodos, então um lote de replay é

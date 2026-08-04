@@ -136,6 +136,29 @@ oráculo de existência sobre finanças alheias. Registros financeiros gerados
 (importados, de recorrente, de compra da wishlist, de crédito legado e convertidos)
 não podem ser alterados por esse caminho. Ver [offline-sync.md](offline-sync.md).
 
+### Apagar sem poder ler
+
+Como a chave só vive em memória, o estado normal depois de qualquer recarregamento
+é um cofre bloqueado: o registro cifrado existe e a fila é ilegível. Nesse estado o
+aplicativo não tem como saber se há trabalho que o servidor nunca recebeu, e a
+única forma de saber sem a senha seria publicar um marcador em texto claro no
+registro — movendo a existência de trabalho pendente para fora da fronteira de
+criptografia. Isso não foi feito: nenhuma contagem, booleano, identificador de
+mutação, tipo de recurso, dono, carimbo de tempo ou status existe fora do texto
+cifrado autenticado, e o formato do cofre continua o V2.
+
+O que existe é uma regra conservadora, derivada em memória do estado que o
+provedor já tem, sem ler o armazenamento e sem decifrar nada: **um cofre local
+que existe mas está bloqueado ou ilegível é tratado como se pudesse conter
+alterações não sincronizadas.** Toda exclusão do registro exige então duas
+confirmações explícitas, e a primeira nunca apaga. Um cofre bloqueado cuja fila
+esteja de fato vazia avisa à toa — o falso positivo é aceito de propósito.
+
+Bloquear continua limpando a chave e os dados decifrados; abrir o diálogo de
+saída não dispara replay nem decifra o cofre; e a limpeza local confirmada
+acontece mesmo quando o logout no servidor falha, sem que a interface relate uma
+exclusão que não aconteceu.
+
 ## Limitações conhecidas
 
 - Sem verificação de e-mail.

@@ -75,7 +75,11 @@ Interface em português do Brasil; código, banco e API em inglês.
   manuais de preço podem ser registrados sem conexão e enviados depois, com
   idempotência durável no servidor, versões otimistas e conflitos resolvidos pelo
   usuário (nunca mesclados automaticamente). Extratos, cartões, faturas,
-  recorrentes, aportes e execução de compra continuam exigindo conexão. Ver
+  recorrentes, aportes e execução de compra continuam exigindo conexão. Como a
+  chave de decifragem só vive em memória, um cofre bloqueado é ilegível até para
+  o próprio aplicativo: apagar a cópia local nesse estado avisa que ela pode
+  conter alterações que nunca chegaram ao servidor e exige duas confirmações,
+  sem nenhum marcador de pendência em texto claro. Ver
   [docs/offline-sync.md](docs/offline-sync.md).
 
 ## Stack

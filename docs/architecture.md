@@ -178,7 +178,10 @@ Detalhes em [offline-sync.md](offline-sync.md).
   — não existe endpoint de reset nem backdoor.
 - QA visual: `VISUAL_QA=1 npx playwright test e2e/visual-qa.spec.ts` popula um
   conjunto demo determinístico e captura screenshots em 4 viewports
-  (`qa-screenshots/`, ignorado pelo Git).
+  (`qa-screenshots/`, ignorado pelo Git). Os estados de sincronização offline
+  ficam em quatro grupos por tema, rerodáveis isoladamente; cada quadro confere
+  tema, largura, marcador de estado, ausência de esqueleto e ausência de rolagem
+  horizontal antes de disparar. Ver [testing.md](testing.md).
 
 ## CORS e configuração
 
