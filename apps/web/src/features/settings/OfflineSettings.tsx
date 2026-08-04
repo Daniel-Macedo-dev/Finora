@@ -27,7 +27,10 @@ export default function OfflineSettings() {
     try {
       await vault.remove()
       setConfirmingRemoval(false)
-      setFeedback('Acesso offline desativado e cópia local excluída deste dispositivo.')
+      // No success message on purpose: removing the vault clears the query
+      // cache, which remounts this screen and would throw the message away
+      // mid-sentence. The status list above says "Desativada" and the enable
+      // form comes back — both survive the remount, which a toast does not.
     } catch {
       // Never reported as done when the record is still there.
       setRemovalFailed(

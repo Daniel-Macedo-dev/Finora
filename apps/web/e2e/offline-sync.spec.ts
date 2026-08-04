@@ -414,7 +414,10 @@ test.describe.serial('Fila de mutações offline', () => {
     await visit(page, '/offline-sync')
     await expect(page.getByText('Pendente ao sair', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Sair da conta' }).click()
+    // Two stages, and the first one deliberately destroys nothing.
     await page.getByRole('button', { name: 'Descartar alterações e sair' }).click()
+    await expect(page.getByText('Essa ação não pode ser desfeita.')).toBeVisible()
+    await page.getByRole('button', { name: 'Excluir e sair definitivamente' }).click()
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
 
     const exists = await page.evaluate(
@@ -799,6 +802,261 @@ test.describe('Isolamento entre donos e mobile', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
     expect(overflow).toBeLessThanOrEqual(1)
+    await context.close()
+  })
+})
+
+/* ---------- destroying a copy nobody can read ---------- */
+
+/** Reads the encrypted record straight out of IndexedDB, bypassing the app. */
+async function vaultRecordExists(page: Page): Promise<boolean> {
+  return page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const request = indexedDB.open('finora-offline-vault')
+        request.onsuccess = () => {
+          const store = request.result.transaction('vault').objectStore('vault')
+          const get = store.get('single-vault')
+          get.onsuccess = () => resolve(Boolean(get.result))
+          get.onerror = () => resolve(false)
+        }
+        request.onerror = () => resolve(false)
+      }),
+  )
+}
+
+/**
+ * Leaves the vault locked the way a user does: by reloading.
+ *
+ * The key is held in memory and nowhere else, so any full load drops it. This
+ * is not a contrived setup — it is the state the application is in every single
+ * time the tab is reopened, which is exactly why deleting on that state without
+ * asking was dangerous.
+ */
+async function reloadIntoLockedVault(page: Page, path = '/transactions'): Promise<void> {
+  await page.goto(path)
+  await expect(page.locator('#main-content')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: 'Sair da conta' })).toBeEnabled({
+    timeout: 20_000,
+  })
+}
+
+/** Unlocks through the sync centre's own form — no extra password screen. */
+async function unlockInPlace(page: Page): Promise<void> {
+  const button = page.getByRole('button', { name: 'Desbloquear cópia offline' })
+  await expect(button).toBeVisible({ timeout: 20_000 })
+  await page.getByLabel('Senha offline').fill(OFFLINE_PASSWORD)
+  await button.click()
+  await expect(button).toBeHidden({ timeout: 20_000 })
+}
+
+test.describe('Ações destrutivas com o cofre bloqueado', () => {
+  /**
+   * Prepares an account whose local copy is locked, with a queued mutation the
+   * server has never seen sealed inside it.
+   *
+   * Automatic replay is switched off first, through the real control: left on,
+   * reconnecting drains the queue and the scenario stops being about a copy
+   * that holds the only version of anything.
+   */
+  async function lockedVaultWithPendingWork(
+    context: BrowserContext,
+    page: Page,
+    description: string,
+  ) {
+    await registerAndEnableVault(page, uniqueIdentity('locked'))
+    await goOfflineAndUnlock(context, page)
+    await createTransactionOffline(page, description, '73,00')
+    await setAutoReplay(page, false)
+    await context.setOffline(false)
+    await reloadIntoLockedVault(page)
+  }
+
+  test('sair com o cofre bloqueado avisa da incerteza e cancelar preserva a cópia', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'pt-BR' })
+    const page = await context.newPage()
+    await lockedVaultWithPendingWork(context, page, 'Presa no cofre')
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await expect(
+      page.getByRole('heading', { name: 'A cópia offline está bloqueada' }),
+    ).toBeVisible()
+    await expect(page.getByText(/pode conter alterações que ainda não foram enviadas/)).toBeVisible()
+
+    // No fabricated count: the application cannot read the queue, and says so
+    // instead of reporting a number it does not have.
+    await expect(page.getByText(/alteração\(ões\) offline que ainda não chegaram/)).toHaveCount(0)
+    await expect(page.getByText(/Há 0 alteração/)).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+    expect(await vaultRecordExists(page)).toBe(true)
+    await expect(page).not.toHaveURL(/\/login/)
+    await expect(page.getByRole('button', { name: 'Sair da conta' })).toBeVisible()
+    await context.close()
+  })
+
+  test('desbloquear e verificar mostra a fila real e ainda sincroniza', async ({ browser }) => {
+    const context = await browser.newContext({ locale: 'pt-BR' })
+    const page = await context.newPage()
+    await lockedVaultWithPendingWork(context, page, 'Revisada antes de sair')
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await page.getByRole('button', { name: 'Desbloquear e verificar' }).click()
+    await expect(page).toHaveURL(/\/offline-sync/)
+
+    await unlockInPlace(page)
+    await expect(page.getByText('Revisada antes de sair', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    })
+    expect(await vaultRecordExists(page)).toBe(true)
+
+    // Still perfectly sendable: reviewing never cost the user the work.
+    await syncNow(page)
+    await visit(page, '/transactions')
+    await expect(page.getByText('Revisada antes de sair')).toHaveCount(1)
+    await context.close()
+  })
+
+  test('descarte destrutivo exige a segunda confirmação e só então apaga', async ({ browser }) => {
+    const context = await browser.newContext({ locale: 'pt-BR' })
+    const page = await context.newPage()
+    await lockedVaultWithPendingWork(context, page, 'Descartada com o cofre fechado')
+
+    // Nothing may be sent while this plays out: a queue that quietly drained
+    // during the dialog would make the deletion look harmless for the wrong
+    // reason.
+    let mutationRequests = 0
+    await context.route('**/api/offline-sync/mutations', async (route) => {
+      mutationRequests += 1
+      await route.continue()
+    })
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await page.getByRole('button', { name: 'Descartar cópia e sair' }).click()
+    await expect(page.getByRole('heading', { name: 'Excluir a cópia offline e sair' })).toBeVisible()
+    await expect(page.getByText('Essa ação não pode ser desfeita.')).toBeVisible()
+
+    // Backing out of the final step leaves the record exactly where it was.
+    await page.getByRole('button', { name: 'Voltar' }).click()
+    await expect(
+      page.getByRole('heading', { name: 'A cópia offline está bloqueada' }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+    expect(await vaultRecordExists(page)).toBe(true)
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await page.getByRole('button', { name: 'Descartar cópia e sair' }).click()
+    await page.getByRole('button', { name: 'Excluir e sair definitivamente' }).click()
+
+    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
+    expect(await vaultRecordExists(page)).toBe(false)
+    expect(mutationRequests).toBe(0)
+    await context.unroute('**/api/offline-sync/mutations')
+    await context.close()
+  })
+
+  test('um cofre bloqueado e vazio recebe o mesmo aviso conservador', async ({ browser }) => {
+    // The intended false positive, stated as a test so it cannot be "fixed" by
+    // someone who reads the empty warning as a bug.
+    const context = await browser.newContext({ locale: 'pt-BR' })
+    const page = await context.newPage()
+    await registerAndEnableVault(page, uniqueIdentity('locked-empty'))
+    await reloadIntoLockedVault(page)
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await expect(
+      page.getByRole('heading', { name: 'A cópia offline está bloqueada' }),
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'Cancelar' }).click()
+    expect(await vaultRecordExists(page)).toBe(true)
+    await context.close()
+  })
+
+  test('desativar o acesso offline com o cofre bloqueado tem a mesma proteção', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'pt-BR' })
+    const page = await context.newPage()
+    await lockedVaultWithPendingWork(context, page, 'Sobrevive à desativação')
+
+    // A row the server already has, to prove at the end that deleting the local
+    // copy never touched it.
+    await visit(page, '/transactions')
+    await page.getByRole('button', { name: 'Nova transação' }).first().click()
+    await page.getByLabel('Descrição', { exact: true }).fill('Guardada no servidor')
+    await page.getByLabel('Valor (R$)', { exact: true }).fill('12,00')
+    await page.getByLabel('Categoria', { exact: true }).selectOption({ index: 1 })
+    await page.getByRole('button', { name: /Adicionar transação|Salvar/ }).first().click()
+    await expect(page.getByText('Guardada no servidor')).toBeVisible()
+
+    await page.goto('/settings')
+    await page.getByRole('button', { name: 'Desativar e excluir cópia local' }).click()
+    await expect(
+      page.getByRole('heading', { name: 'A cópia offline está bloqueada' }),
+    ).toBeVisible()
+    await expect(page.getByText('Os dados já enviados ao servidor não são apagados.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Desbloquear e verificar' }).click()
+    await expect(page).toHaveURL(/\/offline-sync/)
+    await unlockInPlace(page)
+    await expect(page.getByText('Sobrevive à desativação', { exact: true })).toBeVisible({
+      timeout: 20_000,
+    })
+    expect(await vaultRecordExists(page)).toBe(true)
+
+    // Now delete it deliberately, from a locked state again.
+    await reloadIntoLockedVault(page, '/settings')
+    await page.getByRole('button', { name: 'Desativar e excluir cópia local' }).click()
+    await page.getByRole('button', { name: 'Excluir cópia mesmo assim' }).click()
+    await expect(page.getByText('Essa ação não pode ser desfeita.')).toBeVisible()
+    await page.getByRole('button', { name: 'Excluir cópia definitivamente' }).click()
+
+    // The settings screen falls back to offering offline access again, which is
+    // how the user sees that this device no longer holds a copy.
+    await expect(
+      page.getByLabel('Senha offline (mínimo de 12 caracteres)'),
+    ).toBeVisible({ timeout: 20_000 })
+    expect(await vaultRecordExists(page)).toBe(false)
+
+    // The account is untouched: only this device's copy went away.
+    await page.goto('/transactions')
+    await expect(page.getByText('Guardada no servidor')).toBeVisible({ timeout: 20_000 })
+    await context.close()
+  })
+
+  test('logout do servidor com falha ainda executa a limpeza local confirmada', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'pt-BR' })
+    const page = await context.newPage()
+    await lockedVaultWithPendingWork(context, page, 'Perdida com o servidor fora')
+
+    // context.route, not page.route: the Service Worker owns /api requests, and
+    // a page-level handler simply never sees them.
+    await context.route('**/api/auth/logout', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+    )
+    let mutationRequests = 0
+    await context.route('**/api/offline-sync/mutations', async (route) => {
+      mutationRequests += 1
+      await route.continue()
+    })
+
+    await page.getByRole('button', { name: 'Sair da conta' }).click()
+    await page.getByRole('button', { name: 'Descartar cópia e sair' }).click()
+    await page.getByRole('button', { name: 'Excluir e sair definitivamente' }).click()
+
+    // The user asked for the copy to go; a server that refused to hear about it
+    // does not get to leave decrypted data on the device.
+    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 })
+    expect(await vaultRecordExists(page)).toBe(false)
+    expect(mutationRequests).toBe(0)
+
+    await context.unroute('**/api/auth/logout')
+    await context.unroute('**/api/offline-sync/mutations')
     await context.close()
   })
 })
