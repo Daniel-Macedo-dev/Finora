@@ -340,8 +340,8 @@ class OfflineSyncDomainTest extends OfflineSyncTestSupport {
 
     private long seedAccount() {
         jdbc.update("""
-                INSERT INTO accounts (name, type, opening_balance, user_id)
-                VALUES ('Conta sync', 'CHECKING', 0, ?)
+                INSERT INTO accounts (name, type, opening_balance, user_id, currency)
+                VALUES ('Conta sync', 'CHECKING', 0, ?, 'BRL')
                 """, user.id());
         return lastId("accounts");
     }
@@ -349,8 +349,9 @@ class OfflineSyncDomainTest extends OfflineSyncTestSupport {
     private long seedCommitment() {
         jdbc.update("""
                 INSERT INTO commitments
-                    (user_id, description, amount, category_id, cadence, due_day, start_date)
-                VALUES (?, 'Assinatura sintética', 30, ?, 'MONTHLY', 10, '2026-01-01')
+                    (user_id, description, amount, category_id, cadence, due_day, start_date,
+                     currency)
+                VALUES (?, 'Assinatura sintética', 30, ?, 'MONTHLY', 10, '2026-01-01', 'BRL')
                 """, user.id(), foodCategory);
         return lastId("commitments");
     }

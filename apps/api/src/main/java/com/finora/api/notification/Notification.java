@@ -1,5 +1,6 @@
 package com.finora.api.notification;
 
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import com.finora.api.forecast.DueEventDtos.DueEventSeverity;
 import com.finora.api.forecast.DueEventDtos.DueEventType;
@@ -26,6 +27,17 @@ public class Notification extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
+
+    /**
+     * The currency of {@code amount}, inherited from the source resource so
+     * the notification can be rendered without guessing.
+     *
+     * <p>Immutable: changing it would reinterpret history rather than
+     * restate it.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 3, updatable = false)
+    private CurrencyCode currency = CurrencyCode.BRL;
 
     @Column(name = "source_key", nullable = false, length = 255, updatable = false)
     private String sourceKey;
@@ -168,6 +180,7 @@ public class Notification extends AuditableEntity {
 
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
+    public CurrencyCode getCurrency() { return currency; }
     public String getSourceKey() { return sourceKey; }
     public String getSourceEventId() { return sourceEventId; }
     public DueEventType getType() { return type; }

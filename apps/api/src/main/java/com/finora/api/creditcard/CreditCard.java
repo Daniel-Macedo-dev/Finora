@@ -1,6 +1,7 @@
 package com.finora.api.creditcard;
 
 import com.finora.api.account.Account;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,6 +32,17 @@ public class CreditCard extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
+
+    /**
+     * The currency this card bills in. Purchases, installments, invoices,
+     * limits and adjustments all inherit it.
+     *
+     * <p>Immutable: changing it would reinterpret history rather than
+     * restate it.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 3, updatable = false)
+    private CurrencyCode currency = CurrencyCode.BRL;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -80,6 +92,10 @@ public class CreditCard extends AuditableEntity {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public CurrencyCode getCurrency() {
+        return currency;
     }
 
     public String getName() {

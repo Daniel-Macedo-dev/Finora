@@ -1,5 +1,6 @@
 package com.finora.api.account;
 
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,6 +33,17 @@ public class Account extends AuditableEntity {
     @Column(name = "opening_balance", nullable = false, precision = 14, scale = 2)
     private BigDecimal openingBalance;
 
+    /**
+     * The currency every movement in this account is denominated in.
+     *
+     * <p>Immutable: changing it would silently reinterpret the account's whole
+     * history, turning a R$ 8.000 balance into US$ 8.000 without a single
+     * transaction being edited.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 3, updatable = false)
+    private CurrencyCode currency;
+
     @Column(nullable = false)
     private boolean archived;
 
@@ -42,11 +54,17 @@ public class Account extends AuditableEntity {
     }
 
     public Account(Long userId, String name, AccountType type, BigDecimal openingBalance, int displayOrder) {
+        this(userId, name, type, openingBalance, displayOrder, CurrencyCode.BRL);
+    }
+
+    public Account(Long userId, String name, AccountType type, BigDecimal openingBalance,
+            int displayOrder, CurrencyCode currency) {
         this.userId = userId;
         this.name = name;
         this.type = type;
         this.openingBalance = openingBalance;
         this.displayOrder = displayOrder;
+        this.currency = currency;
         this.archived = false;
     }
 
@@ -56,6 +74,10 @@ public class Account extends AuditableEntity {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public CurrencyCode getCurrency() {
+        return currency;
     }
 
     public String getName() {

@@ -154,27 +154,27 @@ class MigrationFromPopulatedV11Test {
                     INSERT INTO notifications
                         (user_id, source_key, source_event_id, type, severity, event_date,
                          title, resource_type, route, revision, first_seen_at, last_seen_at,
-                         revision_changed_at)
+                         revision_changed_at, currency)
                     VALUES (1, 'X', 'X', 'INVALID', 'INFO', '2026-07-01', 'X',
-                            'FORECAST', '/forecast', 1, now(), now(), now())
+                            'FORECAST', '/forecast', 1, now(), now(), now(), 'BRL')
                     """)).hasMessageContaining("ck_notifications_type");
             assertThatThrownBy(() -> sql.execute("""
                     INSERT INTO notifications
                         (user_id, source_key, source_event_id, type, severity, event_date,
                          title, resource_type, route, revision, read_revision,
-                         first_seen_at, last_seen_at, revision_changed_at)
+                         first_seen_at, last_seen_at, revision_changed_at, currency)
                     VALUES (1, 'FORECAST:INSUFFICIENT_CASH', 'event',
                             'INSUFFICIENT_CASH_PROJECTED', 'CRITICAL', '2026-07-01',
-                            'Risco', 'FORECAST', '/forecast', 1, 2, now(), now(), now())
+                            'Risco', 'FORECAST', '/forecast', 1, 2, now(), now(), now(), 'BRL')
                     """)).hasMessageContaining("ck_notifications_revision_states");
             assertThatThrownBy(() -> sql.execute("""
                     INSERT INTO notifications
                         (user_id, source_key, source_event_id, type, severity, event_date,
                          title, resource_type, route, revision, first_seen_at, last_seen_at,
-                         revision_changed_at)
+                         revision_changed_at, currency)
                     VALUES (999, 'FORECAST:INSUFFICIENT_CASH', 'event',
                             'INSUFFICIENT_CASH_PROJECTED', 'CRITICAL', '2026-07-01',
-                            'Risco', 'FORECAST', '/forecast', 1, now(), now(), now())
+                            'Risco', 'FORECAST', '/forecast', 1, now(), now(), now(), 'BRL')
                     """)).hasMessageContaining("notifications_user_id_fkey");
         }
     }

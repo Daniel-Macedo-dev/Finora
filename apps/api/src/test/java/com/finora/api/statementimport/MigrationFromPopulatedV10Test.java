@@ -309,33 +309,33 @@ class MigrationFromPopulatedV10Test {
             statement.execute("""
                     INSERT INTO transactions
                         (type, amount, description, occurred_on, category_id, account_id,
-                         payment_method, user_id, statement_import_item_id)
+                         payment_method, user_id, statement_import_item_id, currency)
                     VALUES ('EXPENSE', 45.90, 'Padaria', '2026-06-01',
                             (SELECT id FROM categories WHERE user_id = 1 AND type = 'EXPENSE'),
                             (SELECT id FROM accounts WHERE user_id = 1 AND type = 'CHECKING'),
                             'OTHER', 1,
-                            (SELECT id FROM statement_import_items WHERE source_index = 1))
+                            (SELECT id FROM statement_import_items WHERE source_index = 1), 'BRL')
                     """);
             assertThatThrownBy(() -> statement.execute("""
                     INSERT INTO transactions
                         (type, amount, description, occurred_on, category_id, account_id,
-                         payment_method, user_id, statement_import_item_id)
+                         payment_method, user_id, statement_import_item_id, currency)
                     VALUES ('EXPENSE', 45.90, 'Padaria de novo', '2026-06-01',
                             (SELECT id FROM categories WHERE user_id = 1 AND type = 'EXPENSE'),
                             (SELECT id FROM accounts WHERE user_id = 1 AND type = 'CHECKING'),
                             'OTHER', 1,
-                            (SELECT id FROM statement_import_items WHERE source_index = 1))
+                            (SELECT id FROM statement_import_items WHERE source_index = 1), 'BRL')
                     """)).hasMessageContaining("uq_transactions_import_item");
             // User B cannot link a transaction to A's import item.
             assertThatThrownBy(() -> statement.execute("""
                     INSERT INTO transactions
                         (type, amount, description, occurred_on, category_id, account_id,
-                         payment_method, user_id, statement_import_item_id)
+                         payment_method, user_id, statement_import_item_id, currency)
                     VALUES ('EXPENSE', 45.90, 'Ataque', '2026-06-01',
                             (SELECT id FROM categories WHERE user_id = 2),
                             (SELECT id FROM accounts WHERE user_id = 2),
                             'OTHER', 2,
-                            (SELECT id FROM statement_import_items WHERE source_index = 3))
+                            (SELECT id FROM statement_import_items WHERE source_index = 3), 'BRL')
                     """)).hasMessageContaining("fk_transactions_import_item_owner");
             // Rules: cross-owner category linkage is impossible...
             assertThatThrownBy(() -> statement.execute("""

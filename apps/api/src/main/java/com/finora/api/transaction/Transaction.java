@@ -2,6 +2,7 @@ package com.finora.api.transaction;
 
 import com.finora.api.account.Account;
 import com.finora.api.category.Category;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -29,6 +30,17 @@ public class Transaction extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
+
+    /**
+     * The currency this movement is denominated in. Derived from the
+     * account when one is linked; explicit for accountless transactions.
+     *
+     * <p>Immutable: changing it would reinterpret history rather than
+     * restate it.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 3, updatable = false)
+    private CurrencyCode currency = CurrencyCode.BRL;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -129,6 +141,10 @@ public class Transaction extends AuditableEntity {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public CurrencyCode getCurrency() {
+        return currency;
     }
 
     public TransactionType getType() {

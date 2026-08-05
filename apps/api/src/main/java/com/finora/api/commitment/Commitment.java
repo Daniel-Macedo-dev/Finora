@@ -2,6 +2,7 @@ package com.finora.api.commitment;
 
 import com.finora.api.account.Account;
 import com.finora.api.category.Category;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import com.finora.api.creditcard.CreditCard;
 import com.finora.api.transaction.PaymentMethod;
@@ -29,6 +30,17 @@ public class Commitment extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
+
+    /**
+     * The currency this commitment settles in. Must match the destination
+     * account or card when the commitment materializes one.
+     *
+     * <p>Immutable: changing it would reinterpret history rather than
+     * restate it.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 3, updatable = false)
+    private CurrencyCode currency = CurrencyCode.BRL;
 
     @Column(nullable = false, length = 200)
     private String description;
@@ -110,6 +122,10 @@ public class Commitment extends AuditableEntity {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public CurrencyCode getCurrency() {
+        return currency;
     }
 
     public String getDescription() {

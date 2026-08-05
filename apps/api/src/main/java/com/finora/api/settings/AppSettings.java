@@ -1,8 +1,11 @@
 package com.finora.api.settings;
 
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -24,6 +27,18 @@ public class AppSettings extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false, unique = true)
     private Long userId;
+
+    /**
+     * The currency this user's base-denominated figures are expressed in:
+     * budgets, the minimum cash buffer and any consolidated analytics.
+     *
+     * <p>Unlike a resource currency this one is changeable, but only while the
+     * ledger is empty. Once financial data exists, changing it would reinterpret
+     * every historical amount instead of converting it.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "base_currency", nullable = false, length = 3)
+    private CurrencyCode baseCurrency = CurrencyCode.BRL;
 
     /** Cash the user never wants to go below (emergency liquidity). */
     @Column(name = "minimum_cash_buffer", nullable = false, precision = 14, scale = 2)
@@ -61,6 +76,14 @@ public class AppSettings extends AuditableEntity {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public CurrencyCode getBaseCurrency() {
+        return baseCurrency;
+    }
+
+    public void setBaseCurrency(CurrencyCode baseCurrency) {
+        this.baseCurrency = baseCurrency;
     }
 
     public BigDecimal getMinimumCashBuffer() {

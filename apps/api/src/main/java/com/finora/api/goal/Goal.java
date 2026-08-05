@@ -1,8 +1,11 @@
 package com.finora.api.goal;
 
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -22,6 +25,17 @@ public class Goal extends AuditableEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
+
+    /**
+     * The currency this goal accumulates in. Target, balance and every
+     * contribution share it.
+     *
+     * <p>Immutable: changing it would reinterpret history rather than
+     * restate it.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 3, updatable = false)
+    private CurrencyCode currency = CurrencyCode.BRL;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -65,6 +79,10 @@ public class Goal extends AuditableEntity {
 
     public Long getUserId() {
         return userId;
+    }
+
+    public CurrencyCode getCurrency() {
+        return currency;
     }
 
     public String getName() {

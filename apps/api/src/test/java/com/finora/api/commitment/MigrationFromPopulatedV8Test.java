@@ -140,30 +140,30 @@ class MigrationFromPopulatedV8Test {
             statement.execute("""
                     INSERT INTO commitments
                         (description, amount, category_id, cadence, start_date, active,
-                         execution_mode, target_kind, account_id, installment_count, user_id)
+                         execution_mode, target_kind, account_id, installment_count, user_id, currency)
                     VALUES ('Feira semanal', 120.00,
                             (SELECT id FROM categories WHERE user_id = 1), 'WEEKLY',
                             '2026-07-01', TRUE, 'AUTOMATIC', 'ACCOUNT_TRANSACTION',
-                            (SELECT id FROM accounts WHERE user_id = 1), 1, 1)
+                            (SELECT id FROM accounts WHERE user_id = 1), 1, 1, 'BRL')
                     """);
             // AUTOMATIC without a target is rejected by the check constraint.
             assertThatThrownBy(() -> statement.execute("""
                     INSERT INTO commitments
                         (description, amount, category_id, cadence, due_day, start_date, active,
-                         execution_mode, target_kind, installment_count, user_id)
+                         execution_mode, target_kind, installment_count, user_id, currency)
                     VALUES ('Inválido', 10.00,
                             (SELECT id FROM categories WHERE user_id = 1), 'MONTHLY', 1,
-                            '2026-01-01', TRUE, 'AUTOMATIC', 'PROJECTION_ONLY', 1, 1)
+                            '2026-01-01', TRUE, 'AUTOMATIC', 'PROJECTION_ONLY', 1, 1, 'BRL')
                     """)).hasMessageContaining("ck_commitments_automatic_has_target");
             // Cross-owner target references are impossible.
             assertThatThrownBy(() -> statement.execute("""
                     INSERT INTO commitments
                         (description, amount, category_id, cadence, due_day, start_date, active,
-                         execution_mode, target_kind, account_id, installment_count, user_id)
+                         execution_mode, target_kind, account_id, installment_count, user_id, currency)
                     VALUES ('Roubo de conta', 10.00,
                             (SELECT id FROM categories WHERE user_id = 2), 'MONTHLY', 1,
                             '2026-01-01', TRUE, 'MANUAL', 'ACCOUNT_TRANSACTION',
-                            (SELECT id FROM accounts WHERE user_id = 1), 1, 2)
+                            (SELECT id FROM accounts WHERE user_id = 1), 1, 2, 'BRL')
                     """)).hasMessageContaining("fk_commitments_account_owner");
         }
     }

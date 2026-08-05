@@ -122,9 +122,10 @@ class MigrationFromPopulatedV5Test {
         try (Connection connection = connect(); Statement statement = connection.createStatement()) {
             assertThatThrownBy(() -> statement.execute("""
                     INSERT INTO transactions
-                        (type, amount, description, occurred_on, category_id, payment_method, user_id)
+                        (type, amount, description, occurred_on, category_id, payment_method,
+                         user_id, currency)
                     VALUES ('EXPENSE', 10.00, 'Novo crédito genérico', '2026-07-01',
-                            (SELECT id FROM categories WHERE user_id = 1), 'CREDIT', 1)
+                            (SELECT id FROM categories WHERE user_id = 1), 'CREDIT', 1, 'BRL')
                     """))
                     .isInstanceOf(SQLException.class)
                     .hasMessageContaining("ck_transactions_credit_is_legacy");
@@ -137,8 +138,8 @@ class MigrationFromPopulatedV5Test {
         try (Connection connection = connect(); Statement statement = connection.createStatement()) {
             statement.execute("""
                     INSERT INTO credit_cards
-                        (user_id, name, brand, credit_limit, closing_day, due_day)
-                    VALUES (1, 'Cartão de A', 'VISA', 5000.00, 10, 17)
+                        (user_id, name, brand, credit_limit, closing_day, due_day, currency)
+                    VALUES (1, 'Cartão de A', 'VISA', 5000.00, 10, 17, 'BRL')
                     """);
             // User B cannot own a purchase pointing at user A's card.
             assertThatThrownBy(() -> statement.execute("""
