@@ -12,6 +12,14 @@ public final class SettingsDtos {
     }
 
     public record SettingsRequest(
+            /**
+             * ISO code of the user's base currency. Optional so existing
+             * clients (and installed PWA copies) that predate multi-currency
+             * keep working: when absent the current base currency is kept,
+             * never silently reset to BRL.
+             */
+            String baseCurrency,
+
             @NotNull(message = "Informe a reserva mínima de caixa.")
             @DecimalMin(value = "0", message = "A reserva mínima não pode ser negativa.")
             @Digits(integer = 12, fraction = 2, message = "Use no máximo 2 casas decimais.")
@@ -37,13 +45,19 @@ public final class SettingsDtos {
     }
 
     public record SettingsResponse(
+            /** Always present: base-denominated figures below are read in it. */
+            String baseCurrency,
+            /** False once the ledger holds data, so the UI can explain why. */
+            boolean baseCurrencyChangeable,
             BigDecimal minimumCashBuffer,
             BigDecimal maxInstallmentCommitmentRatio,
             BigDecimal monthlyOpportunityRate,
             BigDecimal budgetWarningThreshold) {
 
-        public static SettingsResponse from(AppSettings settings) {
+        public static SettingsResponse from(AppSettings settings, boolean baseCurrencyChangeable) {
             return new SettingsResponse(
+                    settings.getBaseCurrency().name(),
+                    baseCurrencyChangeable,
                     settings.getMinimumCashBuffer(),
                     settings.getMaxInstallmentCommitmentRatio(),
                     settings.getMonthlyOpportunityRate(),
