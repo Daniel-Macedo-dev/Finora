@@ -36,6 +36,17 @@ public final class TransactionDtos {
 
             Long accountId,
 
+            /**
+             * ISO code this movement is denominated in.
+             *
+             * <p>When an account is linked the currency is derived from it, and
+             * an explicitly different code is rejected rather than silently
+             * overridden. For an accountless transaction it is the only source
+             * of truth; omitting it falls back to the user's base currency so
+             * clients that predate multi-currency keep working.
+             */
+            String currency,
+
             PaymentMethod paymentMethod,
 
             @Size(max = 2000, message = "As observações podem ter no máximo 2000 caracteres.")
@@ -56,6 +67,8 @@ public final class TransactionDtos {
             LocalDate date,
             CategorySummary category,
             AccountSummary account,
+            /** Authoritative currency of {@code amount}. */
+            String currency,
             PaymentMethod paymentMethod,
             boolean legacyCredit,
             /** FALSE while an active legacy-credit conversion replaces this expense. */
@@ -108,6 +121,7 @@ public final class TransactionDtos {
                                     t.getAccount().getName(),
                                     t.getAccount().getType())
                             : null,
+                    t.getCurrency().name(),
                     t.getPaymentMethod(),
                     t.isLegacyCredit(),
                     t.isFinanciallyActive(),

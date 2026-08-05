@@ -69,6 +69,11 @@ public class TransactionMutationHandler implements MutationHandler {
                 request.date(),
                 request.categoryId(),
                 request.accountId(),
+                // Upper-cased so "usd" and "USD" from different client builds
+                // cannot fingerprint as two different requests.
+                request.currency() == null || request.currency().isBlank()
+                        ? null
+                        : request.currency().trim().toUpperCase(java.util.Locale.ROOT),
                 request.paymentMethod(),
                 request.notes() != null && !request.notes().isBlank() ? request.notes().trim() : null);
     }

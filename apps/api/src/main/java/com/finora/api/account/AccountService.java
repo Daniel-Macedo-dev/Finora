@@ -4,9 +4,11 @@ import com.finora.api.account.AccountDtos.AccountRequest;
 import com.finora.api.account.AccountDtos.AccountResponse;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.payment.InvoicePaymentRepository;
 import com.finora.api.identity.CurrentUserProvider;
+import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.TransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,17 +24,20 @@ public class AccountService {
     private final AccountBalanceService balances;
     private final InvoicePaymentRepository invoicePayments;
     private final CurrentUserProvider currentUser;
+    private final SettingsService settings;
 
     public AccountService(AccountRepository accounts,
                           TransactionRepository transactions,
                           AccountBalanceService balances,
                           InvoicePaymentRepository invoicePayments,
-                          CurrentUserProvider currentUser) {
+                          CurrentUserProvider currentUser,
+                          SettingsService settings) {
         this.accounts = accounts;
         this.transactions = transactions;
         this.balances = balances;
         this.invoicePayments = invoicePayments;
         this.currentUser = currentUser;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
@@ -53,12 +58,15 @@ public class AccountService {
         accounts.findByUserIdAndNameIgnoreCase(userId, request.name().trim()).ifPresent(existing -> {
             throw new BusinessRuleException("ACCOUNT_NAME_TAKEN", "Já existe uma conta com esse nome.");
         });
+        CurrencyCode currency = resolveCurrency(request.currency(), userId);
+        MoneyRules.validateScale(request.openingBalance(), currency);
         Account account = new Account(
                 userId,
                 request.name().trim(),
                 request.type(),
-                MoneyRules.normalize(request.openingBalance()),
-                request.displayOrder() != null ? request.displayOrder() : 0);
+                MoneyRules.normalize(request.openingBalance(), currency),
+                request.displayOrder() != null ? request.displayOrder() : 0,
+                currency);
         return toResponse(accounts.save(account));
     }
 
@@ -70,9 +78,12 @@ public class AccountService {
                 throw new BusinessRuleException("ACCOUNT_NAME_TAKEN", "Já existe uma conta com esse nome.");
             }
         });
+        assertCurrencyUnchanged(account, request.currency());
+        MoneyRules.validateScale(request.openingBalance(), account.getCurrency());
         account.setName(request.name().trim());
         account.setType(request.type());
-        account.setOpeningBalance(MoneyRules.normalize(request.openingBalance()));
+        account.setOpeningBalance(
+                MoneyRules.normalize(request.openingBalance(), account.getCurrency()));
         if (request.displayOrder() != null) {
             account.setDisplayOrder(request.displayOrder());
         }
@@ -97,6 +108,31 @@ public class AccountService {
         accounts.delete(account);
     }
 
+    /**
+     * An omitted currency means the user's base currency. A foreign currency is
+     * never inferred: the client must ask for it explicitly.
+     */
+    private CurrencyCode resolveCurrency(String requested, Long userId) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        return explicit != null ? explicit : settings.forUser(userId).getBaseCurrency();
+    }
+
+    /**
+     * An account's currency is immutable: changing it would reinterpret every
+     * movement already recorded against it instead of converting them. Omitting
+     * the field keeps the current currency, so old clients keep working.
+     */
+    private void assertCurrencyUnchanged(Account account, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (explicit != null && explicit != account.getCurrency()) {
+            throw new BusinessRuleException(
+                    "CURRENCY_IMMUTABLE",
+                    ("A moeda de uma conta não pode ser alterada (%s). Alterá-la "
+                            + "reinterpretaria todos os lançamentos já registrados nela.")
+                            .formatted(account.getCurrency().name()));
+        }
+    }
+
     /** Foreign-owned ids resolve to 404 — never 403 — to avoid enumeration. */
     private Account find(Long id) {
         return accounts.findByIdAndUserId(id, currentUser.currentUserId())
@@ -111,8 +147,9 @@ public class AccountService {
                 account.getId(),
                 account.getName(),
                 account.getType(),
-                MoneyRules.normalize(account.getOpeningBalance()),
-                MoneyRules.normalize(current),
+                MoneyRules.normalize(account.getOpeningBalance(), account.getCurrency()),
+                MoneyRules.normalize(current, account.getCurrency()),
+                account.getCurrency().name(),
                 account.isArchived(),
                 account.getDisplayOrder());
     }

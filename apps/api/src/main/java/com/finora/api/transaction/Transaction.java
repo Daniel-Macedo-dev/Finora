@@ -147,6 +147,15 @@ public class Transaction extends AuditableEntity {
         return currency;
     }
 
+    /**
+     * Set once, at creation, by the service that resolved it from the account
+     * or the user's base currency. The column is insert-only, so a later change
+     * cannot reach the database even if some caller attempts it.
+     */
+    public void setCurrency(CurrencyCode currency) {
+        this.currency = currency;
+    }
+
     public TransactionType getType() {
         return type;
     }

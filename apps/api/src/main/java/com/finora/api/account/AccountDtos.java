@@ -25,6 +25,15 @@ public final class AccountDtos {
             @Digits(integer = 12, fraction = 2, message = "Use no máximo 2 casas decimais.")
             BigDecimal openingBalance,
 
+            /**
+             * ISO code of the currency every movement in this account is
+             * denominated in. Optional for backward compatibility: an omitted
+             * currency means the authenticated user's base currency, never a
+             * guessed foreign one. Ignored on update, because an account's
+             * currency is immutable.
+             */
+            String currency,
+
             Integer displayOrder,
 
             Boolean archived) {
@@ -36,6 +45,8 @@ public final class AccountDtos {
             AccountType type,
             BigDecimal openingBalance,
             BigDecimal currentBalance,
+            /** Authoritative currency of both balances above. */
+            String currency,
             boolean archived,
             int displayOrder) {
     }

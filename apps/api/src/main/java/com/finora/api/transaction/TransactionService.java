@@ -6,6 +6,7 @@ import com.finora.api.category.Category;
 import com.finora.api.category.CategoryRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.common.web.PageResponse;
 import com.finora.api.identity.CurrentUserProvider;
@@ -13,6 +14,7 @@ import com.finora.api.legacyconversion.ConversionStatus;
 import com.finora.api.legacyconversion.LegacyConversionRepository;
 import com.finora.api.legacyconversion.LegacyCreditConversion;
 import com.finora.api.statementimport.StatementImportItem;
+import com.finora.api.settings.SettingsService;
 import com.finora.api.statementimport.StatementImportItemRepository;
 import com.finora.api.transaction.TransactionDtos.TransactionRequest;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
@@ -39,19 +41,22 @@ public class TransactionService {
     private final LegacyConversionRepository conversions;
     private final StatementImportItemRepository importItems;
     private final CurrentUserProvider currentUser;
+    private final SettingsService settings;
 
     public TransactionService(TransactionRepository transactions,
                               CategoryRepository categories,
                               AccountRepository accounts,
                               LegacyConversionRepository conversions,
                               StatementImportItemRepository importItems,
-                              CurrentUserProvider currentUser) {
+                              CurrentUserProvider currentUser,
+                              SettingsService settings) {
         this.transactions = transactions;
         this.categories = categories;
         this.accounts = accounts;
         this.conversions = conversions;
         this.importItems = importItems;
         this.currentUser = currentUser;
+        this.settings = settings;
     }
 
     /**
@@ -181,15 +186,19 @@ public class TransactionService {
     public TransactionResponse create(TransactionRequest request, java.util.UUID clientResourceId) {
         Long userId = currentUser.currentUserId();
         Category category = resolveCategory(userId, request);
+        Account account = resolveAccount(userId, request);
+        CurrencyCode currency = resolveCurrency(userId, account, request.currency());
+        MoneyRules.validateScale(request.amount(), currency);
         Transaction transaction = new Transaction(
                 userId,
                 request.type(),
-                MoneyRules.normalize(request.amount()),
+                MoneyRules.normalize(request.amount(), currency),
                 request.description().trim(),
                 request.date(),
                 category);
+        transaction.setCurrency(currency);
         transaction.setClientResourceId(clientResourceId);
-        applyOptionalFields(userId, transaction, request);
+        applyOptionalFields(userId, transaction, request, account);
         return TransactionResponse.from(transactions.save(transaction));
     }
 
@@ -204,12 +213,16 @@ public class TransactionService {
                             + "auditoria. Estorne a conversão para editá-la.");
         }
         Category category = resolveCategory(userId, request);
+        Account account = resolveAccount(userId, request);
+        assertCurrencyUnchanged(transaction, account, request.currency());
+        CurrencyCode currency = transaction.getCurrency();
+        MoneyRules.validateScale(request.amount(), currency);
         transaction.setType(request.type());
-        transaction.setAmount(MoneyRules.normalize(request.amount()));
+        transaction.setAmount(MoneyRules.normalize(request.amount(), currency));
         transaction.setDescription(request.description().trim());
         transaction.setOccurredOn(request.date());
         transaction.setCategory(category);
-        applyOptionalFields(userId, transaction, request);
+        applyOptionalFields(userId, transaction, request, account);
         return TransactionResponse.from(transaction);
     }
 
@@ -239,7 +252,62 @@ public class TransactionService {
         transactions.delete(transaction);
     }
 
-    private void applyOptionalFields(Long userId, Transaction transaction, TransactionRequest request) {
+    /**
+     * The currency of an account-linked movement belongs to the account; an
+     * accountless one carries its own. A client that supplies a currency
+     * contradicting the account is refused rather than silently overridden,
+     * because the two readings differ by the whole exchange rate.
+     */
+    private CurrencyCode resolveCurrency(Long userId, Account account, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (account == null) {
+            // Old clients omit the field entirely; base currency is the only
+            // safe reading, never a guessed foreign one.
+            return explicit != null ? explicit : settings.forUser(userId).getBaseCurrency();
+        }
+        if (explicit != null && explicit != account.getCurrency()) {
+            throw new BusinessRuleException(
+                    "ACCOUNT_CURRENCY_MISMATCH",
+                    ("A conta selecionada é em %s e não aceita lançamentos em %s. "
+                            + "Não há conversão de moeda.")
+                            .formatted(account.getCurrency().name(), explicit.name()));
+        }
+        return account.getCurrency();
+    }
+
+    /**
+     * A transaction's currency is immutable, and it cannot be moved to an
+     * account of another currency either -- that would reinterpret the amount
+     * instead of converting it.
+     */
+    private void assertCurrencyUnchanged(Transaction transaction, Account account, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (explicit != null && explicit != transaction.getCurrency()) {
+            throw new BusinessRuleException(
+                    "CURRENCY_IMMUTABLE",
+                    ("A moeda de um lançamento não pode ser alterada (%s).")
+                            .formatted(transaction.getCurrency().name()));
+        }
+        if (account != null && account.getCurrency() != transaction.getCurrency()) {
+            throw new BusinessRuleException(
+                    "ACCOUNT_CURRENCY_MISMATCH",
+                    ("Este lançamento é em %s e não pode ser movido para uma conta em %s.")
+                            .formatted(transaction.getCurrency().name(),
+                                    account.getCurrency().name()));
+        }
+    }
+
+    /** Owner-scoped: another user's account id behaves as absent. */
+    private Account resolveAccount(Long userId, TransactionRequest request) {
+        if (request.accountId() == null) {
+            return null;
+        }
+        return accounts.findByIdAndUserId(request.accountId(), userId)
+                .orElseThrow(() -> new NotFoundException("Conta", request.accountId()));
+    }
+
+    private void applyOptionalFields(Long userId, Transaction transaction,
+            TransactionRequest request, Account account) {
         // Generic CREDIT belongs to the pre-card era: new credit spending goes
         // through the credit-card domain, where it gets invoices and limits.
         // Editing a legacy credit entry that keeps its CREDIT method is safe.
@@ -247,14 +315,7 @@ public class TransactionService {
             throw new BusinessRuleException("USE_CREDIT_CARD_PURCHASE",
                     "Para registrar uma nova compra no crédito, use a área de Cartões.");
         }
-        if (request.accountId() != null) {
-            // Owner-scoped lookup: another user's account id behaves as absent.
-            Account account = accounts.findByIdAndUserId(request.accountId(), userId)
-                    .orElseThrow(() -> new NotFoundException("Conta", request.accountId()));
-            transaction.setAccount(account);
-        } else {
-            transaction.setAccount(null);
-        }
+        transaction.setAccount(account);
         transaction.setPaymentMethod(request.paymentMethod());
         transaction.setNotes(request.notes() != null && !request.notes().isBlank()
                 ? request.notes().trim()
