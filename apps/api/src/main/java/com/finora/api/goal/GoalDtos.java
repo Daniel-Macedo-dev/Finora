@@ -36,6 +36,14 @@ public final class GoalDtos {
 
             LocalDate targetDate,
 
+            /**
+             * ISO code this goal accumulates in. Optional for backward
+             * compatibility: an omitted currency means the user's base
+             * currency. Ignored on update, because a goal's currency is
+             * immutable.
+             */
+            String currency,
+
             Boolean archived) {
     }
 
@@ -56,6 +64,12 @@ public final class GoalDtos {
             GoalStatus status,
             /** Suggested contribution per month to hit the target date; null without a future target date. */
             BigDecimal suggestedMonthlyContribution,
+            /**
+             * Authoritative currency of every amount above. {@code
+             * percentAchieved} stays currency-independent because its
+             * numerator and denominator share this currency.
+             */
+            String currency,
             /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
             long version) {
     }

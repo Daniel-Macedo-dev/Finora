@@ -52,6 +52,11 @@ public class GoalMutationHandler implements MutationHandler {
                 MoneyRules.normalize(request.targetAmount()),
                 request.currentAmount() == null ? null : MoneyRules.normalize(request.currentAmount()),
                 request.targetDate(),
+                // Upper-cased for a stable fingerprint; left null when absent so
+                // a pre-multi-currency entry keeps its legacy canonical shape.
+                request.currency() == null || request.currency().isBlank()
+                        ? null
+                        : request.currency().trim().toUpperCase(java.util.Locale.ROOT),
                 request.archived());
     }
 

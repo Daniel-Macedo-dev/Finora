@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import com.finora.api.common.money.CurrencyTotals;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -61,7 +62,17 @@ public final class CommitmentDtos {
 
             @Min(value = 1, message = "O número de parcelas deve estar entre 1 e 120.")
             @Max(value = 120, message = "O número de parcelas deve estar entre 1 e 120.")
-            Integer installmentCount) {
+            Integer installmentCount,
+
+            /**
+             * ISO code this commitment settles in.
+             *
+             * <p>For an account or card target the currency belongs to that
+             * destination and an explicitly different code is rejected. A
+             * projection-only commitment may name any supported currency;
+             * omitting it means the user's base currency.
+             */
+            String currency) {
     }
 
     /** Maps a legacy CREDIT definition to a real card; only the target changes. */
@@ -102,22 +113,33 @@ public final class CommitmentDtos {
             int installmentCount,
             /** True for pre-automation rows kept projection-only for safety. */
             boolean legacyProjectionOnly,
-            long failedOccurrences) {
+            long failedOccurrences,
+            /** Authoritative currency of {@code amount}. */
+            String currency) {
     }
 
     public record UpcomingCommitment(
             Long commitmentId,
             String description,
             BigDecimal amount,
+            /** Currency of {@code amount}; upcoming items are never summed across currencies. */
+            String currency,
             CommitmentCategory category,
             LocalDate dueDate,
             PaymentMethod paymentMethod) {
     }
 
+    /**
+     * Upcoming commitments in a window.
+     *
+     * <p>{@code totals} replaces what used to be one summed amount: commitments
+     * may settle in different currencies, and Finora cannot convert them, so a
+     * single figure is only offered when there is nothing left to convert.
+     */
     public record UpcomingResponse(
             LocalDate from,
             LocalDate to,
-            BigDecimal totalAmount,
+            CurrencyTotals totals,
             List<UpcomingCommitment> items) {
     }
 }

@@ -42,7 +42,11 @@ class CommitmentApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.items.length()").value(2))
                 .andExpect(jsonPath("$.items[0].dueDate").value("2026-07-10"))
                 .andExpect(jsonPath("$.items[1].dueDate").value("2026-08-10"))
-                .andExpect(jsonPath("$.totalAmount").value(79.80));
+                // Single-currency window still consolidates, and now says so.
+                .andExpect(jsonPath("$.totals.complete").value(true))
+                .andExpect(jsonPath("$.totals.total").value(79.80))
+                .andExpect(jsonPath("$.totals.byCurrency[0].currency").value("BRL"))
+                .andExpect(jsonPath("$.totals.unconvertedCurrencies").isEmpty());
     }
 
     @Test

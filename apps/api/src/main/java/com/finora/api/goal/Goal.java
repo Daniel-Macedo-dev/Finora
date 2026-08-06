@@ -85,6 +85,14 @@ public class Goal extends AuditableEntity {
         return currency;
     }
 
+    /**
+     * Set once, at creation. The column is insert-only, so a later change
+     * cannot reach the database even if some caller attempts it.
+     */
+    public void setCurrency(CurrencyCode currency) {
+        this.currency = currency;
+    }
+
     public String getName() {
         return name;
     }

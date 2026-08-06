@@ -128,6 +128,15 @@ public class Commitment extends AuditableEntity {
         return currency;
     }
 
+    /**
+     * Set once, at creation, from the destination account or card (or the
+     * user's base currency for a projection-only commitment). The column is
+     * insert-only.
+     */
+    public void setCurrency(CurrencyCode currency) {
+        this.currency = currency;
+    }
+
     public String getDescription() {
         return description;
     }

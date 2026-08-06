@@ -15,10 +15,13 @@ import com.finora.api.commitment.occurrence.CommitmentOccurrenceRepository;
 import com.finora.api.commitment.occurrence.OccurrenceStatus;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
+import com.finora.api.common.money.CurrencyTotals;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.CreditCard;
 import com.finora.api.creditcard.CreditCardRepository;
 import com.finora.api.identity.CurrentUserProvider;
+import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.PaymentMethod;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -52,6 +55,7 @@ public class CommitmentService {
     private final CreditCardRepository cards;
     private final CurrentUserProvider currentUser;
     private final Clock clock;
+    private final SettingsService settings;
 
     public CommitmentService(CommitmentRepository commitments,
                              CommitmentOccurrenceRepository occurrences,
@@ -59,7 +63,8 @@ public class CommitmentService {
                              AccountRepository accounts,
                              CreditCardRepository cards,
                              CurrentUserProvider currentUser,
-                             Clock clock) {
+                             Clock clock,
+                             SettingsService settings) {
         this.commitments = commitments;
         this.occurrences = occurrences;
         this.categories = categories;
@@ -67,6 +72,7 @@ public class CommitmentService {
         this.cards = cards;
         this.currentUser = currentUser;
         this.clock = clock;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
@@ -108,7 +114,8 @@ public class CommitmentService {
                 items.add(new UpcomingCommitment(
                         commitment.getId(),
                         commitment.getDescription(),
-                        MoneyRules.normalize(commitment.getAmount()),
+                        MoneyRules.normalize(commitment.getAmount(), commitment.getCurrency()),
+                        commitment.getCurrency().name(),
                         toCategory(commitment.getCategory()),
                         due,
                         commitment.getPaymentMethod()));
@@ -116,10 +123,16 @@ public class CommitmentService {
         }
         items.sort(Comparator.comparing(UpcomingCommitment::dueDate)
                 .thenComparing(UpcomingCommitment::description));
-        BigDecimal total = items.stream()
-                .map(UpcomingCommitment::amount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new UpcomingResponse(from, to, MoneyRules.normalize(total), items);
+        // Commitments in different currencies cannot be added, so the window
+        // reports grouped native totals and offers one consolidated figure only
+        // when every commitment already settles in the base currency.
+        CurrencyTotals totals = CurrencyTotals.of(
+                items.stream()
+                        .map(item -> new CurrencyTotals.Entry(
+                                item.amount(), CurrencyCode.parse(item.currency())))
+                        .toList(),
+                settings.forUser(userId).getBaseCurrency());
+        return new UpcomingResponse(from, to, totals, items);
     }
 
     /**
@@ -157,6 +170,10 @@ public class CommitmentService {
                 request.startDate());
         commitment.setEndDate(request.endDate());
         applyTargetFields(userId, commitment, request);
+        CurrencyCode currency = deriveCurrency(userId, commitment, request.currency());
+        MoneyRules.validateScale(request.amount(), currency);
+        commitment.setCurrency(currency);
+        commitment.setAmount(MoneyRules.normalize(request.amount(), currency));
         if (request.active() != null) {
             commitment.setActive(request.active());
         }
@@ -173,14 +190,18 @@ public class CommitmentService {
         Commitment commitment = find(id);
         Category category = resolveCategory(userId, request.categoryId());
         validate(request, category);
+        assertCurrencyUnchanged(commitment, request.currency());
+        MoneyRules.validateScale(request.amount(), commitment.getCurrency());
         commitment.setDescription(request.description().trim());
-        commitment.setAmount(MoneyRules.normalize(request.amount()));
+        commitment.setAmount(
+                MoneyRules.normalize(request.amount(), commitment.getCurrency()));
         commitment.setCategory(category);
         commitment.setCadence(request.cadence());
         commitment.setDueDay(request.dueDay());
         commitment.setStartDate(request.startDate());
         commitment.setEndDate(request.endDate());
         applyTargetFields(userId, commitment, request);
+        assertTargetMatchesCurrency(commitment);
         if (request.active() != null) {
             commitment.setActive(request.active());
         }
@@ -349,6 +370,63 @@ public class CommitmentService {
         }
     }
 
+    /**
+     * The currency a commitment settles in.
+     *
+     * <p>For an account or card target the destination owns the currency: a
+     * materialized occurrence becomes a real movement there, so any other
+     * currency would be unpayable. A projection-only commitment has no
+     * destination and may name any supported currency, defaulting to the
+     * user's base currency.
+     */
+    private CurrencyCode deriveCurrency(Long userId, Commitment commitment, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        CurrencyCode destination = destinationCurrency(commitment);
+        if (destination == null) {
+            return explicit != null ? explicit : settings.forUser(userId).getBaseCurrency();
+        }
+        if (explicit != null && explicit != destination) {
+            throw new BusinessRuleException("COMMITMENT_CURRENCY_MISMATCH",
+                    ("O destino deste recorrente é em %s e não aceita um compromisso "
+                            + "em %s. Não há conversão de moeda.")
+                            .formatted(destination.name(), explicit.name()));
+        }
+        return destination;
+    }
+
+    /** Rejects an edit that repoints a commitment at a differently denominated target. */
+    private void assertTargetMatchesCurrency(Commitment commitment) {
+        CurrencyCode destination = destinationCurrency(commitment);
+        if (destination != null && destination != commitment.getCurrency()) {
+            throw new BusinessRuleException("COMMITMENT_CURRENCY_MISMATCH",
+                    ("Este recorrente é em %s e não pode ter um destino em %s.")
+                            .formatted(commitment.getCurrency().name(), destination.name()));
+        }
+    }
+
+    private static CurrencyCode destinationCurrency(Commitment commitment) {
+        if (commitment.getAccount() != null) {
+            return commitment.getAccount().getCurrency();
+        }
+        if (commitment.getCreditCard() != null) {
+            return commitment.getCreditCard().getCurrency();
+        }
+        return null;
+    }
+
+    /**
+     * A commitment's currency is immutable: its occurrence history and every
+     * materialized movement are denominated in it.
+     */
+    private void assertCurrencyUnchanged(Commitment commitment, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (explicit != null && explicit != commitment.getCurrency()) {
+            throw new BusinessRuleException("CURRENCY_IMMUTABLE",
+                    ("A moeda de um recorrente não pode ser alterada (%s).")
+                            .formatted(commitment.getCurrency().name()));
+        }
+    }
+
     /** Removes untouched future SCHEDULED rows that the new schedule no longer produces. */
     private void pruneStaleScheduledOccurrences(Commitment commitment) {
         List<CommitmentOccurrence> persisted =
@@ -405,7 +483,7 @@ public class CommitmentService {
         return new CommitmentResponse(
                 commitment.getId(),
                 commitment.getDescription(),
-                MoneyRules.normalize(commitment.getAmount()),
+                MoneyRules.normalize(commitment.getAmount(), commitment.getCurrency()),
                 toCategory(commitment.getCategory()),
                 commitment.getCadence(),
                 commitment.getDueDay(),
@@ -422,7 +500,8 @@ public class CommitmentService {
                 Optional.ofNullable(commitment.getCreditCard()).map(CreditCard::getName).orElse(null),
                 commitment.getInstallmentCount(),
                 legacyProjectionOnly,
-                failedOccurrences);
+                failedOccurrences,
+                commitment.getCurrency().name());
     }
 
     private static CommitmentCategory toCategory(Category category) {

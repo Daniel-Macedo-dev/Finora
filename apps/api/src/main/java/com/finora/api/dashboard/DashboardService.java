@@ -150,7 +150,7 @@ public class DashboardService {
                 topCategories(userId, month, expense),
                 trend(userId, month),
                 upcoming.items(),
-                upcoming.totalAmount(),
+                upcoming.totals(),
                 goals.listForUser(userId).stream()
                         .filter(goal -> goal.status() != com.finora.api.goal.GoalDtos.GoalStatus.ARCHIVED)
                         .toList(),

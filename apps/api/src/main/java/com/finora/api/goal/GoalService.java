@@ -2,12 +2,14 @@ package com.finora.api.goal;
 
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.goal.GoalDtos.ContributionRequest;
 import com.finora.api.goal.GoalDtos.GoalRequest;
 import com.finora.api.goal.GoalDtos.GoalResponse;
 import com.finora.api.goal.GoalDtos.GoalStatus;
 import com.finora.api.identity.CurrentUserProvider;
+import com.finora.api.settings.SettingsService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -23,10 +25,13 @@ public class GoalService {
 
     private final GoalRepository goals;
     private final CurrentUserProvider currentUser;
+    private final SettingsService settings;
 
-    public GoalService(GoalRepository goals, CurrentUserProvider currentUser) {
+    public GoalService(GoalRepository goals, CurrentUserProvider currentUser,
+            SettingsService settings) {
         this.goals = goals;
         this.currentUser = currentUser;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
@@ -60,14 +65,19 @@ public class GoalService {
      * @param clientResourceId null for anything created online
      */
     public GoalResponse create(GoalRequest request, java.util.UUID clientResourceId) {
+        Long userId = currentUser.currentUserId();
+        CurrencyCode currency = resolveCurrency(request.currency(), userId);
+        MoneyRules.validateScale(request.targetAmount(), currency);
+        MoneyRules.validateScale(request.currentAmount(), currency);
         Goal goal = new Goal(
-                currentUser.currentUserId(),
+                userId,
                 request.name().trim(),
-                MoneyRules.normalize(request.targetAmount()),
+                MoneyRules.normalize(request.targetAmount(), currency),
                 request.currentAmount() != null
-                        ? MoneyRules.normalize(request.currentAmount())
-                        : MoneyRules.normalize(BigDecimal.ZERO),
+                        ? MoneyRules.normalize(request.currentAmount(), currency)
+                        : MoneyRules.normalize(BigDecimal.ZERO, currency),
                 request.targetDate());
+        goal.setCurrency(currency);
         if (request.archived() != null) {
             goal.setArchived(request.archived());
         }
@@ -77,10 +87,14 @@ public class GoalService {
 
     public GoalResponse update(Long id, GoalRequest request) {
         Goal goal = find(id);
+        assertCurrencyUnchanged(goal, request.currency());
+        CurrencyCode currency = goal.getCurrency();
+        MoneyRules.validateScale(request.targetAmount(), currency);
+        MoneyRules.validateScale(request.currentAmount(), currency);
         goal.setName(request.name().trim());
-        goal.setTargetAmount(MoneyRules.normalize(request.targetAmount()));
+        goal.setTargetAmount(MoneyRules.normalize(request.targetAmount(), currency));
         if (request.currentAmount() != null) {
-            goal.setCurrentAmount(MoneyRules.normalize(request.currentAmount()));
+            goal.setCurrentAmount(MoneyRules.normalize(request.currentAmount(), currency));
         }
         goal.setTargetDate(request.targetDate());
         if (request.archived() != null) {
@@ -96,17 +110,43 @@ public class GoalService {
             throw new BusinessRuleException("GOAL_CONTRIBUTION_ZERO",
                     "O valor do aporte não pode ser zero.");
         }
+        // A contribution is denominated in the goal's own currency; there is
+        // no second currency in play, so the addition stays homogeneous.
+        MoneyRules.validateScale(request.amount(), goal.getCurrency());
         BigDecimal updated = goal.getCurrentAmount().add(request.amount());
         if (updated.signum() < 0) {
             throw new BusinessRuleException("GOAL_BALANCE_NEGATIVE",
                     "A retirada deixaria a meta com valor negativo.");
         }
-        goal.setCurrentAmount(MoneyRules.normalize(updated));
+        goal.setCurrentAmount(MoneyRules.normalize(updated, goal.getCurrency()));
         return toResponse(goal, LocalDate.now());
     }
 
     public void delete(Long id) {
         goals.delete(find(id));
+    }
+
+    /**
+     * An omitted currency means the user's base currency; a foreign one is
+     * never inferred.
+     */
+    private CurrencyCode resolveCurrency(String requested, Long userId) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        return explicit != null ? explicit : settings.forUser(userId).getBaseCurrency();
+    }
+
+    /**
+     * A goal's currency is immutable: its balance and every past contribution
+     * are denominated in it, so a change would reinterpret them.
+     */
+    private void assertCurrencyUnchanged(Goal goal, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (explicit != null && explicit != goal.getCurrency()) {
+            throw new BusinessRuleException("CURRENCY_IMMUTABLE",
+                    ("A moeda de uma meta não pode ser alterada (%s). Alterá-la "
+                            + "reinterpretaria o saldo e os aportes já registrados.")
+                            .formatted(goal.getCurrency().name()));
+        }
     }
 
     private Goal find(Long id) {
@@ -133,13 +173,14 @@ public class GoalService {
         return new GoalResponse(
                 goal.getId(),
                 goal.getName(),
-                MoneyRules.normalize(goal.getTargetAmount()),
-                MoneyRules.normalize(goal.getCurrentAmount()),
-                MoneyRules.normalize(remaining),
+                MoneyRules.normalize(goal.getTargetAmount(), goal.getCurrency()),
+                MoneyRules.normalize(goal.getCurrentAmount(), goal.getCurrency()),
+                MoneyRules.normalize(remaining, goal.getCurrency()),
                 percent,
                 goal.getTargetDate(),
                 status,
                 suggestedMonthlyContribution(goal, remaining, today),
+                goal.getCurrency().name(),
                 goal.getVersion());
     }
 

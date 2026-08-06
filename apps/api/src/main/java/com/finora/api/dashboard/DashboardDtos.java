@@ -4,6 +4,7 @@ import com.finora.api.commitment.CommitmentDtos.UpcomingCommitment;
 import com.finora.api.creditcard.invoice.InvoiceStatus;
 import com.finora.api.goal.GoalDtos.GoalResponse;
 import com.finora.api.transaction.TransactionDtos.TransactionResponse;
+import com.finora.api.common.money.CurrencyTotals;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -108,7 +109,12 @@ public final class DashboardDtos {
             /** Last 6 months (oldest first) of income/expense, for the trend chart. */
             List<MonthTrendPoint> trend,
             List<UpcomingCommitment> upcomingCommitments,
-            BigDecimal upcomingCommitmentsTotal,
+            /**
+             * Grouped native totals for the upcoming window. Commitments may
+             * settle in different currencies, so a single consolidated figure
+             * is offered only when there is nothing left to convert.
+             */
+            CurrencyTotals upcomingCommitmentsTotal,
             List<GoalResponse> goals,
             List<TransactionResponse> recentTransactions,
             /** Null when the user has no credit cards. */
