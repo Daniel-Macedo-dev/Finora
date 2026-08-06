@@ -34,6 +34,26 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             """)
     BigDecimal netMovement(@Param("accountId") Long accountId, @Param("userId") Long userId);
 
+    /**
+     * Net movement of every account of one user in a single query:
+     * {@code [accountId, net]}.
+     *
+     * <p>The overview needs a balance for each row, and asking per account is a
+     * query per account. Accounts without movement are simply absent from the
+     * result — the caller already holds the opening balance.
+     */
+    @Query("""
+            select t.account.id,
+                   sum(case when t.type = com.finora.api.transaction.TransactionType.INCOME
+                            then t.amount else -t.amount end)
+            from Transaction t
+            where t.userId = :userId
+              and t.account.id is not null
+              and t.financiallyActive = true
+            group by t.account.id
+            """)
+    List<Object[]> netMovementGroupedByAccount(@Param("userId") Long userId);
+
     /** Net movement recognized up to a reference date (forecast opening balance). */
     @Query("""
             select sum(case when t.type = com.finora.api.transaction.TransactionType.INCOME

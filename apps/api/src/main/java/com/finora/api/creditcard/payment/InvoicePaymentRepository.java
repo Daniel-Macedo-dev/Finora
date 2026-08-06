@@ -76,6 +76,20 @@ public interface InvoicePaymentRepository extends JpaRepository<InvoicePayment, 
             """)
     BigDecimal sumCompletedByAccount(@Param("accountId") Long accountId, @Param("userId") Long userId);
 
+    /**
+     * Settled invoice cash per account in a single query: {@code [accountId, total]}.
+     * The batched counterpart of {@link #sumCompletedByAccount}, so an overview
+     * of N accounts costs one query rather than N.
+     */
+    @Query("""
+            select p.account.id, coalesce(sum(p.amount), 0)
+            from InvoicePayment p
+            where p.userId = :userId
+              and p.status = com.finora.api.creditcard.payment.PaymentStatus.COMPLETED
+            group by p.account.id
+            """)
+    java.util.List<Object[]> sumCompletedGroupedByAccount(@Param("userId") Long userId);
+
     boolean existsByInvoiceIdAndStatus(Long invoiceId, PaymentStatus status);
 
     boolean existsByAccountId(Long accountId);

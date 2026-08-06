@@ -1,11 +1,13 @@
 package com.finora.api.account;
 
+import com.finora.api.common.money.CurrencyTotals;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
+import java.util.List;
 
 public final class AccountDtos {
 
@@ -49,5 +51,26 @@ public final class AccountDtos {
             String currency,
             boolean archived,
             int displayOrder) {
+    }
+
+    /**
+     * The account list plus the only totals that can honestly be stated.
+     *
+     * <p>Balances in different currencies are not addable, so there is no
+     * consolidated scalar here at all: {@code totals} reports each currency on
+     * its own and says whether a native or a base-denominated total exists.
+     * A user with only BRL accounts still gets exactly one figure, unchanged.
+     *
+     * @param accounts every account, archived ones included, each with its own
+     *     native currency and balances
+     * @param totals grouped current balances of the <em>active</em> accounts
+     *     only, matching what the dashboard treats as available cash
+     * @param archivedTotals the same grouping for archived accounts, so the
+     *     money is still visible without being folded into available cash
+     */
+    public record AccountsOverviewResponse(
+            List<AccountResponse> accounts,
+            CurrencyTotals totals,
+            CurrencyTotals archivedTotals) {
     }
 }

@@ -5,6 +5,7 @@ import com.finora.api.account.AccountDtos.AccountResponse;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.CurrencyCode;
+import com.finora.api.common.money.CurrencyTotals;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.payment.InvoicePaymentRepository;
 import com.finora.api.identity.CurrentUserProvider;
@@ -45,6 +46,46 @@ public class AccountService {
         Long userId = currentUser.currentUserId();
         return accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId).stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * The account list together with balances grouped by currency.
+     *
+     * <p>Every account is loaded once and every balance comes from two grouped
+     * queries, so this costs a constant number of round trips regardless of how
+     * many accounts or currencies the user has. No consolidated scalar is
+     * produced: {@link CurrencyTotals} decides what can honestly be totalled.
+     */
+    @Transactional(readOnly = true)
+    public AccountDtos.AccountsOverviewResponse overview() {
+        Long userId = currentUser.currentUserId();
+        CurrencyCode base = settings.forUser(userId).getBaseCurrency();
+        List<Account> owned = accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId);
+        var currentBalances = balances.currentBalances(userId, owned);
+
+        List<AccountResponse> responses = owned.stream()
+                .map(account -> toResponse(account, currentBalances.get(account.getId())))
+                .toList();
+
+        // A balance is a point-in-time snapshot, so an empty foreign account has
+        // genuinely nothing to convert and must not make the base total
+        // unavailable. See CurrencyTotals#ofSnapshots.
+        CurrencyTotals active = CurrencyTotals.ofSnapshots(
+                entriesOf(owned, currentBalances, false), base);
+        CurrencyTotals archived = CurrencyTotals.ofSnapshots(
+                entriesOf(owned, currentBalances, true), base);
+        return new AccountDtos.AccountsOverviewResponse(responses, active, archived);
+    }
+
+    private static List<CurrencyTotals.Entry> entriesOf(List<Account> owned,
+            java.util.Map<Long, BigDecimal> currentBalances, boolean archived) {
+        return owned.stream()
+                .filter(account -> account.isArchived() == archived)
+                .map(account -> new CurrencyTotals.Entry(
+                        MoneyRules.normalize(
+                                currentBalances.get(account.getId()), account.getCurrency()),
+                        account.getCurrency()))
                 .toList();
     }
 
@@ -140,8 +181,14 @@ public class AccountService {
     }
 
     private AccountResponse toResponse(Account account) {
-        BigDecimal current = account.getId() != null
+        return toResponse(account, account.getId() != null
                 ? balances.currentBalance(account)
+                : account.getOpeningBalance());
+    }
+
+    private AccountResponse toResponse(Account account, BigDecimal currentBalance) {
+        BigDecimal current = currentBalance != null
+                ? currentBalance
                 : account.getOpeningBalance();
         return new AccountResponse(
                 account.getId(),

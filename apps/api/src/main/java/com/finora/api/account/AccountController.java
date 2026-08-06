@@ -30,6 +30,17 @@ public class AccountController {
         return service.list();
     }
 
+    /**
+     * The list plus balances grouped by currency.
+     *
+     * <p>Kept apart from {@code GET /accounts} so the plain list keeps the shape
+     * offline copies and older clients already hold.
+     */
+    @GetMapping("/overview")
+    public AccountDtos.AccountsOverviewResponse overview() {
+        return service.overview();
+    }
+
     @GetMapping("/{id}")
     public AccountResponse get(@PathVariable Long id) {
         return service.get(id);
