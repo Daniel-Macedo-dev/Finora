@@ -8,7 +8,9 @@ import com.finora.api.creditcard.CreditCard;
 import com.finora.api.creditcard.InvoiceCycleCalculator;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisAssumptions;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisResponse;
+import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.UnavailableReason;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.CardAnalysis;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.OptionAnalysis;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.OptionIssue;
@@ -56,13 +58,13 @@ public class PurchaseAnalysisService {
 
     private final WishlistItemRepository items;
     private final SettingsService settings;
-    private final FinancialContextService contextService;
+    private final PurchaseFinancialContextService contextService;
     private final CardLimitService cardLimits;
     private final CurrentUserProvider currentUser;
 
     public PurchaseAnalysisService(WishlistItemRepository items,
                                    SettingsService settings,
-                                   FinancialContextService contextService,
+                                   PurchaseFinancialContextService contextService,
                                    CardLimitService cardLimits,
                                    CurrentUserProvider currentUser) {
         this.items = items;
@@ -79,36 +81,167 @@ public class PurchaseAnalysisService {
     @Transactional(readOnly = true)
     public AnalysisResponse analyze(Long itemId, LocalDate referenceDate) {
         Long userId = currentUser.currentUserId();
+        // Owner scope is settled before any currency is even looked at, so
+        // another user's item stays indistinguishable from a missing one.
         WishlistItem item = items.findByIdAndUserId(itemId, userId)
                 .orElseThrow(() -> new NotFoundException("Item da lista de desejos", itemId));
         AppSettings config = settings.forUser(userId);
-        FinancialContext context = contextService.build(userId, referenceDate);
+        PurchaseFinancialContext context = contextService.build(userId, referenceDate);
+        CurrencyCode base = CurrencyCode.parse(context.baseCurrency());
+        CurrencyCode itemCurrency = item.getCurrency();
 
+        // Eligibility is decided before a single subtraction, ratio or
+        // present-value comparison runs. Computing mixed figures and hiding
+        // them afterwards would leave the wrong numbers one refactor away from
+        // being shown.
+        List<UnavailableReason> reasons = unavailableReasons(item, itemCurrency, base, context);
+        if (!reasons.isEmpty()) {
+            return AnalysisResponse.exchangeRateRequired(
+                    item.getId(), item.getName(), base.name(), itemCurrency.name(),
+                    missingCurrencies(context, itemCurrency, base), reasons);
+        }
+
+        // Past this point every operand is denominated in the base currency,
+        // which is also the item's, so the arithmetic below is homogeneous and
+        // behaves exactly as it did before multi-currency.
+        BaseAmounts money = BaseAmounts.of(context);
         List<OptionAnalysis> analyses = item.getOptions().stream()
-                .map(option -> analyzeOption(option, config, context, referenceDate))
+                .map(option -> analyzeOption(option, config, money, referenceDate))
                 .toList();
 
-        return new AnalysisResponse(
+        return AnalysisResponse.available(
                 item.getId(),
                 item.getName(),
+                base.name(),
                 new AnalysisAssumptions(
-                        context.availableCash(),
+                        money.availableCash(),
                         config.getMinimumCashBuffer(),
                         config.getMonthlyOpportunityRate(),
                         config.getMaxInstallmentCommitmentRatio(),
-                        context.avgMonthlyIncome(),
-                        context.avgMonthlyExpense(),
-                        context.avgMonthlySurplus(),
-                        context.monthlyCommitments(),
-                        context.cardOutstandingTotal(),
-                        context.nextMonthCardInstallments(),
-                        context.historyMonthsUsed()),
+                        money.avgMonthlyIncome(),
+                        money.avgMonthlyExpense(),
+                        money.avgMonthlySurplus(),
+                        money.monthlyCommitments(),
+                        money.cardOutstandingTotal(),
+                        money.nextMonthCardInstallments(),
+                        money.historyMonthsUsed()),
                 analyses,
-                recommend(analyses, config, context));
+                recommend(analyses, config, money));
+    }
+
+    /**
+     * Every reason a complete recommendation cannot be produced, not just the
+     * first: a user whose item is foreign <em>and</em> whose cash is mixed
+     * deserves to see both.
+     *
+     * <p>Card outstanding is deliberately absent from this list. It is reported
+     * in the assumptions but no recommendation rule divides or subtracts with
+     * it, so an incomplete card-obligation total cannot distort a conclusion and
+     * must not suppress an otherwise valid analysis.
+     */
+    private static List<UnavailableReason> unavailableReasons(WishlistItem item,
+            CurrencyCode itemCurrency, CurrencyCode base, PurchaseFinancialContext context) {
+        List<UnavailableReason> reasons = new ArrayList<>();
+        if (itemCurrency != base) {
+            reasons.add(new UnavailableReason("ITEM_CURRENCY_DIFFERS_FROM_BASE",
+                    ("%s está em %s e sua análise financeira é feita em %s. Sem cotação não há como "
+                            + "comparar os dois sem distorcer o resultado.")
+                            .formatted(item.getName(), itemCurrency.name(), base.name())));
+        }
+        if (!context.availableCash().baseComplete()) {
+            reasons.add(new UnavailableReason("AVAILABLE_CASH_INCOMPLETE",
+                    "Parte do seu saldo disponível está em %s."
+                            .formatted(join(context.availableCash().unconvertedCurrencies()))));
+        }
+        // No history at all is fine: the engine already falls back to a
+        // cash-only analysis with explicit warnings. History that exists in
+        // another currency is not the same thing and must not pass as absence.
+        if (context.averageIncome().anyHistory() && !context.averageIncome().baseComplete()) {
+            reasons.add(new UnavailableReason("INCOME_HISTORY_INCOMPLETE",
+                    "Parte da sua renda dos últimos meses está em %s."
+                            .formatted(join(context.averageIncome().unconvertedCurrencies()))));
+        }
+        if (context.averageExpenses().anyHistory() && !context.averageExpenses().baseComplete()) {
+            reasons.add(new UnavailableReason("EXPENSE_HISTORY_INCOMPLETE",
+                    "Parte das suas despesas dos últimos meses está em %s."
+                            .formatted(join(context.averageExpenses().unconvertedCurrencies()))));
+        }
+        if (!context.monthlyCommitments().baseComplete()) {
+            reasons.add(new UnavailableReason("COMMITMENTS_INCOMPLETE",
+                    "Parte dos seus compromissos recorrentes está em %s."
+                            .formatted(join(context.monthlyCommitments().unconvertedCurrencies()))));
+        }
+        if (!context.nextMonthCardInstallments().baseComplete()) {
+            reasons.add(new UnavailableReason("CARD_INSTALLMENTS_INCOMPLETE",
+                    "Parte das parcelas de cartão do próximo mês está em %s."
+                            .formatted(join(context.nextMonthCardInstallments()
+                                    .unconvertedCurrencies()))));
+        }
+        // An option billed by a card in another currency cannot be compared with
+        // the item's price either.
+        boolean incompatibleCard = item.getOptions().stream()
+                .map(PurchaseOption::getCreditCard)
+                .filter(java.util.Objects::nonNull)
+                .anyMatch(card -> card.getCurrency() != itemCurrency);
+        if (incompatibleCard) {
+            reasons.add(new UnavailableReason("CARD_CONTEXT_INCOMPATIBLE",
+                    "Uma das opções está ligada a um cartão que fatura em outra moeda."));
+        }
+        return List.copyOf(reasons);
+    }
+
+    /** Context currencies plus the item's own, deduplicated in catalogue order. */
+    private static List<String> missingCurrencies(PurchaseFinancialContext context,
+            CurrencyCode itemCurrency, CurrencyCode base) {
+        java.util.EnumSet<CurrencyCode> missing = java.util.EnumSet.noneOf(CurrencyCode.class);
+        context.missingCurrencies().forEach(code -> missing.add(CurrencyCode.parse(code)));
+        if (itemCurrency != base) {
+            missing.add(itemCurrency);
+        }
+        List<String> ordered = new ArrayList<>(missing.size());
+        missing.forEach(currency -> ordered.add(currency.name()));
+        return List.copyOf(ordered);
+    }
+
+    private static String join(List<String> currencies) {
+        return String.join(", ", currencies);
+    }
+
+    /**
+     * The base-denominated projection of a context already proven complete.
+     *
+     * <p>It exists so the recommendation arithmetic keeps operating on plain
+     * scalars exactly as it always has — but it can only be built after every
+     * dimension has been shown to be in one currency, so those scalars can no
+     * longer be a mix of two.
+     */
+    private record BaseAmounts(
+            BigDecimal availableCash,
+            BigDecimal avgMonthlyIncome,
+            BigDecimal avgMonthlyExpense,
+            BigDecimal avgMonthlySurplus,
+            BigDecimal monthlyCommitments,
+            BigDecimal cardOutstandingTotal,
+            BigDecimal nextMonthCardInstallments,
+            int historyMonthsUsed) {
+
+        static BaseAmounts of(PurchaseFinancialContext context) {
+            return new BaseAmounts(
+                    context.availableCash().baseTotal(),
+                    context.averageIncome().baseAverage(),
+                    context.averageExpenses().baseAverage(),
+                    context.averageSurplus().baseAverage(),
+                    context.monthlyCommitments().baseTotal(),
+                    // Informational only; null when the card side is mixed,
+                    // which never blocks the analysis.
+                    context.cardOutstanding().baseTotal(),
+                    context.nextMonthCardInstallments().baseTotal(),
+                    context.averageIncome().baseMonthsUsed());
+        }
     }
 
     private OptionAnalysis analyzeOption(PurchaseOption option, AppSettings config,
-                                         FinancialContext context, LocalDate referenceDate) {
+                                         BaseAmounts context, LocalDate referenceDate) {
         BigDecimal nominal = MoneyRules.normalize(option.nominalCost());
         BigDecimal presentValue = presentValue(option, config.getMonthlyOpportunityRate());
         List<OptionIssue> issues = new ArrayList<>();
@@ -194,7 +327,7 @@ public class PurchaseAnalysisService {
     }
 
     private void checkInstallmentPressure(PurchaseOption option, AppSettings config,
-                                          FinancialContext context, List<OptionIssue> issues) {
+                                          BaseAmounts context, List<OptionIssue> issues) {
         BigDecimal installment = option.getInstallmentAmount();
 
         if (context.avgMonthlySurplus() != null) {
@@ -260,7 +393,7 @@ public class PurchaseAnalysisService {
     }
 
     private Recommendation recommend(List<OptionAnalysis> analyses, AppSettings config,
-                                     FinancialContext context) {
+                                     BaseAmounts context) {
         if (analyses.isEmpty()) {
             return new Recommendation(RecommendationType.NO_OPTIONS, null, List.of(),
                     "Cadastre opções de compra para gerar a análise.", List.of(), null, null);
@@ -323,7 +456,7 @@ public class PurchaseAnalysisService {
     }
 
     private Recommendation buildWaitRecommendation(List<OptionAnalysis> analyses, AppSettings config,
-                                                   FinancialContext context, List<String> warnings) {
+                                                   BaseAmounts context, List<String> warnings) {
         // The gap to close: smallest shortfall between required cash (upfront +
         // buffer) and available cash across the options.
         BigDecimal requiredAdditionalCash = analyses.stream()
