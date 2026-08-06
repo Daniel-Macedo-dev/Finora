@@ -62,15 +62,7 @@ public class BaseCurrencyGuard {
      */
     @Transactional(readOnly = true)
     public void assertChangeAllowed(Long userId, AppSettings settings) {
-        List<String> blocking = new ArrayList<>(nonEmptyDomains(userId));
-
-        // A non-zero buffer is a real amount in the current base currency, so
-        // reinterpreting it would quietly change the user's safety margin.
-        if (settings.getMinimumCashBuffer() != null
-                && settings.getMinimumCashBuffer().compareTo(BigDecimal.ZERO) != 0) {
-            blocking.add("reserva mínima de caixa");
-        }
-
+        List<String> blocking = blockingReasons(userId, settings);
         if (!blocking.isEmpty()) {
             throw new BusinessRuleException(
                     "BASE_CURRENCY_CHANGE_BLOCKED",
@@ -80,6 +72,29 @@ public class BaseCurrencyGuard {
                             + "serem convertidos.")
                             .formatted(String.join(", ", blocking)));
         }
+    }
+
+    /**
+     * Everything that currently blocks a base-currency change, as a plain
+     * query.
+     *
+     * <p>Callers that merely want to <em>report</em> whether the change is
+     * still possible must use this rather than catching the exception above:
+     * an exception escaping a transactional method marks the surrounding
+     * transaction rollback-only, so a caught-and-ignored one would still fail
+     * the request at commit time.
+     */
+    @Transactional(readOnly = true)
+    public List<String> blockingReasons(Long userId, AppSettings settings) {
+        List<String> blocking = new ArrayList<>(nonEmptyDomains(userId));
+
+        // A non-zero buffer is a real amount in the current base currency, so
+        // reinterpreting it would quietly change the user's safety margin.
+        if (settings.getMinimumCashBuffer() != null
+                && settings.getMinimumCashBuffer().compareTo(BigDecimal.ZERO) != 0) {
+            blocking.add("reserva mínima de caixa");
+        }
+        return blocking;
     }
 
     /**

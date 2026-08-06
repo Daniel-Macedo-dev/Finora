@@ -1,6 +1,5 @@
 package com.finora.api.settings;
 
-import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.settings.SettingsDtos.SettingsRequest;
@@ -70,12 +69,12 @@ public class SettingsService {
         settings.setBaseCurrency(target);
     }
 
+    /**
+     * Asks the guard directly instead of catching its exception: an exception
+     * crossing a transactional boundary marks the transaction rollback-only,
+     * which would turn a plain settings read into a failed commit.
+     */
     private boolean isBaseCurrencyChangeable(AppSettings settings) {
-        try {
-            baseCurrencyGuard.assertChangeAllowed(settings.getUserId(), settings);
-            return true;
-        } catch (BusinessRuleException blocked) {
-            return false;
-        }
+        return baseCurrencyGuard.blockingReasons(settings.getUserId(), settings).isEmpty();
     }
 }
