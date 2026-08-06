@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -37,6 +38,26 @@ final class RequestFingerprint {
 
     /** Unit separator: cannot occur in validated text, so fields cannot bleed. */
     private static final char SEPARATOR = '';
+
+    /**
+     * Payload fields introduced after this fingerprint format was already in
+     * production, omitted from the hash when absent.
+     *
+     * <p>Multi-currency added {@code currency} to payloads that used to be
+     * implicitly BRL. A mutation queued by a pre-multi-currency client carries
+     * no currency at all, and its receipt was hashed over a shape without the
+     * field. Serializing the new record would write {@code "currency":null} and
+     * change that hash, so retrying an already-applied mutation whose response
+     * was lost would be misread as the same key reused with different content
+     * -- and the user would be wrongly told the operation was refused.
+     *
+     * <p>Omitting only these fields, and only when null, keeps the legacy shape
+     * byte-identical while every other nullable field ({@code notes},
+     * {@code accountId}, ...) stays inside the hash exactly as before. An
+     * explicitly supplied currency is always hashed: an explicit USD request
+     * must never collide with an old implicit-BRL one.
+     */
+    private static final Set<String> OMITTED_WHEN_ABSENT = Set.of("currency");
 
     private RequestFingerprint() {
     }
@@ -81,7 +102,10 @@ final class RequestFingerprint {
         }
         if (node.isObject()) {
             Map<String, JsonNode> sorted = new TreeMap<>();
-            node.propertyStream().forEach(entry -> sorted.put(entry.getKey(), entry.getValue()));
+            node.propertyStream()
+                    .filter(entry -> !(OMITTED_WHEN_ABSENT.contains(entry.getKey())
+                            && isAbsent(entry.getValue())))
+                    .forEach(entry -> sorted.put(entry.getKey(), entry.getValue()));
             out.append('{');
             boolean first = true;
             for (Map.Entry<String, JsonNode> entry : sorted.entrySet()) {
@@ -121,6 +145,11 @@ final class RequestFingerprint {
             return;
         }
         writeString(node.stringValue(), out);
+    }
+
+    /** A field carrying no value: JSON null or a missing node. */
+    private static boolean isAbsent(JsonNode value) {
+        return value == null || value.isNull() || value.isMissingNode();
     }
 
     private static void writeString(String value, StringBuilder out) {
