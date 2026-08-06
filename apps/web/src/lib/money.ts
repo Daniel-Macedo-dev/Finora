@@ -128,13 +128,27 @@ export function parseMoneyInput(
   return value
 }
 
-/** Grouped native totals, as returned by the backend CurrencyTotals record. */
+/**
+ * Grouped native totals, as returned by the backend CurrencyTotals record.
+ *
+ * Homogeneity and base completeness are separate questions on purpose. A user
+ * whose ledger is entirely in USD has a real `nativeTotal`; that same total is
+ * not an answer denominated in a BRL base currency, so `baseTotal` stays null.
+ */
 export interface CurrencyTotals {
   baseCurrency: CurrencyCode
-  /** False when foreign amounts are present; `total` is then absent. */
-  complete: boolean
-  total: number | null
+  /** Always present, even when nothing can be consolidated. */
   byCurrency: Array<{ amount: number; currency: CurrencyCode }>
+  /** True when every contributing amount shares one currency. */
+  homogeneous: boolean
+  /** That shared currency; null when the set is mixed. */
+  homogeneousCurrency: CurrencyCode | null
+  /** Addable total in `homogeneousCurrency`; null when the set is mixed. */
+  nativeTotal: number | null
+  /** True when every contributing amount was already in `baseCurrency`. */
+  baseComplete: boolean
+  /** Base-denominated total; null when not base-complete. Never converted. */
+  baseTotal: number | null
   /** Currencies a future exchange-rate stage would have to convert. */
   unconvertedCurrencies: CurrencyCode[]
 }
