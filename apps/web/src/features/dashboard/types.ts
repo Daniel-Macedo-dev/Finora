@@ -1,3 +1,4 @@
+import type { CurrencyCode, CurrencyTotals } from '../../lib/money'
 import type { PaymentMethod, TransactionType } from '../shared/types'
 import type { Transaction } from '../transactions/types'
 
@@ -27,6 +28,8 @@ export interface UpcomingCommitment {
   commitmentId: number
   description: string
   amount: number
+  /** Currency of `amount`; upcoming items are never summed across currencies. */
+  currency: CurrencyCode
   category: { id: number; name: string; type: TransactionType }
   dueDate: string
   paymentMethod: PaymentMethod | null
@@ -103,7 +106,8 @@ export interface DashboardData {
   topCategories: CategoryShare[]
   trend: MonthTrendPoint[]
   upcomingCommitments: UpcomingCommitment[]
-  upcomingCommitmentsTotal: number
+  /** Grouped native totals; commitments may settle in different currencies. */
+  upcomingCommitmentsTotal: CurrencyTotals
   goals: GoalSnapshot[]
   recentTransactions: Transaction[]
   cards: CardsOverview | null

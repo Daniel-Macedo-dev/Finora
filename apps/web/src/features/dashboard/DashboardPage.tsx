@@ -15,6 +15,7 @@ import {
 import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
 import Money from '../../components/Money'
+import CurrencyTotal from '../../components/CurrencyTotal'
 import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
 import { currentMonth } from '../../lib/month'
 import { formatBRL, formatDate, formatPercent } from '../../lib/format'
@@ -320,13 +321,11 @@ export default function DashboardPage() {
                     <li key={`${commitment.commitmentId}-${commitment.dueDate}`}>
                       <span className="mini-list-main">{commitment.description}</span>
                       <span className="mini-list-meta">{formatDate(commitment.dueDate)}</span>
-                      <Money value={commitment.amount} />
+                      <Money value={commitment.amount} currency={commitment.currency} />
                     </li>
                   ))}
                 </ul>
-                <p className="stat-footnote">
-                  Total projetado: {formatBRL(data.upcomingCommitmentsTotal)}
-                </p>
+                <CurrencyTotal label="Total projetado" totals={data.upcomingCommitmentsTotal} />
               </>
             )}
           </section>

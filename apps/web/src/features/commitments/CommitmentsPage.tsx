@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { CalendarClock, History, Pause, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import Money from '../../components/Money'
+import CurrencyTotal from '../../components/CurrencyTotal'
 import Dialog from '../../components/Dialog'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
-import { formatBRL, formatDate } from '../../lib/format'
+import { formatDate } from '../../lib/format'
 import CommitmentForm from './CommitmentForm'
 import OccurrencesDialog from './OccurrencesDialog'
 import LegacyCardMappingDialog from './LegacyCardMappingDialog'
@@ -273,13 +274,11 @@ export default function CommitmentsPage() {
                     <li key={`${item.commitmentId}-${item.dueDate}`}>
                       <span className="mini-list-main">{item.description}</span>
                       <span className="mini-list-meta">{formatDate(item.dueDate)}</span>
-                      <Money value={item.amount} />
+                      <Money value={item.amount} currency={item.currency} />
                     </li>
                   ))}
                 </ul>
-                <p className="stat-footnote">
-                  Total projetado: {formatBRL(upcoming.data.totalAmount)}
-                </p>
+                <CurrencyTotal label="Total projetado" totals={upcoming.data.totals} />
               </>
             )}
           </aside>

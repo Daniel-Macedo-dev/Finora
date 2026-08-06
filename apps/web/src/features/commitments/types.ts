@@ -1,3 +1,4 @@
+import type { CurrencyCode, CurrencyTotals } from '../../lib/money'
 import type { PaymentMethod, TransactionType } from '../shared/types'
 
 export type CommitmentCadence = 'WEEKLY' | 'MONTHLY' | 'YEARLY'
@@ -95,11 +96,13 @@ export interface ProcessDueResult {
 export interface UpcomingCommitments {
   from: string
   to: string
-  totalAmount: number
+  /** Grouped native totals; a single figure only when nothing needs converting. */
+  totals: CurrencyTotals
   items: Array<{
     commitmentId: number
     description: string
     amount: number
+    currency: CurrencyCode
     category: { id: number; name: string; type: TransactionType }
     dueDate: string
     paymentMethod: PaymentMethod | null
