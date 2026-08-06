@@ -91,8 +91,8 @@ test.describe('Cenário — Conversão assistida de crédito legado', () => {
     await seedCard(page, 'Cartão Roxo', 10000)
 
     // Before: November holds the expense.
-    expect((await (await pageGet(page, '/dashboard?month=2025-11')).json()).expense).toBe(300)
-    expect((await (await pageGet(page, '/dashboard?month=2025-12')).json()).expense).toBe(0)
+    expect((await (await pageGet(page, '/dashboard?month=2025-11')).json()).expense.baseTotal).toBe(300)
+    expect((await (await pageGet(page, '/dashboard?month=2025-12')).json()).expense.baseTotal).toBe(0)
 
     // Inventory shows the eligible source with its summary.
     await page.goto('/legacy-credit')
@@ -132,8 +132,8 @@ test.describe('Cenário — Conversão assistida de crédito legado', () => {
     await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()
 
     // Accounting: the expense moved to the invoice month, exactly once.
-    expect((await (await pageGet(page, '/dashboard?month=2025-11')).json()).expense).toBe(0)
-    expect((await (await pageGet(page, '/dashboard?month=2025-12')).json()).expense).toBe(300)
+    expect((await (await pageGet(page, '/dashboard?month=2025-11')).json()).expense.baseTotal).toBe(0)
+    expect((await (await pageGet(page, '/dashboard?month=2025-12')).json()).expense.baseTotal).toBe(300)
 
     // The generated purchase is real, and the source is financially inactive.
     const transaction = await (await pageGet(page, `/transactions/${sourceId}`)).json()
@@ -241,7 +241,7 @@ test.describe('Cenário — Conversão assistida de crédito legado', () => {
 
     const restored = await (await pageGet(page, `/transactions/${sourceId}`)).json()
     expect(restored.financiallyActive).toBe(true)
-    expect((await (await pageGet(page, '/dashboard?month=2025-11')).json()).expense).toBe(300)
+    expect((await (await pageGet(page, '/dashboard?month=2025-11')).json()).expense.baseTotal).toBe(300)
 
     // Convert again, pay the invoice, and the reversal becomes blocked.
     const again = await pagePost(page, '/legacy-conversions', {
@@ -270,7 +270,7 @@ test.describe('Cenário — Conversão assistida de crédito legado', () => {
     await expect(blocked.getByRole('button', { name: 'Estornar conversão' })).toBeDisabled()
 
     // Money moved exactly once through the invoice payment.
-    expect((await (await pageGet(page, '/dashboard?month=2025-12')).json()).totalBalance).toBe(
+    expect((await (await pageGet(page, '/dashboard?month=2025-12')).json()).accountBalances.baseTotal).toBe(
       4700,
     )
   })
