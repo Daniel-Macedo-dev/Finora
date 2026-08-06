@@ -122,7 +122,8 @@ describe('V2 → V3 cached query migration', () => {
     const result = migrateQueryToV3(
       query(['accounts'], [{ id: 1, currentBalance: 100, meta: { amount: 5 } }]),
     )
-    const [account] = result?.data as Array<Record<string, unknown>>
+    const rows = result!.data as Array<Record<string, unknown>>
+    const account = rows[0]
     expect(account.currency).toBe('BRL')
     expect(account.meta).toEqual({ amount: 5 })
   })
