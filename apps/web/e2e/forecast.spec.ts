@@ -136,10 +136,10 @@ test.describe('Cenário — Previsão de caixa', () => {
     // The page tells the same story.
     await page.goto('/forecast')
     await expect(page.getByRole('heading', { name: 'Previsão de caixa' })).toBeVisible()
-    await expect(page.getByText('Saldo hoje')).toBeVisible()
-    await expect(page.getByText('Menor saldo projetado')).toBeVisible()
+    await expect(page.getByText(/Saldo hoje/)).toBeVisible()
+    await expect(page.getByText(/Menor saldo projetado/)).toBeVisible()
     await expect(page.getByRole('alert')).toContainText('negativo em')
-    await expect(page.getByText(/Fluxos sem conta definida/)).toBeVisible()
+    await expect(page.getByText(/Fluxos em BRL sem conta definida/)).toBeVisible()
     await expect(page.getByText('Renda extra').first()).toBeVisible()
     await expect(page.getByText(/Recorrente projetado/).first()).toBeVisible()
     await expect(page.getByText(/Compra recorrente projetada/).first()).toBeVisible()
@@ -150,11 +150,11 @@ test.describe('Cenário — Previsão de caixa', () => {
       'aria-pressed',
       'true',
     )
-    await expect(page.getByText('Saldo hoje')).toBeVisible()
+    await expect(page.getByText(/Saldo hoje/)).toBeVisible()
 
     // Account filter keeps the page consistent.
     await page.getByLabel('Filtrar por conta').selectOption(String(account.id))
-    await expect(page.getByText('Saldo hoje')).toBeVisible()
+    await expect(page.getByText(/Saldo hoje/)).toBeVisible()
 
     // Dashboard integration: compact future-cash summary, no duplicate page.
     await page.goto('/dashboard')
@@ -294,7 +294,7 @@ test.describe('Cenário — Recorrentes e previsão no celular (390px)', () => {
     await page.getByRole('button', { name: 'Abrir menu' }).click()
     await page.getByRole('link', { name: 'Previsão' }).click()
     await expect(page.getByRole('heading', { name: 'Previsão de caixa' })).toBeVisible()
-    await expect(page.getByText('Saldo hoje')).toBeVisible()
+    await expect(page.getByText(/Saldo hoje/)).toBeVisible()
     await expect(page.getByText('Internet fibra').first()).toBeVisible()
   })
 })
