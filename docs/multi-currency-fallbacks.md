@@ -21,10 +21,8 @@ Levantada em `f1d7082..HEAD` com `rg formatBRL apps/web/src`.
 | --- | --- |
 | `features/wishlist/AnalysisPanel.tsx` | 8 |
 | `features/wishlist/price-history/PriceHistorySection.tsx` | 8 |
-| `features/forecast/ForecastPage.tsx` | 8 |
 | `features/wishlist/WishlistItemPage.tsx` | 7 |
 | `features/wishlist/ExecutePurchaseDialog.tsx` | 5 |
-| `features/forecast/BalanceChart.tsx` | 5 |
 | `features/credit-cards/InvoicePaymentForm.tsx` | 4 |
 | `features/legacy-conversions/LegacyConversionWizard.tsx` | 4 |
 | `features/credit-cards/InstallmentPreview.tsx` | 4 |
@@ -47,12 +45,16 @@ Levantada em `f1d7082..HEAD` com `rg formatBRL apps/web/src`.
 | `lib/format.ts` | 1 (a própria definição) |
 | `lib/format.test.ts` | 8 (testes da definição) |
 
-Total: **100 ocorrências em 27 arquivos**, sendo 9 na definição e nos seus testes.
+Total: **87 ocorrências em 25 arquivos**, sendo 9 na definição e nos seus testes.
+
+Migrados desde o levantamento inicial: `features/forecast/ForecastPage.tsx` (8) e
+`features/forecast/BalanceChart.tsx` (5), junto com a previsão por moeda — ambos
+passaram a receber a moeda explicitamente e nenhum usa mais o fallback.
 
 ## Ordem sugerida para o fechamento
 
-1. Previsão (`ForecastPage`, `BalanceChart`) — depende do contrato de previsão por
-   moeda, que ainda não existe.
+1. ~~Previsão (`ForecastPage`, `BalanceChart`)~~ — **concluído** junto com a
+   previsão por moeda.
 2. Notificações (`NotificationItem`, `browserNotifications`) — depende da moeda
    autoritativa na resposta de notificação.
 3. Análise de compra e lista de desejos — depende do estado tipado
