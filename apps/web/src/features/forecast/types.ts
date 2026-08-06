@@ -1,3 +1,5 @@
+import type { CurrencyCode } from '../../lib/money'
+
 export type ForecastSource =
   | 'ACTUAL_TRANSACTION'
   | 'RECURRING_ACCOUNT_OCCURRENCE'
@@ -15,6 +17,8 @@ export interface ForecastEvent {
   date: string
   description: string
   amount: number
+  /** Authoritative currency, derived from the source resource. */
+  currency: CurrencyCode
   source: ForecastSource
   accountId: number | null
   accountName: string | null
@@ -34,20 +38,57 @@ export interface ForecastMonth {
   endBalance: number
 }
 
-export interface Forecast {
-  from: string
-  to: string
-  accountId: number | null
+/**
+ * One currency's own running forecast.
+ *
+ * A balance only means something in one denomination, so each currency gets an
+ * independent opening balance, series and set of conclusions — every one of
+ * them a real, addable number.
+ */
+export interface ForecastCurrencySummary {
+  currency: CurrencyCode
   openingBalance: number
-  projectedIncome: number
-  projectedAccountExpenses: number
-  projectedInvoiceOutflows: number
+  income: number
+  accountExpenses: number
+  invoiceOutflows: number
   closingBalance: number
   lowestBalance: number
   lowestBalanceDate: string
   firstNegativeDate: string | null
   unassignedInflows: number
   unassignedOutflows: number
+  /** Events that actually moved this balance; unassigned ones are reported apart. */
+  assignedEventCount: number
+  months: ForecastMonth[]
+}
+
+/**
+ * The forecast, partitioned by currency.
+ *
+ * `byCurrency` is always the authoritative answer. The scalar fields beside it
+ * are the pre-multi-currency shape, populated *only* when the forecast is
+ * homogeneous, with `currency` naming the denomination they are in. A mixed
+ * forecast leaves every one of them null rather than sending a number somebody
+ * would act on. An account-filtered forecast is homogeneous by construction.
+ */
+export interface Forecast {
+  from: string
+  to: string
+  accountId: number | null
+  baseCurrency: CurrencyCode
+  /** The single denomination of the scalars below; null when mixed. */
+  currency: CurrencyCode | null
+  openingBalance: number | null
+  projectedIncome: number | null
+  projectedAccountExpenses: number | null
+  projectedInvoiceOutflows: number | null
+  closingBalance: number | null
+  lowestBalance: number | null
+  lowestBalanceDate: string | null
+  firstNegativeDate: string | null
+  unassignedInflows: number | null
+  unassignedOutflows: number | null
+  byCurrency: ForecastCurrencySummary[]
   events: ForecastEvent[]
   months: ForecastMonth[]
 }

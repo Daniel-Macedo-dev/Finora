@@ -150,15 +150,6 @@ public interface TransactionRepository
                                                 @Param("from") LocalDate from,
                                                 @Param("to") LocalDate to);
 
-    /**
-     * How many of the user's transactions are denominated outside one currency.
-     *
-     * <p>Used to decide whether a single running balance can honestly be
-     * projected: an accountless foreign transaction is enough to make one
-     * meaningless, and no account or card would reveal it.
-     */
-    long countByUserIdAndCurrencyNot(Long userId, com.finora.api.common.money.CurrencyCode currency);
-
     List<Transaction> findTop10ByUserIdOrderByOccurredOnDescIdDesc(Long userId);
 
     /** Future-dated real transactions inside the forecast window (active cash only). */

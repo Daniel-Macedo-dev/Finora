@@ -3,12 +3,30 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ForecastPage from './ForecastPage'
-import type { Forecast } from './types'
+import type { Forecast, ForecastCurrencySummary } from './types'
+
+const BRL_SUMMARY: ForecastCurrencySummary = {
+  currency: 'BRL',
+  openingBalance: 1500,
+  income: 3000,
+  accountExpenses: 1200,
+  invoiceOutflows: 800,
+  closingBalance: 2500,
+  lowestBalance: 700,
+  lowestBalanceDate: '2026-08-05',
+  firstNegativeDate: null,
+  unassignedInflows: 0,
+  unassignedOutflows: 0,
+  assignedEventCount: 2,
+  months: [{ month: '2026-08', inflows: 3000, outflows: 2000, net: 1000, endBalance: 2500 }],
+}
 
 const BASE_FORECAST: Forecast = {
   from: '2026-07-14',
   to: '2026-10-12',
   accountId: null,
+  baseCurrency: 'BRL',
+  currency: 'BRL',
   openingBalance: 1500,
   projectedIncome: 3000,
   projectedAccountExpenses: 1200,
@@ -19,11 +37,13 @@ const BASE_FORECAST: Forecast = {
   firstNegativeDate: null,
   unassignedInflows: 0,
   unassignedOutflows: 0,
+  byCurrency: [BRL_SUMMARY],
   events: [
     {
       date: '2026-08-01',
       description: 'Salário',
       amount: 3000,
+      currency: 'BRL',
       source: 'RECURRING_ACCOUNT_OCCURRENCE',
       accountId: 10,
       accountName: 'Conta Principal',
@@ -38,6 +58,7 @@ const BASE_FORECAST: Forecast = {
       date: '2026-08-10',
       description: 'Fatura Cartão Roxo',
       amount: -800,
+      currency: 'BRL',
       source: 'CARD_INVOICE',
       accountId: 10,
       accountName: 'Conta Principal',
@@ -92,16 +113,16 @@ afterEach(() => {
 describe('ForecastPage', () => {
   it('shows the KPI cards with opening, lowest and projected flows', async () => {
     renderForecast(BASE_FORECAST)
-    expect(await screen.findByText('Saldo hoje')).toBeInTheDocument()
-    expect(screen.getByText('Menor saldo projetado')).toBeInTheDocument()
-    expect(screen.getByText('Entradas × saídas projetadas')).toBeInTheDocument()
+    expect(await screen.findByText(/Saldo hoje/)).toBeInTheDocument()
+    expect(screen.getByText(/Menor saldo projetado/)).toBeInTheDocument()
+    expect(screen.getByText(/Entradas × saídas projetadas/)).toBeInTheDocument()
     // Sum of account expenses (1200) and invoice outflows (800)
     expect(screen.getByText(/R\$\s*3\.000,00\s*·\s*R\$\s*2\.000,00/)).toBeInTheDocument()
   })
 
   it('does not warn when the balance never goes negative', async () => {
     renderForecast(BASE_FORECAST)
-    await screen.findByText('Saldo hoje')
+    await screen.findByText(/Saldo hoje/)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -110,6 +131,7 @@ describe('ForecastPage', () => {
       ...BASE_FORECAST,
       lowestBalance: -350,
       firstNegativeDate: '2026-09-02',
+      byCurrency: [{ ...BRL_SUMMARY, lowestBalance: -350, firstNegativeDate: '2026-09-02' }],
     })
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(/negativo em/i)
@@ -121,9 +143,10 @@ describe('ForecastPage', () => {
       ...BASE_FORECAST,
       unassignedInflows: 500,
       unassignedOutflows: 120,
+      byCurrency: [{ ...BRL_SUMMARY, unassignedInflows: 500, unassignedOutflows: 120 }],
     })
-    await screen.findByText('Saldo hoje')
-    const status = screen.getByText(/fluxos sem conta definida/i).closest('[role="status"]')
+    await screen.findByText(/Saldo hoje/)
+    const status = screen.getByText(/fluxos em BRL sem conta definida/i).closest('[role="status"]')
     expect(status).not.toBeNull()
     expect(status).toHaveTextContent(/500,00/)
     expect(status).toHaveTextContent(/120,00/)
@@ -146,8 +169,9 @@ describe('ForecastPage', () => {
       ...BASE_FORECAST,
       events: [],
       months: [],
-      closingBalance: BASE_FORECAST.openingBalance,
-      lowestBalance: BASE_FORECAST.openingBalance,
+      closingBalance: 1500,
+      lowestBalance: 1500,
+      byCurrency: [{ ...BRL_SUMMARY, closingBalance: 1500, lowestBalance: 1500, months: [] }],
     })
     expect(await screen.findByText('Nenhum evento no horizonte')).toBeInTheDocument()
   })

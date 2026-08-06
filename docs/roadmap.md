@@ -99,9 +99,17 @@ descarta os derivados que não podem ser consertados e **não toca na fila**: o
 payload canônico de uma mutação enfileirada é o que o servidor já resumiu num
 recibo. Versão futura falha fechado.
 
-Ainda em aberto nesta etapa: previsão por moeda (hoje o painel esconde o caixa
-futuro quando existe qualquer moeda estrangeira, em vez de mostrar um saldo
-misto), supressão de insights agregados, análise de compra com
+Também concluído: a **previsão por moeda**. O serviço roda uma corrida
+independente por denominação numa única passagem ordenada — saldo de abertura,
+série, menor saldo, primeira data negativa e resumo mensal separados — e cada
+evento carrega a moeda derivada do seu recurso de origem (lançamento,
+compromisso ou cartão), nunca da requisição. Uma previsão filtrada por conta é
+homogênea por construção e mantém todos os escalares; uma previsão mista deixa
+todos eles nulos em vez de enviar um número misto. Um saldo negativo em USD não
+marca mais o saldo em BRL. Com isso o painel deixou de esconder o caixa futuro e
+passou a mostrar um saldo projetado por moeda.
+
+Ainda em aberto nesta etapa: supressão de insights agregados, análise de compra com
 `EXCHANGE_RATE_REQUIRED`, importação CSV/OFX com CURDEF e reconhecimento
 explícito, moeda nas notificações, proteção da troca de moeda base entre
 dispositivos no replay do servidor, guarda local da moeda base nas configurações,

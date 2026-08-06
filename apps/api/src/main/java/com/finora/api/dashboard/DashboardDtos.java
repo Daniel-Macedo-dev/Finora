@@ -123,24 +123,29 @@ public final class DashboardDtos {
             String currency) {
     }
 
+    /** One currency's projected 30-day balance and its first negative day. */
+    public record ProjectedBalance(
+            String currency,
+            BigDecimal balance,
+            /** Null when the balance never goes negative in the window. */
+            LocalDate firstNegativeDate) {
+    }
+
     /**
      * Compact future-cash view backed by the forecast service (30 days).
      * The dashboard never computes projections on its own.
      *
-     * <p>{@code projectedBalance30d} and {@code firstNegativeDate} describe one
-     * running balance, which only exists if everything feeding it settles in one
-     * currency. When it does not, {@code available} is false and both are null:
-     * a projected balance that silently added dollars to reais would be the most
-     * actionable wrong number on the page.
+     * <p>A running balance only means something in one denomination, so this is
+     * a list rather than a scalar: one entry per currency the forecast actually
+     * projects. A base-currency-only user gets exactly one entry; a mixed user
+     * gets one per currency and no consolidated figure, because there is no
+     * honest way to produce one without rates.
      */
     public record FutureCashOverview(
-            boolean available,
-            BigDecimal projectedBalance30d,
-            /** Currency of the projection; null when unavailable. */
-            String currency,
+            String baseCurrency,
+            List<ProjectedBalance> projections,
             FutureCashEvent nextRecurringEvent,
             FutureCashEvent nextInvoiceObligation,
-            LocalDate firstNegativeDate,
             long failedOccurrences) {
     }
 

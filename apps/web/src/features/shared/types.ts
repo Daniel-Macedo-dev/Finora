@@ -1,3 +1,4 @@
+import type { CurrencyCode } from '../../lib/money'
 /** Enums and reference entities shared across features (mirror the API contracts). */
 
 export type TransactionType = 'INCOME' | 'EXPENSE'
@@ -20,6 +21,8 @@ export interface Account {
   type: AccountType
   openingBalance: number
   currentBalance: number
+  /** Authoritative currency of both balances above; immutable after creation. */
+  currency: CurrencyCode
   archived: boolean
   displayOrder: number
 }

@@ -294,31 +294,34 @@ export default function DashboardPage() {
               <h2 className="panel-title">
                 <ChartSpline size={15} aria-hidden="true" /> Caixa futuro (30 dias)
               </h2>
-              {data.futureCash.available ? (
-                <div className="dash-cards-figures">
-                  <div>
-                    <span className="stat-footnote">Saldo projetado</span>
+              <div className="dash-cards-figures">
+                {data.futureCash.projections.map((projection) => (
+                  <div key={projection.currency}>
+                    <span className="stat-footnote">
+                      Saldo projetado{' '}
+                      <span className="currency-total-code">{projection.currency}</span>
+                    </span>
                     <p className="dash-cards-value">
-                      {formatMoney(
-                        data.futureCash.projectedBalance30d,
-                        data.futureCash.currency ?? data.baseCurrency,
-                      )}
+                      {formatMoney(projection.balance, projection.currency)}
                     </p>
                   </div>
-                </div>
-              ) : (
+                ))}
+              </div>
+              {data.futureCash.projections.length > 1 && (
                 <p className="stat-footnote" role="note">
-                  Saldo projetado indisponível: suas contas, cartões ou lançamentos incluem mais de
-                  uma moeda, e projetar um saldo único exigiria cotações, que ainda não existem no
-                  Finora.
+                  Um saldo por moeda. Eles não são somados — consolidar exigiria cotações, que
+                  ainda não existem no Finora.
                 </p>
               )}
-              {data.futureCash.firstNegativeDate && (
-                <span className="badge badge-negative">
-                  <AlertOctagon size={13} aria-hidden="true" />
-                  Saldo negativo previsto em {formatDate(data.futureCash.firstNegativeDate)}
-                </span>
-              )}
+              {data.futureCash.projections
+                .filter((projection) => projection.firstNegativeDate !== null)
+                .map((projection) => (
+                  <span key={projection.currency} className="badge badge-negative">
+                    <AlertOctagon size={13} aria-hidden="true" />
+                    Saldo em {projection.currency} negativo previsto em{' '}
+                    {formatDate(projection.firstNegativeDate as string)}
+                  </span>
+                ))}
               {data.futureCash.failedOccurrences > 0 && (
                 <span className="badge badge-warning">
                   {data.futureCash.failedOccurrences} recorrência(s) com falha

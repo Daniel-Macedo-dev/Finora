@@ -100,20 +100,26 @@ export interface FutureCashEvent {
   currency: CurrencyCode
 }
 
+/** One currency's projected 30-day balance and its first negative day. */
+export interface ProjectedBalance {
+  currency: CurrencyCode
+  balance: number
+  firstNegativeDate: string | null
+}
+
 /**
  * Compact 30-day forecast summary served by the backend forecast engine.
  *
- * A projected balance is one running number, so it exists only when everything
- * feeding it settles in one currency. Otherwise `available` is false and the
- * figures are absent rather than mixed.
+ * A running balance only means something in one denomination, so this is a list
+ * rather than a scalar: one entry per currency the forecast projects. A
+ * base-currency-only user gets exactly one; a mixed user gets one per currency
+ * and no consolidated figure.
  */
 export interface FutureCashOverview {
-  available: boolean
-  projectedBalance30d: number | null
-  currency: CurrencyCode | null
+  baseCurrency: CurrencyCode
+  projections: ProjectedBalance[]
   nextRecurringEvent: FutureCashEvent | null
   nextInvoiceObligation: FutureCashEvent | null
-  firstNegativeDate: string | null
   failedOccurrences: number
 }
 

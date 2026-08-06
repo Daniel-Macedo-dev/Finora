@@ -65,7 +65,10 @@ class DashboardMixedCurrencyIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.expense.baseTotal").value(1000.00))
                 .andExpect(jsonPath("$.monthResult.baseTotal").value(4000.00))
                 .andExpect(jsonPath("$.savingsRate").value(80.0))
-                .andExpect(jsonPath("$.futureCash.available").value(true));
+                // Exactly one projected balance, in the only currency in play.
+                .andExpect(jsonPath("$.futureCash.baseCurrency").value("BRL"))
+                .andExpect(jsonPath("$.futureCash.projections.length()").value(1))
+                .andExpect(jsonPath("$.futureCash.projections[0].currency").value("BRL"));
     }
 
     @Test
@@ -173,7 +176,7 @@ class DashboardMixedCurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void aForeignBalanceMakesTheProjectedCashUnavailableRatherThanWrong() throws Exception {
+    void aForeignBalanceProjectsEachCurrencyOnItsOwn() throws Exception {
         createAccount("""
                 {"name": "Conta Corrente", "type": "CHECKING", "openingBalance": 8000.00}
                 """);
@@ -184,16 +187,20 @@ class DashboardMixedCurrencyIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2026-07"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.futureCash.available").value(false))
-                .andExpect(jsonPath("$.futureCash.projectedBalance30d").doesNotExist())
-                .andExpect(jsonPath("$.futureCash.firstNegativeDate").doesNotExist())
-                .andExpect(jsonPath("$.futureCash.currency").doesNotExist());
+                // Two real balances rather than one fabricated consolidation.
+                .andExpect(jsonPath("$.futureCash.projections.length()").value(2))
+                .andExpect(jsonPath("$.futureCash.projections[0].currency").value("BRL"))
+                .andExpect(jsonPath("$.futureCash.projections[0].balance").value(8000.00))
+                .andExpect(jsonPath("$.futureCash.projections[1].currency").value("USD"))
+                .andExpect(jsonPath("$.futureCash.projections[1].balance").value(1200.00))
+                // And emphatically no consolidated scalar to act on.
+                .andExpect(jsonPath("$.futureCash.projectedBalance30d").doesNotExist());
     }
 
     @Test
-    void anAccountlessForeignTransactionAlsoWithholdsTheProjection() throws Exception {
-        // No foreign account or card exists, so nothing else in the read model
-        // would disclose this.
+    void anAccountlessForeignExpenseNeverTouchesTheBaseCurrencyBalance() throws Exception {
+        // No foreign account or card exists, so this event is unassigned: it is
+        // disclosed, but nothing settles it and no balance moves because of it.
         createAccount("""
                 {"name": "Conta Corrente", "type": "CHECKING", "openingBalance": 8000.00}
                 """);
@@ -201,7 +208,9 @@ class DashboardMixedCurrencyIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2026-07"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.futureCash.available").value(false))
+                // The BRL projection is untouched by the 50 USD.
+                .andExpect(jsonPath("$.futureCash.projections[0].currency").value("BRL"))
+                .andExpect(jsonPath("$.futureCash.projections[0].balance").value(8000.00))
                 .andExpect(jsonPath("$.futureCash.projectedBalance30d").doesNotExist());
     }
 }

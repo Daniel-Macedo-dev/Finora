@@ -144,11 +144,12 @@ saldos e limites, nunca para fluxos.
   categoria **e** moeda, e a porcentagem é medida contra as despesas daquela mesma
   moeda. A tendência vira **uma série homogênea por moeda**, cada uma com seu
   próprio eixo.
-- **Caixa futuro** — a previsão ainda dobra tudo num único saldo corrente, então a
-  seção só é exibida quando **todos** os recursos monetários do usuário liquidam
-  na moeda base. Contas e cartões já estão carregados; duas contagens cobrem o que
-  nenhum deles revelaria: um lançamento estrangeiro sem conta e um compromisso
-  estrangeiro só de projeção.
+- **Previsão e caixa futuro** — a previsão roda uma corrida independente por
+  moeda: saldo de abertura, série, menor saldo e primeira data negativa
+  separados, cada evento carregando a moeda derivada do seu recurso de origem.
+  Uma previsão filtrada por conta é homogênea por construção e mantém todos os
+  escalares. O painel consome esses resumos diretamente — um saldo projetado por
+  moeda, sem consolidação. Ver [forecast.md](forecast.md).
 - **Compromissos futuros** — total projetado agrupado.
 
 No front, `CurrencyTotal` (rodapés) e `CurrencyStat` (números de destaque)
@@ -214,10 +215,6 @@ campo pelo mesmo motivo.
   moedas, nenhuma análise de compra em moeda estrangeira.
 - Pagamento de fatura entre moedas é recusado, não convertido.
 - Não há ganho/perda cambial, spread, taxa ou reavaliação.
-- A **previsão** ainda calcula um único saldo de abertura, fechamento, mínimo e
-  primeira data negativa para todas as contas juntas. Por isso o painel esconde a
-  seção de caixa futuro quando existe qualquer moeda estrangeira, em vez de
-  mostrar um saldo misto.
 - Insights agregados, análise de compra, importação com CURDEF, moeda nas
   notificações, a migração dos dados criptografados antigos e a interface completa
   de moeda ainda não estão prontos — ver o roadmap.

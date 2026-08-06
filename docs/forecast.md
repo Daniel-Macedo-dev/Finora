@@ -58,27 +58,84 @@ uma fonte determinística (`source` estável em cada evento).
 `GET /api/forecast?days&accountId` (padrão 90 dias, máximo 730 / 24 meses;
 filtro opcional por conta ativa do usuário):
 
-- saldo de abertura, entradas projetadas, saídas de conta, saídas de fatura,
-  saldo de fechamento;
-- **menor saldo projetado** e sua data;
-- **primeira data de saldo negativo** (`firstNegativeDate`, `null` se nunca);
-- fluxos sem conta (entradas/saídas separadas);
-- eventos diários ordenados, cada um com fonte, conta, vínculos (transação,
-  recorrente, fatura, cartão) e `balanceAfter` (saldo após o evento — `null`
-  em eventos sem conta, que não movem o saldo);
-- resumo mensal (entradas, saídas, líquido, saldo ao fim do mês).
+### Partição por moeda
+
+Um saldo corrente só significa alguma coisa em **uma** denominação. Somar reais
+com dólares num único saldo projetado seria o número mais acionável — e mais
+errado — que o produto poderia mostrar a alguém decidindo se pode gastar.
+
+Por isso a previsão roda **uma corrida independente por moeda**, numa única
+passagem ordenada. Cada moeda tem seu próprio saldo de abertura, sua própria
+série, seu próprio menor saldo e sua própria primeira data negativa. Um saldo
+negativo em USD nunca marca o saldo em BRL.
+
+`byCurrency` é sempre a resposta autoritativa. Cada entrada traz:
+
+- `currency`;
+- `openingBalance`;
+- `income`;
+- `accountExpenses`;
+- `invoiceOutflows`;
+- `closingBalance`;
+- `lowestBalance` e `lowestBalanceDate`;
+- `firstNegativeDate` (`null` se nunca);
+- `unassignedInflows` / `unassignedOutflows`;
+- `assignedEventCount`;
+- `months` (entradas, saídas, líquido, saldo ao fim do mês).
+
+### Escalares legados
+
+Os campos escalares ao lado (`openingBalance`, `closingBalance`,
+`lowestBalance`, `firstNegativeDate`, `projectedIncome`, …) são o contrato
+anterior ao multi-moeda, mantidos para clientes e cópias offline que já têm esse
+formato. Eles são preenchidos **apenas quando a previsão é homogênea**, com
+`currency` nomeando a denominação. Uma previsão mista deixa todos eles nulos —
+nunca envia um valor misto só para manter um campo não-nulo.
+
+Uma previsão **filtrada por conta** é homogênea por construção: ela contém
+exatamente os eventos que liquidam na moeda daquela conta, então todos os
+escalares continuam disponíveis, em `currency`.
+
+### Moeda de cada evento
+
+Cada evento carrega a moeda derivada do **recurso de origem**, nunca da
+requisição:
+
+| Origem | Moeda |
+| --- | --- |
+| lançamento com conta | moeda do lançamento (FK garante que é a da conta) |
+| lançamento sem conta | moeda do próprio lançamento |
+| ocorrência recorrente de conta | moeda do compromisso |
+| compromisso só de projeção | moeda do compromisso |
+| fatura de cartão | moeda do cartão |
+| compra recorrente projetada | moeda do cartão |
+
+`balanceAfter` é o saldo **daquela moeda** depois do evento.
+
+### Saída
+
+- eventos diários ordenados, cada um com fonte, moeda, conta, vínculos
+  (transação, recorrente, fatura, cartão) e `balanceAfter` (`null` em eventos
+  sem conta, que não movem saldo nenhum);
+- `byCurrency` com um resumo completo por moeda;
+- escalares legados quando homogêneo.
 
 ## Frontend
 
 - **Página Previsão** (`/forecast`): seletor de horizonte (30/90/180/365 dias),
-  filtro por conta, KPIs, alerta de saldo negativo, aviso de fluxos sem conta,
-  gráfico de saldo (Recharts, com contexto textual acessível e leitura em modo
-  escuro), resumo mensal e linha do tempo de eventos com links para transação,
-  recorrente, cartão e fatura.
-- **Dashboard**: seção compacta "Caixa futuro (30 dias)" — saldo projetado,
-  próximo recorrente, próxima obrigação de fatura, alerta de primeira data
-  negativa e contagem de recorrências com falha. Usa o serviço de forecast
-  como fonte única — o frontend não calcula projeção financeira própria.
+  filtro por conta (que mostra a moeda de cada conta), e então **um bloco por
+  moeda** — KPIs, alerta de saldo negativo, aviso de fluxos sem conta, gráfico
+  de saldo (Recharts, um eixo por denominação, com contexto textual acessível e
+  leitura em modo escuro) e resumo mensal. Com uma única moeda o layout é o de
+  sempre, sem título extra. Com mais de uma, cada bloco recebe um título com o
+  nome da moeda e uma nota explicando que os valores não são somados entre
+  moedas. A linha do tempo de eventos é única e ordenada, cada linha com sua
+  própria moeda e o saldo daquela moeda.
+- **Dashboard**: seção compacta "Caixa futuro (30 dias)" — **um saldo projetado
+  por moeda**, próximo recorrente, próxima obrigação de fatura, um alerta de
+  primeira data negativa por moeda afetada e contagem de recorrências com falha.
+  Usa o serviço de forecast como fonte única — o frontend não calcula projeção
+  financeira própria, e não existe saldo consolidado.
 
 ## Limitações conhecidas
 
@@ -87,6 +144,10 @@ filtro opcional por conta ativa do usuário):
   determinística baseada nos dados atuais.
 - Compras avulsas futuras de cartão ainda não registradas obviamente não
   aparecem; apenas faturas existentes e recorrentes projetados.
+- **Não existe saldo consolidado entre moedas.** Isso exigiria cotações, que o
+  Finora deliberadamente ainda não tem. Uma moeda com saldo de abertura zero e
+  nenhum evento não gera série, para que um usuário só em BRL continue vendo
+  exatamente uma.
 
 ## Uso pela central de notificações
 

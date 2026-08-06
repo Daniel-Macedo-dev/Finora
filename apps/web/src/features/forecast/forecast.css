@@ -147,3 +147,21 @@
     font-size: var(--text-lg);
   }
 }
+
+/* One heading per currency when the forecast spans more than one. Each
+   currency owns its own balances, chart and monthly table, so the heading is
+   what tells the reader which denomination they are looking at. */
+.forecast-currency-heading {
+  font-size: var(--text-md);
+  font-weight: 650;
+  margin: 20px 0 8px;
+  color: var(--ink-primary);
+}
+
+.forecast-multi-note {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}

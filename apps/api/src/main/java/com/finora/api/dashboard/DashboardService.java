@@ -29,6 +29,7 @@ import com.finora.api.dashboard.DashboardDtos.FutureCashEvent;
 import com.finora.api.dashboard.DashboardDtos.FutureCashOverview;
 import com.finora.api.dashboard.DashboardDtos.MonthTrendPoint;
 import com.finora.api.dashboard.DashboardDtos.MonthTrendSeries;
+import com.finora.api.dashboard.DashboardDtos.ProjectedBalance;
 import com.finora.api.dashboard.DashboardDtos.RecentCardPurchase;
 import com.finora.api.forecast.ForecastDtos;
 import com.finora.api.forecast.ForecastService;
@@ -71,7 +72,6 @@ public class DashboardService {
     private final AccountService accountService;
     private final BudgetService budgets;
     private final CommitmentService commitments;
-    private final com.finora.api.commitment.CommitmentRepository commitmentRepository;
     private final GoalService goals;
     private final CreditCardRepository cards;
     private final CardInstallmentRepository installments;
@@ -88,7 +88,6 @@ public class DashboardService {
                             AccountService accountService,
                             BudgetService budgets,
                             CommitmentService commitments,
-                            com.finora.api.commitment.CommitmentRepository commitmentRepository,
                             GoalService goals,
                             CreditCardRepository cards,
                             CardInstallmentRepository installments,
@@ -104,7 +103,6 @@ public class DashboardService {
         this.accountService = accountService;
         this.budgets = budgets;
         this.commitments = commitments;
-        this.commitmentRepository = commitmentRepository;
         this.goals = goals;
         this.cards = cards;
         this.installments = installments;
@@ -157,7 +155,6 @@ public class DashboardService {
         var upcoming = commitments.upcomingForUser(userId, today, 1);
         CurrencyTotals accountBalances = accountService.overview().totals();
         List<CreditCard> userCards = cards.findAllByUserIdOrderByArchivedAscNameAsc(userId);
-        boolean singleCurrency = everythingSettlesInBase(userId, base, userCards, accountBalances);
 
         return new DashboardResponse(
                 month,
@@ -189,7 +186,7 @@ public class DashboardService {
                         .map(TransactionResponse::from)
                         .toList(),
                 cardsOverview(userId, userCards, today, base, flows.cardExpense(month, base)),
-                futureCash(userId, base, singleCurrency));
+                futureCash(userId, base));
     }
 
     // ── Monthly flows ───────────────────────────────────────────────────────
@@ -307,53 +304,50 @@ public class DashboardService {
      * balance that had quietly added dollars to reais would be the single most
      * actionable wrong figure on the page.
      */
-    private FutureCashOverview futureCash(Long userId, CurrencyCode base, boolean available) {
+    /**
+     * Compact 30-day future-cash view; the forecast service is the single source.
+     *
+     * <p>The forecast now runs one independent balance per currency, so the
+     * dashboard consumes those summaries directly instead of the previous
+     * conservative mitigation, which hid the whole section as soon as anything
+     * foreign existed. A projected balance still only exists per currency —
+     * there is no consolidated one — so a mixed user sees one row per currency
+     * and no total.
+     */
+    private FutureCashOverview futureCash(Long userId, CurrencyCode base) {
         var result = forecast.forecastForUser(userId, 30, null);
         long failed = occurrences.countByUserIdAndStatus(userId, OccurrenceStatus.FAILED);
 
-        FutureCashEvent nextRecurring = result.events().stream()
-                .filter(e -> e.source() == ForecastDtos.ForecastSource.RECURRING_ACCOUNT_OCCURRENCE
-                        || e.source() == ForecastDtos.ForecastSource.PROJECTED_RECURRING_CARD_PURCHASE)
-                .findFirst()
-                .map(e -> new FutureCashEvent(e.date(), e.description(), e.amount(), base.name()))
-                .orElse(null);
-        FutureCashEvent nextInvoice = result.events().stream()
-                .filter(e -> e.source() == ForecastDtos.ForecastSource.CARD_INVOICE)
-                .findFirst()
-                .map(e -> new FutureCashEvent(e.date(), e.description(), e.amount(), base.name()))
-                .orElse(null);
+        List<ProjectedBalance> projections = result.byCurrency().stream()
+                .map(summary -> new ProjectedBalance(
+                        summary.currency(),
+                        summary.closingBalance(),
+                        summary.firstNegativeDate()))
+                .toList();
+
+        FutureCashEvent nextRecurring = firstEvent(result,
+                ForecastDtos.ForecastSource.RECURRING_ACCOUNT_OCCURRENCE,
+                ForecastDtos.ForecastSource.PROJECTED_RECURRING_CARD_PURCHASE);
+        FutureCashEvent nextInvoice = firstEvent(result,
+                ForecastDtos.ForecastSource.CARD_INVOICE);
 
         return new FutureCashOverview(
-                available,
-                available ? result.closingBalance() : null,
-                available ? base.name() : null,
-                available ? nextRecurring : null,
-                available ? nextInvoice : null,
-                available ? result.firstNegativeDate() : null,
+                base.name(),
+                projections,
+                nextRecurring,
+                nextInvoice,
                 failed);
     }
 
-    /**
-     * Whether every monetary root the user owns settles in the base currency.
-     *
-     * <p>The forecast still folds every account, card, commitment and future
-     * transaction into one running balance. That number is correct exactly when
-     * there is nothing foreign anywhere — so rather than presenting a mixed
-     * projection, the section is withheld until the forecast itself reports per
-     * currency. Accounts and cards are already loaded; the two counts below
-     * cover what neither would disclose: an accountless foreign transaction and
-     * a projection-only foreign commitment.
-     */
-    private boolean everythingSettlesInBase(Long userId, CurrencyCode base,
-            List<CreditCard> userCards, CurrencyTotals accountBalances) {
-        if (!accountBalances.baseComplete()) {
-            return false;
-        }
-        if (userCards.stream().anyMatch(card -> card.getCurrency() != base)) {
-            return false;
-        }
-        return transactions.countByUserIdAndCurrencyNot(userId, base) == 0
-                && commitmentRepository.countByUserIdAndCurrencyNot(userId, base) == 0;
+    private static FutureCashEvent firstEvent(ForecastDtos.ForecastResponse result,
+            ForecastDtos.ForecastSource... sources) {
+        List<ForecastDtos.ForecastSource> wanted = List.of(sources);
+        return result.events().stream()
+                .filter(event -> wanted.contains(event.source()))
+                .findFirst()
+                .map(event -> new FutureCashEvent(
+                        event.date(), event.description(), event.amount(), event.currency()))
+                .orElse(null);
     }
 
     private CardsOverview cardsOverview(Long userId, List<CreditCard> userCards, LocalDate today,
