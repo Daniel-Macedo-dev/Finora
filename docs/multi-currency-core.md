@@ -215,9 +215,14 @@ campo pelo mesmo motivo.
   moedas, nenhuma análise de compra em moeda estrangeira.
 - Pagamento de fatura entre moedas é recusado, não convertido.
 - Não há ganho/perda cambial, spread, taxa ou reavaliação.
-- Insights agregados, análise de compra, importação com CURDEF, moeda nas
-  notificações, a migração dos dados criptografados antigos e a interface completa
-  de moeda ainda não estão prontos — ver o roadmap.
+- **Análise de compra** — o contexto de compra é ciente de moeda e a análise tem
+  disponibilidade tipada: um item estrangeiro ou um contexto incompleto em moeda
+  base devolve `EXCHANGE_RATE_REQUIRED` em vez de `BUY`/`WAIT`. Ver
+  [purchase-analysis.md](purchase-analysis.md).
+- Insights agregados ainda consomem o `FinancialContext` escalar legado, que
+  existe apenas para eles; migrá-lo e removê-lo é a próxima tarefa.
+- Importação com CURDEF, moeda nas notificações e a interface completa de moeda
+  ainda não estão prontas — ver o roadmap.
 
 ## Próxima etapa
 

@@ -7,8 +7,14 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import Money from '../../components/Money'
-import { formatBRL, formatPercent } from '../../lib/format'
-import type { PurchaseAnalysis, RecommendationType } from './types'
+import { formatPercent } from '../../lib/format'
+import { currencyLabel, formatMoney, type CurrencyCode } from '../../lib/money'
+import type {
+  AvailablePurchaseAnalysis,
+  PurchaseAnalysis,
+  RecommendationType,
+  UnavailablePurchaseAnalysis,
+} from './types'
 import './AnalysisPanel.css'
 
 const RECOMMENDATION_META: Record<
@@ -21,7 +27,68 @@ const RECOMMENDATION_META: Record<
   NO_OPTIONS: { label: 'Sem opções', badge: 'badge-neutral', icon: Info },
 }
 
+/**
+ * The analysis needs to compare amounts that are not comparable.
+ *
+ * <p>Rendered instead of — never alongside — the recommendation, so no
+ * conclusion, badge or figure derived from mixed currencies can appear. The
+ * item, its options and its price history stay on the page around this panel;
+ * only the financial verdict is withheld, and the reason is stated plainly
+ * rather than left as an error.
+ */
+function UnavailableAnalysis({ analysis }: { analysis: UnavailablePurchaseAnalysis }) {
+  return (
+    <div className="analysis">
+      <section className="analysis-unavailable" aria-label="Análise indisponível">
+        <p className="analysis-unavailable-title">
+          <Info size={16} aria-hidden="true" /> Análise financeira indisponível
+        </p>
+        <p className="analysis-explanation">
+          Esta análise precisa comparar valores em moedas diferentes. O Finora ainda não possui
+          cotações para fazer essa conversão sem distorcer os resultados.
+        </p>
+        <dl className="analysis-unavailable-currencies">
+          <div>
+            <dt>Moeda do item</dt>
+            <dd>{currencyLabel(analysis.itemCurrency)}</dd>
+          </div>
+          <div>
+            <dt>Sua moeda base</dt>
+            <dd>{currencyLabel(analysis.baseCurrency)}</dd>
+          </div>
+          {analysis.missingCurrencies.length > 0 && (
+            <div>
+              <dt>Precisaria converter</dt>
+              <dd>{analysis.missingCurrencies.join(', ')}</dd>
+            </div>
+          )}
+        </dl>
+        {analysis.unavailableReasons.length > 0 && (
+          <ul className="analysis-unavailable-reasons">
+            {analysis.unavailableReasons.map((reason) => (
+              <li key={reason.code}>{reason.message}</li>
+            ))}
+          </ul>
+        )}
+        <p className="analysis-unavailable-note">
+          As opções de compra e o histórico de preços continuam disponíveis nesta página.
+        </p>
+      </section>
+    </div>
+  )
+}
+
 export default function AnalysisPanel({ analysis }: { analysis: PurchaseAnalysis }) {
+  if (analysis.availability === 'EXCHANGE_RATE_REQUIRED') {
+    return <UnavailableAnalysis analysis={analysis} />
+  }
+  return <AvailableAnalysis analysis={analysis} />
+}
+
+function AvailableAnalysis({ analysis }: { analysis: AvailablePurchaseAnalysis }) {
+  // Available implies the item and the base currency agree, so one currency
+  // labels every figure below.
+  const currency: CurrencyCode = analysis.itemCurrency
   const meta = RECOMMENDATION_META[analysis.recommendation.type]
   const RecommendationIcon = meta.icon
   const assumptions = analysis.assumptions
@@ -38,7 +105,7 @@ export default function AnalysisPanel({ analysis }: { analysis: PurchaseAnalysis
           analysis.recommendation.requiredAdditionalCash !== null && (
             <p className="analysis-wait-detail">
               Faltam aproximadamente{' '}
-              <strong>{formatBRL(analysis.recommendation.requiredAdditionalCash)}</strong>
+              <strong>{formatMoney(analysis.recommendation.requiredAdditionalCash, currency)}</strong>
               {analysis.recommendation.estimatedMonthsToAfford !== null && (
                 <>
                   {' '}
@@ -108,25 +175,25 @@ export default function AnalysisPanel({ analysis }: { analysis: PurchaseAnalysis
                           <span className="stat-footnote">
                             {option.kind === 'CASH'
                               ? 'À vista'
-                              : `${option.installmentCount}× de ${formatBRL(option.monthlyBurden)}`}
+                              : `${option.installmentCount}× de ${formatMoney(option.monthlyBurden, currency)}`}
                           </span>
                         </div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <Money value={option.nominalCost} />
+                        <Money currency={currency} value={option.nominalCost} />
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <Money value={option.presentValue} />
+                        <Money currency={currency} value={option.presentValue} />
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         {option.monthlyBurden !== null ? (
-                          <Money value={option.monthlyBurden} />
+                          <Money currency={currency} value={option.monthlyBurden} />
                         ) : (
                           <span className="stat-footnote">—</span>
                         )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <Money value={option.cashAfterPurchase} signed />
+                        <Money currency={currency} value={option.cashAfterPurchase} signed />
                       </td>
                       <td>
                         {option.safe ? (
@@ -177,11 +244,11 @@ export default function AnalysisPanel({ analysis }: { analysis: PurchaseAnalysis
         <dl className="analysis-assumptions">
           <div>
             <dt>Caixa disponível</dt>
-            <dd>{formatBRL(assumptions.availableCash)}</dd>
+            <dd>{formatMoney(assumptions.availableCash, currency)}</dd>
           </div>
           <div>
             <dt>Reserva mínima</dt>
-            <dd>{formatBRL(assumptions.minimumCashBuffer)}</dd>
+            <dd>{formatMoney(assumptions.minimumCashBuffer, currency)}</dd>
           </div>
           <div>
             <dt>Taxa de oportunidade</dt>
@@ -195,7 +262,7 @@ export default function AnalysisPanel({ analysis }: { analysis: PurchaseAnalysis
             <dt>Renda média mensal</dt>
             <dd>
               {assumptions.avgMonthlyIncome !== null
-                ? formatBRL(assumptions.avgMonthlyIncome)
+                ? formatMoney(assumptions.avgMonthlyIncome, currency)
                 : 'Sem histórico'}
             </dd>
           </div>
@@ -203,13 +270,13 @@ export default function AnalysisPanel({ analysis }: { analysis: PurchaseAnalysis
             <dt>Sobra média mensal</dt>
             <dd>
               {assumptions.avgMonthlySurplus !== null
-                ? formatBRL(assumptions.avgMonthlySurplus)
+                ? formatMoney(assumptions.avgMonthlySurplus, currency)
                 : 'Sem histórico'}
             </dd>
           </div>
           <div>
             <dt>Recorrentes do próximo mês</dt>
-            <dd>{formatBRL(assumptions.monthlyCommitments)}</dd>
+            <dd>{formatMoney(assumptions.monthlyCommitments, currency)}</dd>
           </div>
           <div>
             <dt>Meses de histórico usados</dt>

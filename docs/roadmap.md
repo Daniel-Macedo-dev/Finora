@@ -109,8 +109,21 @@ todos eles nulos em vez de enviar um número misto. Um saldo negativo em USD nã
 marca mais o saldo em BRL. Com isso o painel deixou de esconder o caixa futuro e
 passou a mostrar um saldo projetado por moeda.
 
-Ainda em aberto nesta etapa: supressão de insights agregados, análise de compra com
-`EXCHANGE_RATE_REQUIRED`, importação CSV/OFX com CURDEF e reconhecimento
+Também concluído: o **contexto financeiro de compra ciente de moeda** e a
+**disponibilidade tipada da análise de compra**. Um contexto paralelo
+(`PurchaseFinancialContext`) agrupa caixa, médias históricas, compromissos e
+obrigações de cartão pela moeda real de cada valor, com denominadores de média
+independentes por moeda e cobertura de moeda base por dimensão. A análise passou
+a decidir elegibilidade **antes** de qualquer subtração ou razão: um item
+estrangeiro, ou um contexto incompleto em moeda base, devolve
+`EXCHANGE_RATE_REQUIRED` — HTTP 200, sem premissas, sem opções e sem `BUY` ou
+`WAIT`. Um usuário sem histórico nenhum continua recebendo a análise de caixa de
+sempre; um cujo histórico existe só em outra moeda não, porque isso não é
+ausência. `FinancialContext` continua existindo apenas para `InsightService`,
+cuja migração é a próxima tarefa.
+
+Ainda em aberto nesta etapa: supressão de insights agregados e remoção do
+contexto legado, importação CSV/OFX com CURDEF e reconhecimento
 explícito, moeda nas notificações, proteção da troca de moeda base entre
 dispositivos no replay do servidor, guarda local da moeda base nas configurações,
 interface completa de moeda (seletores, formulários, tela de moeda base),

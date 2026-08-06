@@ -1,3 +1,4 @@
+import type { CurrencyCode } from '../../lib/money'
 import type { TransactionType } from '../shared/types'
 
 export type WishlistStatus =
@@ -248,13 +249,49 @@ export interface Recommendation {
   estimatedMonthsToAfford: number | null
 }
 
-export interface PurchaseAnalysis {
+/** Stable machine-readable reason a complete analysis could not be produced. */
+export interface UnavailableReason {
+  code: string
+  message: string
+}
+
+/**
+ * The complete analysis: every operand was denominated in one currency.
+ *
+ * `itemCurrency` always equals `baseCurrency` here — that equality is one of
+ * the conditions for the analysis to be available at all.
+ */
+export interface AvailablePurchaseAnalysis {
+  availability: 'AVAILABLE'
   itemId: number
   itemName: string
+  baseCurrency: CurrencyCode
+  itemCurrency: CurrencyCode
   assumptions: AnalysisAssumptions
   options: OptionAnalysis[]
   recommendation: Recommendation
 }
+
+/**
+ * The analysis is deliberately unavailable because it would need a rate.
+ *
+ * Not an error: the request succeeded and the item, its options and its price
+ * history are all still readable. There is simply no honest recommendation to
+ * make, so `assumptions`, `options` and `recommendation` do not exist on this
+ * variant at all — a shape where they were merely optional would let a `WAIT`
+ * slip through the type checker.
+ */
+export interface UnavailablePurchaseAnalysis {
+  availability: 'EXCHANGE_RATE_REQUIRED'
+  itemId: number
+  itemName: string
+  baseCurrency: CurrencyCode
+  itemCurrency: CurrencyCode
+  missingCurrencies: CurrencyCode[]
+  unavailableReasons: UnavailableReason[]
+}
+
+export type PurchaseAnalysis = AvailablePurchaseAnalysis | UnavailablePurchaseAnalysis
 
 export const STATUS_LABELS: Record<WishlistStatus, string> = {
   PLANNING: 'Planejando',

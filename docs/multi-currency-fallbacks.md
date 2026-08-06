@@ -19,7 +19,6 @@ Levantada em `f1d7082..HEAD` com `rg formatBRL apps/web/src`.
 
 | Arquivo | Ocorrências |
 | --- | --- |
-| `features/wishlist/AnalysisPanel.tsx` | 8 |
 | `features/wishlist/price-history/PriceHistorySection.tsx` | 8 |
 | `features/wishlist/WishlistItemPage.tsx` | 7 |
 | `features/wishlist/ExecutePurchaseDialog.tsx` | 5 |
@@ -45,11 +44,13 @@ Levantada em `f1d7082..HEAD` com `rg formatBRL apps/web/src`.
 | `lib/format.ts` | 1 (a própria definição) |
 | `lib/format.test.ts` | 8 (testes da definição) |
 
-Total: **87 ocorrências em 25 arquivos**, sendo 9 na definição e nos seus testes.
+Total: **79 ocorrências em 24 arquivos**, sendo 9 na definição e nos seus testes.
 
-Migrados desde o levantamento inicial: `features/forecast/ForecastPage.tsx` (8) e
-`features/forecast/BalanceChart.tsx` (5), junto com a previsão por moeda — ambos
-passaram a receber a moeda explicitamente e nenhum usa mais o fallback.
+Migrados desde o levantamento inicial: `features/forecast/ForecastPage.tsx` (8)
+e `features/forecast/BalanceChart.tsx` (5), junto com a previsão por moeda, e
+`features/wishlist/AnalysisPanel.tsx` (8), junto com a disponibilidade da análise
+de compra. Todos passaram a receber a moeda explicitamente e nenhum usa mais o
+fallback.
 
 ## Ordem sugerida para o fechamento
 
@@ -57,8 +58,10 @@ passaram a receber a moeda explicitamente e nenhum usa mais o fallback.
    previsão por moeda.
 2. Notificações (`NotificationItem`, `browserNotifications`) — depende da moeda
    autoritativa na resposta de notificação.
-3. Análise de compra e lista de desejos — depende do estado tipado
-   `EXCHANGE_RATE_REQUIRED`.
+3. ~~Análise de compra (`AnalysisPanel`)~~ — **concluído** junto com o estado
+   tipado `EXCHANGE_RATE_REQUIRED`. O restante da lista de desejos
+   (`WishlistItemPage`, `ExecutePurchaseDialog`, histórico de preços) continua
+   pendente.
 4. Importação de extratos — depende da moeda da conta na pré-visualização.
 5. Cartões, metas, conversões legadas e comparação de conflito — moeda já
    disponível no recurso, migração puramente de apresentação.
