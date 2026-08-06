@@ -6,22 +6,34 @@ export interface CategoryShare {
   categoryId: number
   categoryName: string
   amount: number
-  percentOfTotal: number
+  /** Authoritative currency of `amount`. Rows are per category and currency. */
+  currency: CurrencyCode
+  /** Share of that same currency's monthly expenses; null when unmeasurable. */
+  percentOfTotal: number | null
 }
 
 export interface BudgetOverview {
   totalLimit: number
   totalConsumed: number
-  percentUsed: number
+  /** Null when any budget's consumption is incomplete. */
+  percentUsed: number | null
   budgetCount: number
   warningCount: number
   exceededCount: number
+  /** Budgets whose category holds spending in another currency. */
+  incompleteCount: number
 }
 
 export interface MonthTrendPoint {
   month: string
   income: number
   expense: number
+}
+
+/** One homogeneous trend line; a chart axis carries only one denomination. */
+export interface MonthTrendSeries {
+  currency: CurrencyCode
+  points: MonthTrendPoint[]
 }
 
 export interface UpcomingCommitment {
@@ -55,6 +67,8 @@ export interface CardInvoiceBrief {
   dueDate: string
   status: import('../credit-cards/types').InvoiceStatus
   outstandingAmount: number
+  /** The card's currency, which is what the invoice bills in. */
+  currency: CurrencyCode
 }
 
 export interface RecentCardPurchase {
@@ -64,15 +78,16 @@ export interface RecentCardPurchase {
   description: string
   purchaseDate: string
   totalAmount: number
+  currency: CurrencyCode
   installmentCount: number
 }
 
 /** Card debt view — deliberately separate from cash balance. */
 export interface CardsOverview {
   cardCount: number
-  totalOutstanding: number
-  totalAvailableLimit: number
-  monthCardExpense: number
+  outstanding: CurrencyTotals
+  availableLimit: CurrencyTotals
+  monthCardExpense: CurrencyTotals
   overdueCount: number
   nextDueInvoice: CardInvoiceBrief | null
   recentPurchases: RecentCardPurchase[]
@@ -82,11 +97,20 @@ export interface FutureCashEvent {
   date: string
   description: string
   amount: number
+  currency: CurrencyCode
 }
 
-/** Compact 30-day forecast summary served by the backend forecast engine. */
+/**
+ * Compact 30-day forecast summary served by the backend forecast engine.
+ *
+ * A projected balance is one running number, so it exists only when everything
+ * feeding it settles in one currency. Otherwise `available` is false and the
+ * figures are absent rather than mixed.
+ */
 export interface FutureCashOverview {
-  projectedBalance30d: number
+  available: boolean
+  projectedBalance30d: number | null
+  currency: CurrencyCode | null
   nextRecurringEvent: FutureCashEvent | null
   nextInvoiceObligation: FutureCashEvent | null
   firstNegativeDate: string | null
@@ -95,16 +119,21 @@ export interface FutureCashOverview {
 
 export interface DashboardData {
   month: string
-  totalBalance: number
-  income: number
-  expense: number
-  monthResult: number
+  baseCurrency: CurrencyCode
+  /** Current balances of active accounts, grouped by currency. */
+  accountBalances: CurrencyTotals
+  income: CurrencyTotals
+  expense: CurrencyTotals
+  monthResult: CurrencyTotals
+  /** Null when income or expense is not complete in the base currency. */
   savingsRate: number | null
-  previousMonthExpense: number
+  previousMonthExpense: CurrencyTotals
+  /** Null when either period is incomplete in the base currency. */
   expenseVariationPercent: number | null
   budgets: BudgetOverview
   topCategories: CategoryShare[]
-  trend: MonthTrendPoint[]
+  /** One homogeneous series per currency present in the window. */
+  trend: MonthTrendSeries[]
   upcomingCommitments: UpcomingCommitment[]
   /** Grouped native totals; commitments may settle in different currencies. */
   upcomingCommitmentsTotal: CurrencyTotals

@@ -1,5 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { Plus, Pencil, Trash2, AlertTriangle, AlertOctagon, CheckCircle2 } from 'lucide-react'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  AlertOctagon,
+  CheckCircle2,
+  HelpCircle,
+} from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
 import Money from '../../components/Money'
@@ -9,7 +17,8 @@ import FormActions from '../../components/FormActions'
 import FormField from '../../components/FormField'
 import { EmptyState, ErrorState, LoadingCards, errorMessage } from '../../components/states'
 import { currentMonth } from '../../lib/month'
-import { formatBRL, formatPercent } from '../../lib/format'
+import { formatPercent } from '../../lib/format'
+import { emptyTotals, formatMoney } from '../../lib/money'
 import { parseMoneyInput } from '../../lib/format'
 import { useCategories } from '../shared/api'
 import { useOptionalVault } from '../../offline/VaultProvider'
@@ -26,6 +35,7 @@ const STATUS_META: Record<
   HEALTHY: { label: 'Saudável', badge: 'badge-positive', icon: CheckCircle2 },
   WARNING: { label: 'Perto do limite', badge: 'badge-warning', icon: AlertTriangle },
   EXCEEDED: { label: 'Estourado', badge: 'badge-negative', icon: AlertOctagon },
+  INCOMPLETE: { label: 'Consumo incompleto', badge: 'badge-warning', icon: HelpCircle },
 }
 
 interface BudgetFormState {
@@ -115,6 +125,9 @@ export default function BudgetsPage() {
   const busy = createMutation.isPending || updateMutation.isPending
   const submitError = editing ? updateMutation.error : createMutation.error
   const data = budgets.data
+  // The denomination comes from the server summary. Until it is known there is
+  // nothing to label a queued row with, and guessing BRL would mislabel it.
+  const baseCurrency = data?.baseCurrency
 
   /**
    * The server's budgets with the queue laid over them.
@@ -137,12 +150,15 @@ export default function BudgetsPage() {
         ?? (categories.data ?? []).find((candidate) => candidate.id === payload.categoryId)
         ?? { id: payload.categoryId ?? 0, name: 'Categoria', type: 'EXPENSE' as const }
       if (!base) {
+        if (!baseCurrency) return null
         return {
           id: localId(entry.clientResourceId),
           month: payload.month ?? month,
           category,
           limitAmount: Number(payload.limitAmount ?? 0),
+          currency: baseCurrency,
           consumedAmount: 0,
+          consumedTotals: emptyTotals(baseCurrency),
           remainingAmount: Number(payload.limitAmount ?? 0),
           percentUsed: 0,
           status: 'HEALTHY' as const,
@@ -191,16 +207,23 @@ export default function BudgetsPage() {
             <div>
               <span className="stat-footnote">Total consumido</span>
               <p className="budget-summary-value">
-                {formatBRL(data.totalConsumed)}{' '}
+                {formatMoney(data.totalConsumed, data.baseCurrency)}{' '}
                 <span className="stat-footnote">
-                  de {formatBRL(data.totalLimit)} ({formatPercent(data.percentUsed)})
+                  de {formatMoney(data.totalLimit, data.baseCurrency)}
+                  {data.percentUsed !== null ? ` (${formatPercent(data.percentUsed)})` : ''}
                 </span>
               </p>
             </div>
             <div>
               <span className="stat-footnote">Restante</span>
               <p className="budget-summary-value">
-                <Money value={data.totalRemaining} signed />
+                {data.totalRemaining !== null ? (
+                  <Money value={data.totalRemaining} currency={data.baseCurrency} signed />
+                ) : (
+                  <span className="stat-footnote" role="note">
+                    Indisponível: {data.incompleteCount} orçamento(s) têm gastos em outra moeda.
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -242,31 +265,49 @@ export default function BudgetsPage() {
                   </div>
                   {pending ? (
                     <p className="budget-pending-note">
-                      Limite de {formatBRL(budget.limitAmount)}. O consumo e o status serão
+                      Limite de {formatMoney(budget.limitAmount, budget.currency)}. O consumo e o status serão
                       calculados pelo servidor depois da sincronização.
                     </p>
                   ) : (
                     <>
-                      <div
-                        className="budget-track"
-                        role="img"
-                        aria-label={`${budget.category.name}: ${formatPercent(budget.percentUsed)} do limite consumido`}
-                      >
+                      {budget.percentUsed !== null ? (
                         <div
-                          className={`budget-fill budget-fill-${budget.status.toLowerCase()}`}
-                          style={{ width: `${Math.min(budget.percentUsed, 100)}%` }}
-                        />
-                      </div>
+                          className="budget-track"
+                          role="img"
+                          aria-label={`${budget.category.name}: ${formatPercent(budget.percentUsed)} do limite consumido`}
+                        >
+                          <div
+                            className={`budget-fill budget-fill-${budget.status.toLowerCase()}`}
+                            style={{ width: `${Math.min(budget.percentUsed, 100)}%` }}
+                          />
+                        </div>
+                      ) : null}
                       <div className="budget-row-footer">
                         <span>
-                          {formatBRL(budget.consumedAmount)} de {formatBRL(budget.limitAmount)}
+                          {formatMoney(budget.consumedAmount, budget.currency)} de{' '}
+                          {formatMoney(budget.limitAmount, budget.currency)}
                         </span>
                         <span>
-                          {budget.remainingAmount >= 0
-                            ? `Restam ${formatBRL(budget.remainingAmount)}`
-                            : `${formatBRL(Math.abs(budget.remainingAmount))} acima do limite`}
+                          {budget.remainingAmount === null
+                            ? 'Restante indisponível'
+                            : budget.remainingAmount >= 0
+                              ? `Restam ${formatMoney(budget.remainingAmount, budget.currency)}`
+                              : `${formatMoney(Math.abs(budget.remainingAmount), budget.currency)} acima do limite`}
                         </span>
                       </div>
+                      {budget.status === 'INCOMPLETE' && (
+                        <p className="budget-incomplete-note" role="note">
+                          Há gastos nesta categoria em{' '}
+                          {budget.consumedTotals.unconvertedCurrencies.join(', ')}:{' '}
+                          {budget.consumedTotals.byCurrency
+                            .filter((entry) => entry.currency !== budget.currency)
+                            .map((entry) => formatMoney(entry.amount, entry.currency))
+                            .join(', ')}
+                          . Sem cotações, o consumo total e a porcentagem não podem ser calculados —
+                          tratá-los como zero poderia mostrar como saudável um orçamento já
+                          estourado.
+                        </p>
+                      )}
                     </>
                   )}
                 </li>

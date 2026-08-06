@@ -69,6 +69,44 @@ public interface CardInstallmentRepository extends JpaRepository<CardInstallment
     BigDecimal sumActiveByMonth(@Param("userId") Long userId,
                                 @Param("referenceMonth") LocalDate referenceMonth);
 
+    /**
+     * Card expense recognized per month and currency across a window:
+     * {@code [referenceMonth, currency, total]}.
+     *
+     * <p>The currency is the card's, which is the authority for everything it
+     * bills. One query covers the dashboard trend and the current and previous
+     * month at once.
+     */
+    @Query("""
+            select i.invoice.referenceMonth, i.invoice.card.currency, sum(i.amount)
+            from CardInstallment i
+            where i.userId = :userId
+              and i.status = com.finora.api.creditcard.installment.InstallmentStatus.ACTIVE
+              and i.invoice.referenceMonth >= :fromMonth
+              and i.invoice.referenceMonth <= :toMonth
+            group by i.invoice.referenceMonth, i.invoice.card.currency
+            """)
+    List<Object[]> sumActiveGroupedByMonthAndCurrency(@Param("userId") Long userId,
+                                                      @Param("fromMonth") LocalDate fromMonth,
+                                                      @Param("toMonth") LocalDate toMonth);
+
+    /**
+     * Active installment totals of a month by category and card currency:
+     * {@code [categoryId, categoryName, currency, total]}.
+     */
+    @Query("""
+            select i.purchase.category.id, i.purchase.category.name,
+                   i.invoice.card.currency, sum(i.amount)
+            from CardInstallment i
+            where i.userId = :userId
+              and i.status = com.finora.api.creditcard.installment.InstallmentStatus.ACTIVE
+              and i.invoice.referenceMonth = :referenceMonth
+            group by i.purchase.category.id, i.purchase.category.name, i.invoice.card.currency
+            """)
+    List<Object[]> sumActiveGroupedByCategoryAndCurrency(
+            @Param("userId") Long userId,
+            @Param("referenceMonth") LocalDate referenceMonth);
+
     /** Active installments of one category in one invoice month (budget consumption). */
     @Query("""
             select coalesce(sum(i.amount), 0)

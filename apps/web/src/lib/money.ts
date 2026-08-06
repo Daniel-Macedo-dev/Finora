@@ -152,3 +152,23 @@ export interface CurrencyTotals {
   /** Currencies a future exchange-rate stage would have to convert. */
   unconvertedCurrencies: CurrencyCode[]
 }
+
+/**
+ * The deterministic zero, mirroring the backend's empty grouping.
+ *
+ * <p>Used for locally projected rows that have no server-computed consumption
+ * yet: zero is zero in any currency, so this states that honestly instead of
+ * leaving the shape undefined.
+ */
+export function emptyTotals(baseCurrency: CurrencyCode): CurrencyTotals {
+  return {
+    baseCurrency,
+    byCurrency: [],
+    homogeneous: true,
+    homogeneousCurrency: baseCurrency,
+    nativeTotal: 0,
+    baseComplete: true,
+    baseTotal: 0,
+    unconvertedCurrencies: [],
+  }
+}

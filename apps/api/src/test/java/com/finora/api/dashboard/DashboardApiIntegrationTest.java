@@ -48,24 +48,27 @@ class DashboardApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2026-07"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.income").value(5000.00))
-                .andExpect(jsonPath("$.expense").value(1500.00))
-                .andExpect(jsonPath("$.monthResult").value(3500.00))
+                .andExpect(jsonPath("$.income.baseTotal").value(5000.00))
+                .andExpect(jsonPath("$.expense.baseTotal").value(1500.00))
+                .andExpect(jsonPath("$.monthResult.baseTotal").value(3500.00))
                 .andExpect(jsonPath("$.savingsRate").value(70.0))
-                .andExpect(jsonPath("$.previousMonthExpense").value(1000.00))
+                .andExpect(jsonPath("$.previousMonthExpense.baseTotal").value(1000.00))
                 .andExpect(jsonPath("$.expenseVariationPercent").value(50.0))
                 .andExpect(jsonPath("$.topCategories[0].categoryName").value("Alimentação"))
                 .andExpect(jsonPath("$.topCategories[0].percentOfTotal").value(80.0))
                 .andExpect(jsonPath("$.recentTransactions.length()").value(4))
-                .andExpect(jsonPath("$.trend.length()").value(6));
+                // One homogeneous series for the only currency in play.
+                .andExpect(jsonPath("$.trend.length()").value(1))
+                .andExpect(jsonPath("$.trend[0].currency").value("BRL"))
+                .andExpect(jsonPath("$.trend[0].points.length()").value(6));
     }
 
     @Test
     void emptyMonthDistinguishesZeroFromUnavailable() throws Exception {
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2026-07"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.income").value(0.00))
-                .andExpect(jsonPath("$.expense").value(0.00))
+                .andExpect(jsonPath("$.income.baseTotal").value(0.00))
+                .andExpect(jsonPath("$.expense.baseTotal").value(0.00))
                 .andExpect(jsonPath("$.savingsRate").doesNotExist())
                 .andExpect(jsonPath("$.expenseVariationPercent").doesNotExist())
                 .andExpect(jsonPath("$.topCategories.length()").value(0));
@@ -104,16 +107,16 @@ class DashboardApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2026-07"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.income").value(10000.00))
-                .andExpect(jsonPath("$.expense").value(1000.00))
-                .andExpect(jsonPath("$.monthResult").value(9000.00))
+                .andExpect(jsonPath("$.income.baseTotal").value(10000.00))
+                .andExpect(jsonPath("$.expense.baseTotal").value(1000.00))
+                .andExpect(jsonPath("$.monthResult.baseTotal").value(9000.00))
                 .andExpect(jsonPath("$.recentTransactions.length()").value(2));
 
         mockMvc.perform(get("/api/dashboard").cookie(other.session()).param("month", "2026-07"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.income").value(1000.00))
-                .andExpect(jsonPath("$.expense").value(5000.00))
-                .andExpect(jsonPath("$.monthResult").value(-4000.00))
+                .andExpect(jsonPath("$.income.baseTotal").value(1000.00))
+                .andExpect(jsonPath("$.expense.baseTotal").value(5000.00))
+                .andExpect(jsonPath("$.monthResult.baseTotal").value(-4000.00))
                 .andExpect(jsonPath("$.recentTransactions.length()").value(2));
     }
 

@@ -192,9 +192,9 @@ class LegacyConversionConcurrencyTest extends AbstractIntegrationTest {
 
         // The expense counts exactly once after the storm.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-12"))
-                .andExpect(jsonPath("$.expense").value(300.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00));
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.expense").value(0.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(0.00));
     }
 
     @Test
@@ -223,9 +223,9 @@ class LegacyConversionConcurrencyTest extends AbstractIntegrationTest {
 
         // Restored exactly once: the source is the November expense again.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.expense").value(300.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00));
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-12"))
-                .andExpect(jsonPath("$.expense").value(0.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(0.00));
     }
 
     @Test
@@ -266,7 +266,7 @@ class LegacyConversionConcurrencyTest extends AbstractIntegrationTest {
             MvcResult dashboard = mockMvc.perform(get("/api/dashboard")
                             .cookie(user.session()).param("month", month))
                     .andReturn();
-            total += json(dashboard).get("expense").asDouble();
+            total += json(dashboard).get("expense").get("baseTotal").asDouble();
         }
         assertThat(total).isEqualTo(300.00);
     }

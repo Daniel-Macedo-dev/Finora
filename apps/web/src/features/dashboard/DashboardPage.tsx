@@ -16,9 +16,11 @@ import PageHeader from '../../components/PageHeader'
 import MonthPicker from '../../components/MonthPicker'
 import Money from '../../components/Money'
 import CurrencyTotal from '../../components/CurrencyTotal'
+import CurrencyStat from '../../components/CurrencyStat'
 import { EmptyState, ErrorState, LoadingCards } from '../../components/states'
 import { currentMonth } from '../../lib/month'
-import { formatBRL, formatDate, formatPercent } from '../../lib/format'
+import { formatDate, formatPercent } from '../../lib/format'
+import { formatMoney } from '../../lib/money'
 import { useDashboard, useInsights } from './api'
 import TrendChart from './TrendChart'
 import CategoryBars from './CategoryBars'
@@ -87,10 +89,10 @@ export default function DashboardPage() {
 
   const data = dashboard.data
   const hasAnyData =
-    data.income > 0 ||
-    data.expense > 0 ||
+    data.income.byCurrency.length > 0 ||
+    data.expense.byCurrency.length > 0 ||
     data.recentTransactions.length > 0 ||
-    data.totalBalance !== 0
+    data.accountBalances.byCurrency.length > 0
 
   return (
     <>
@@ -118,7 +120,7 @@ export default function DashboardPage() {
                 <Wallet size={15} aria-hidden="true" /> Saldo total
               </span>
               <span className="stat-value">
-                <Money value={data.totalBalance} />
+                <CurrencyStat totals={data.accountBalances} />
               </span>
               <span className="stat-footnote">Somando todas as contas ativas</span>
             </div>
@@ -127,12 +129,14 @@ export default function DashboardPage() {
                 <TrendingUp size={15} aria-hidden="true" /> Receitas
               </span>
               <span className="stat-value stat-income">
-                <Money value={data.income} />
+                <CurrencyStat totals={data.income} />
               </span>
               <span className="stat-footnote">
                 {data.savingsRate !== null
                   ? `Taxa de poupança: ${formatPercent(data.savingsRate)}`
-                  : 'Sem receitas neste mês'}
+                  : !data.income.baseComplete || !data.expense.baseComplete
+                    ? `Taxa de poupança indisponível: há valores fora de ${data.baseCurrency} neste mês.`
+                    : 'Sem receitas neste mês'}
               </span>
             </div>
             <div className="card stat-card">
@@ -140,14 +144,16 @@ export default function DashboardPage() {
                 <TrendingDown size={15} aria-hidden="true" /> Despesas
               </span>
               <span className="stat-value stat-expense">
-                <Money value={data.expense} />
+                <CurrencyStat totals={data.expense} />
               </span>
               <span className="stat-footnote">
                 {data.expenseVariationPercent !== null
                   ? `${data.expenseVariationPercent > 0 ? '+' : ''}${formatPercent(
                       data.expenseVariationPercent,
                     )} vs mês anterior`
-                  : 'Sem base de comparação anterior'}
+                  : !data.expense.baseComplete || !data.previousMonthExpense.baseComplete
+                    ? `Comparação indisponível: há valores fora de ${data.baseCurrency} em um dos meses.`
+                    : 'Sem base de comparação anterior'}
               </span>
             </div>
             <div className="card stat-card">
@@ -155,7 +161,7 @@ export default function DashboardPage() {
                 <PiggyBank size={15} aria-hidden="true" /> Resultado do mês
               </span>
               <span className="stat-value">
-                <Money value={data.monthResult} signed />
+                <CurrencyStat totals={data.monthResult} signed />
               </span>
               <span className="stat-footnote">Receitas menos despesas</span>
             </div>
@@ -163,7 +169,7 @@ export default function DashboardPage() {
 
           <section className="card dash-panel" aria-label="Evolução mensal">
             <h2 className="panel-title">Evolução (últimos 6 meses)</h2>
-            <TrendChart points={data.trend} />
+            <TrendChart series={data.trend} />
           </section>
 
           <section className="card dash-panel" aria-label="Principais categorias">
@@ -187,14 +193,22 @@ export default function DashboardPage() {
                   <div>
                     <span className="stat-footnote">Consumido</span>
                     <p className="budget-overview-value">
-                      {formatBRL(data.budgets.totalConsumed)}{' '}
+                      {formatMoney(data.budgets.totalConsumed, data.baseCurrency)}{' '}
                       <span className="stat-footnote">
-                        de {formatBRL(data.budgets.totalLimit)} (
-                        {formatPercent(data.budgets.percentUsed)})
+                        de {formatMoney(data.budgets.totalLimit, data.baseCurrency)}
+                        {data.budgets.percentUsed !== null
+                          ? ` (${formatPercent(data.budgets.percentUsed)})`
+                          : ''}
                       </span>
                     </p>
                   </div>
                   <div className="budget-overview-badges">
+                    {data.budgets.incompleteCount > 0 && (
+                      <span className="badge badge-warning">
+                        <AlertTriangle size={13} aria-hidden="true" />
+                        {data.budgets.incompleteCount} com consumo incompleto
+                      </span>
+                    )}
                     {data.budgets.exceededCount > 0 && (
                       <span className="badge badge-negative">
                         <AlertOctagon size={13} aria-hidden="true" />
@@ -207,12 +221,14 @@ export default function DashboardPage() {
                         {data.budgets.warningCount} perto do limite
                       </span>
                     )}
-                    {data.budgets.exceededCount === 0 && data.budgets.warningCount === 0 && (
-                      <span className="badge badge-positive">
-                        <CheckCircle2 size={13} aria-hidden="true" />
-                        Tudo sob controle
-                      </span>
-                    )}
+                    {data.budgets.exceededCount === 0 &&
+                      data.budgets.warningCount === 0 &&
+                      data.budgets.incompleteCount === 0 && (
+                        <span className="badge badge-positive">
+                          <CheckCircle2 size={13} aria-hidden="true" />
+                          Tudo sob controle
+                        </span>
+                      )}
                   </div>
                 </div>
                 <Link to="/budgets" className="panel-link">
@@ -230,15 +246,21 @@ export default function DashboardPage() {
               <div className="dash-cards-figures">
                 <div>
                   <span className="stat-footnote">Dívida de cartão</span>
-                  <p className="dash-cards-value">{formatBRL(data.cards.totalOutstanding)}</p>
+                  <p className="dash-cards-value">
+                    <CurrencyStat totals={data.cards.outstanding} />
+                  </p>
                 </div>
                 <div>
                   <span className="stat-footnote">Limite disponível</span>
-                  <p className="dash-cards-value">{formatBRL(data.cards.totalAvailableLimit)}</p>
+                  <p className="dash-cards-value">
+                    <CurrencyStat totals={data.cards.availableLimit} />
+                  </p>
                 </div>
                 <div>
                   <span className="stat-footnote">Despesa no cartão (mês)</span>
-                  <p className="dash-cards-value">{formatBRL(data.cards.monthCardExpense)}</p>
+                  <p className="dash-cards-value">
+                    <CurrencyStat totals={data.cards.monthCardExpense} />
+                  </p>
                 </div>
               </div>
               {data.cards.overdueCount > 0 && (
@@ -251,7 +273,11 @@ export default function DashboardPage() {
                 <p className="stat-footnote dash-cards-next">
                   Próxima fatura: {data.cards.nextDueInvoice.cardName} vence em{' '}
                   {formatDate(data.cards.nextDueInvoice.dueDate)} (
-                  {formatBRL(data.cards.nextDueInvoice.outstandingAmount)} em aberto){' '}
+                  {formatMoney(
+                    data.cards.nextDueInvoice.outstandingAmount,
+                    data.cards.nextDueInvoice.currency,
+                  )}{' '}
+                  em aberto){' '}
                   <InvoiceStatusBadge status={data.cards.nextDueInvoice.status} />
                 </p>
               ) : (
@@ -268,14 +294,25 @@ export default function DashboardPage() {
               <h2 className="panel-title">
                 <ChartSpline size={15} aria-hidden="true" /> Caixa futuro (30 dias)
               </h2>
-              <div className="dash-cards-figures">
-                <div>
-                  <span className="stat-footnote">Saldo projetado</span>
-                  <p className="dash-cards-value">
-                    {formatBRL(data.futureCash.projectedBalance30d)}
-                  </p>
+              {data.futureCash.available ? (
+                <div className="dash-cards-figures">
+                  <div>
+                    <span className="stat-footnote">Saldo projetado</span>
+                    <p className="dash-cards-value">
+                      {formatMoney(
+                        data.futureCash.projectedBalance30d,
+                        data.futureCash.currency ?? data.baseCurrency,
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <p className="stat-footnote" role="note">
+                  Saldo projetado indisponível: suas contas, cartões ou lançamentos incluem mais de
+                  uma moeda, e projetar um saldo único exigiria cotações, que ainda não existem no
+                  Finora.
+                </p>
+              )}
               {data.futureCash.firstNegativeDate && (
                 <span className="badge badge-negative">
                   <AlertOctagon size={13} aria-hidden="true" />
@@ -291,14 +328,20 @@ export default function DashboardPage() {
                 <p className="stat-footnote dash-cards-next">
                   Próximo recorrente: {data.futureCash.nextRecurringEvent.description} em{' '}
                   {formatDate(data.futureCash.nextRecurringEvent.date)} (
-                  {formatBRL(Math.abs(data.futureCash.nextRecurringEvent.amount))})
+                  {formatMoney(
+                    Math.abs(data.futureCash.nextRecurringEvent.amount),
+                    data.futureCash.nextRecurringEvent.currency,
+                  )})
                 </p>
               )}
               {data.futureCash.nextInvoiceObligation && (
                 <p className="stat-footnote dash-cards-next">
                   Próxima fatura a pagar: {data.futureCash.nextInvoiceObligation.description} em{' '}
                   {formatDate(data.futureCash.nextInvoiceObligation.date)} (
-                  {formatBRL(Math.abs(data.futureCash.nextInvoiceObligation.amount))})
+                  {formatMoney(
+                    Math.abs(data.futureCash.nextInvoiceObligation.amount),
+                    data.futureCash.nextInvoiceObligation.currency,
+                  )})
                 </p>
               )}
               <Link to="/forecast" className="panel-link">

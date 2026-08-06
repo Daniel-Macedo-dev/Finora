@@ -146,12 +146,12 @@ class CardAccountingIntegrationTest extends AbstractIntegrationTest {
         createPurchase("900.00", 3, "2031-03-05");
 
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2031-03"))
-                .andExpect(jsonPath("$.expense").value(300.00))
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00))
                 .andExpect(jsonPath("$.topCategories[0].amount").value(300.00))
-                .andExpect(jsonPath("$.cards.monthCardExpense").value(300.00))
-                .andExpect(jsonPath("$.cards.totalOutstanding").value(900.00))
-                .andExpect(jsonPath("$.cards.totalAvailableLimit").value(9100.00))
-                .andExpect(jsonPath("$.totalBalance").value(5000.00));
+                .andExpect(jsonPath("$.cards.monthCardExpense.baseTotal").value(300.00))
+                .andExpect(jsonPath("$.cards.outstanding.baseTotal").value(900.00))
+                .andExpect(jsonPath("$.cards.availableLimit.baseTotal").value(9100.00))
+                .andExpect(jsonPath("$.accountBalances.baseTotal").value(5000.00));
 
         // Full payment of the March invoice: cash drops, expense stays.
         MvcResult invoices = mockMvc.perform(get("/api/credit-cards/%d/invoices".formatted(cardId))
@@ -170,9 +170,9 @@ class CardAccountingIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2031-03"))
-                .andExpect(jsonPath("$.expense").value(300.00))
-                .andExpect(jsonPath("$.totalBalance").value(4700.00))
-                .andExpect(jsonPath("$.cards.totalOutstanding").value(600.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00))
+                .andExpect(jsonPath("$.accountBalances.baseTotal").value(4700.00))
+                .andExpect(jsonPath("$.cards.outstanding.baseTotal").value(600.00));
     }
 
     @Test

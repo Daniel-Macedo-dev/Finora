@@ -290,9 +290,9 @@ class LegacyConversionApiIntegrationTest extends AbstractIntegrationTest {
 
         // Before: the legacy row is the November expense.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.expense").value(300.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00));
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-12"))
-                .andExpect(jsonPath("$.expense").value(0.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(0.00));
 
         MvcResult converted = mockMvc.perform(post("/api/legacy-conversions")
                         .cookie(user.session()).with(csrf())
@@ -306,9 +306,9 @@ class LegacyConversionApiIntegrationTest extends AbstractIntegrationTest {
 
         // After: November loses the expense, December (invoice month) gains it.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.expense").value(0.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(0.00));
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-12"))
-                .andExpect(jsonPath("$.expense").value(300.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00));
 
         // The original stays visible, marked as the audit record.
         mockMvc.perform(get("/api/transactions/" + sourceId).cookie(user.session()))
@@ -344,7 +344,7 @@ class LegacyConversionApiIntegrationTest extends AbstractIntegrationTest {
 
         // The account-linked legacy row reduces the balance.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.totalBalance").value(4700.00));
+                .andExpect(jsonPath("$.accountBalances.baseTotal").value(4700.00));
 
         mockMvc.perform(post("/api/legacy-conversions")
                         .cookie(user.session()).with(csrf())
@@ -354,7 +354,7 @@ class LegacyConversionApiIntegrationTest extends AbstractIntegrationTest {
 
         // Cash effect removed: only paying the invoice will move money.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.totalBalance").value(5000.00));
+                .andExpect(jsonPath("$.accountBalances.baseTotal").value(5000.00));
 
         MvcResult invoices = mockMvc.perform(
                         get("/api/credit-cards/%d/invoices".formatted(cardId))
@@ -372,7 +372,7 @@ class LegacyConversionApiIntegrationTest extends AbstractIntegrationTest {
 
         // Money moved exactly once.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-12"))
-                .andExpect(jsonPath("$.totalBalance").value(4700.00));
+                .andExpect(jsonPath("$.accountBalances.baseTotal").value(4700.00));
     }
 
     @Test
@@ -450,9 +450,9 @@ class LegacyConversionApiIntegrationTest extends AbstractIntegrationTest {
 
         // Expense recognition is back in the source month, once.
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-11"))
-                .andExpect(jsonPath("$.expense").value(300.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(300.00));
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2025-12"))
-                .andExpect(jsonPath("$.expense").value(0.00));
+                .andExpect(jsonPath("$.expense.baseTotal").value(0.00));
 
         // The generated purchase is cancelled, not deleted.
         mockMvc.perform(get("/api/credit-cards/%d/purchases/%d".formatted(cardId, purchaseId))

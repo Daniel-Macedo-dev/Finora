@@ -549,3 +549,70 @@ table.data tr:last-child td {
 .cc-invoice-link:focus-visible {
   text-decoration: underline;
 }
+
+/* ── Multi-currency presentation ─────────────────────────────────────────────
+   A total that cannot be consolidated has to read as an explanation, not as a
+   smaller number. These styles keep the per-currency rows compact enough to sit
+   inside a stat card at 390px without pushing the document sideways. */
+
+.currency-total-code {
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.currency-total-list,
+.currency-stat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.currency-total-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.currency-total-unavailable,
+.currency-stat-note {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-muted);
+  /* Long currency lists must wrap rather than widen the card. */
+  overflow-wrap: anywhere;
+}
+
+.currency-stat-native,
+.currency-stat-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Stat values are large; the explanation next to them is not. */
+  align-items: flex-start;
+}
+
+.currency-stat-grouped .money,
+.currency-stat-native .money {
+  font-size: var(--text-lg);
+}
+
+.trend-series-title {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--ink-secondary);
+  margin: 12px 0 4px;
+}
+
+.budget-incomplete-note {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}

@@ -71,6 +71,69 @@ public interface TransactionRepository
                                               @Param("from") LocalDate from,
                                               @Param("to") LocalDate to);
 
+    /**
+     * Monthly totals of a window split by type and currency:
+     * {@code [year, month, type, currency, total]}.
+     *
+     * <p>One query answers the whole dashboard trend as well as the current and
+     * previous month's income and expenses. Grouping by currency in the database
+     * is what keeps a USD row from being added to a BRL one on the way out.
+     */
+    @Query("""
+            select year(t.occurredOn), month(t.occurredOn), t.type, t.currency, sum(t.amount)
+            from Transaction t
+            where t.userId = :userId
+              and t.financiallyActive = true
+              and t.occurredOn >= :from
+              and t.occurredOn <= :to
+            group by year(t.occurredOn), month(t.occurredOn), t.type, t.currency
+            """)
+    List<Object[]> sumGroupedByMonthTypeAndCurrency(@Param("userId") Long userId,
+                                                    @Param("from") LocalDate from,
+                                                    @Param("to") LocalDate to);
+
+    /**
+     * Expense totals of one category in a period, split by currency:
+     * {@code [currency, total]}. A budget consumes only what is denominated in
+     * the budget's own currency; the rest has to be reported separately.
+     */
+    @Query("""
+            select t.currency, sum(t.amount)
+            from Transaction t
+            where t.userId = :userId
+              and t.type = com.finora.api.transaction.TransactionType.EXPENSE
+              and t.financiallyActive = true
+              and t.category.id = :categoryId
+              and t.occurredOn >= :from
+              and t.occurredOn <= :to
+            group by t.currency
+            """)
+    List<Object[]> sumExpensesByCategoryAndPeriodGroupedByCurrency(
+            @Param("userId") Long userId,
+            @Param("categoryId") Long categoryId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    /**
+     * Expense totals of every category in a period, split by currency:
+     * {@code [categoryId, categoryName, currency, total]}. One query for the
+     * whole month's budget consumption, so a summary never costs a query per
+     * budget.
+     */
+    @Query("""
+            select t.category.id, t.category.name, t.currency, sum(t.amount)
+            from Transaction t
+            where t.userId = :userId
+              and t.type = com.finora.api.transaction.TransactionType.EXPENSE
+              and t.financiallyActive = true
+              and t.occurredOn >= :from
+              and t.occurredOn <= :to
+            group by t.category.id, t.category.name, t.currency
+            """)
+    List<Object[]> sumExpensesGroupedByCategoryAndCurrency(@Param("userId") Long userId,
+                                                           @Param("from") LocalDate from,
+                                                           @Param("to") LocalDate to);
+
     /** The user's expense totals grouped by category: [categoryId, categoryName, total]. */
     @Query("""
             select t.category.id, t.category.name, sum(t.amount)
@@ -86,6 +149,15 @@ public interface TransactionRepository
     List<Object[]> sumExpensesGroupedByCategory(@Param("userId") Long userId,
                                                 @Param("from") LocalDate from,
                                                 @Param("to") LocalDate to);
+
+    /**
+     * How many of the user's transactions are denominated outside one currency.
+     *
+     * <p>Used to decide whether a single running balance can honestly be
+     * projected: an accountless foreign transaction is enough to make one
+     * meaningless, and no account or card would reveal it.
+     */
+    long countByUserIdAndCurrencyNot(Long userId, com.finora.api.common.money.CurrencyCode currency);
 
     List<Transaction> findTop10ByUserIdOrderByOccurredOnDescIdDesc(Long userId);
 

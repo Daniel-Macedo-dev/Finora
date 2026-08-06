@@ -125,8 +125,8 @@ class StatementImportAccountingTest extends AbstractIntegrationTest {
     private void assertDashboard(double income, double expense) throws Exception {
         mockMvc.perform(get("/api/dashboard").cookie(user.session()).param("month", "2026-06"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.income").value(income))
-                .andExpect(jsonPath("$.expense").value(expense));
+                .andExpect(jsonPath("$.income.baseTotal").value(income))
+                .andExpect(jsonPath("$.expense.baseTotal").value(expense));
     }
 
     private void assertBudgetConsumed(double expected) throws Exception {

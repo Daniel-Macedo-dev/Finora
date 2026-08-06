@@ -121,6 +121,50 @@ public interface InvoiceAdjustmentRepository extends JpaRepository<InvoiceAdjust
     List<Object[]> sumActiveNetGroupedByCategory(@Param("userId") Long userId,
                                                  @Param("referenceMonth") LocalDate referenceMonth);
 
+    /**
+     * Net active adjustments per month and card currency across a window:
+     * {@code [referenceMonth, currency, net]}.
+     */
+    @Query("""
+            select a.invoice.referenceMonth, a.invoice.card.currency,
+                   sum(case when a.kind in (
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.FEE,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.INTEREST,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.OTHER_DEBIT)
+                       then a.amount else -a.amount end)
+            from InvoiceAdjustment a
+            where a.userId = :userId
+              and a.status = com.finora.api.creditcard.adjustment.AdjustmentStatus.ACTIVE
+              and a.invoice.referenceMonth >= :fromMonth
+              and a.invoice.referenceMonth <= :toMonth
+            group by a.invoice.referenceMonth, a.invoice.card.currency
+            """)
+    List<Object[]> sumActiveNetGroupedByMonthAndCurrency(@Param("userId") Long userId,
+                                                         @Param("fromMonth") LocalDate fromMonth,
+                                                         @Param("toMonth") LocalDate toMonth);
+
+    /**
+     * Categorized net active adjustments of a month by card currency:
+     * {@code [categoryId, categoryName, currency, net]}.
+     */
+    @Query("""
+            select a.category.id, a.category.name, a.invoice.card.currency,
+                   sum(case when a.kind in (
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.FEE,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.INTEREST,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.OTHER_DEBIT)
+                       then a.amount else -a.amount end)
+            from InvoiceAdjustment a
+            where a.userId = :userId
+              and a.status = com.finora.api.creditcard.adjustment.AdjustmentStatus.ACTIVE
+              and a.category is not null
+              and a.invoice.referenceMonth = :referenceMonth
+            group by a.category.id, a.category.name, a.invoice.card.currency
+            """)
+    List<Object[]> sumActiveNetGroupedByCategoryAndCurrency(
+            @Param("userId") Long userId,
+            @Param("referenceMonth") LocalDate referenceMonth);
+
     /** Net active adjustment of one category in one invoice month (budgets). */
     @Query("""
             select coalesce(sum(case when a.kind in (

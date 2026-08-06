@@ -8,6 +8,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface CommitmentRepository extends JpaRepository<Commitment, Long> {
 
+    /**
+     * How many of the user's commitments settle outside one currency.
+     *
+     * <p>A projection-only commitment carries its own currency and belongs to no
+     * account, so nothing else in the read model would disclose it.
+     */
+    long countByUserIdAndCurrencyNot(Long userId, com.finora.api.common.money.CurrencyCode currency);
+
     List<Commitment> findAllByUserIdOrderByActiveDescDescriptionAsc(Long userId);
 
     List<Commitment> findAllByUserIdAndActiveTrue(Long userId);

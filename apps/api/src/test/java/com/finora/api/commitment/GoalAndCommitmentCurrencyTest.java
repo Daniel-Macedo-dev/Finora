@@ -131,8 +131,8 @@ class GoalAndCommitmentCurrencyTest extends AbstractIntegrationTest {
                         .param("from", "2026-07-01")
                         .param("months", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totals.complete").value(false))
-                .andExpect(jsonPath("$.totals.total").doesNotExist())
+                .andExpect(jsonPath("$.totals.baseComplete").value(false))
+                .andExpect(jsonPath("$.totals.baseTotal").doesNotExist())
                 .andExpect(jsonPath("$.totals.unconvertedCurrencies[0]").value("EUR"))
                 .andExpect(jsonPath("$.totals.byCurrency.length()").value(2));
     }
