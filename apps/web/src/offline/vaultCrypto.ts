@@ -1,3 +1,4 @@
+import { migrateQueriesToV3 } from './dataMigration'
 import {
   DEFAULT_SYNC_PREFERENCES,
   type OutboxEntry,
@@ -6,8 +7,21 @@ import {
   type SyncPreferences,
 } from './outbox/types'
 
+/**
+ * The encryption envelope. Unchanged at 2: this stage touches none of PBKDF2,
+ * the iteration count, AES-GCM, the salt or IV format, or the IndexedDB record.
+ */
 export const VAULT_SCHEMA_VERSION = 2
-export const DATA_SCHEMA_VERSION = 2
+
+/**
+ * The plaintext payload's shape, inside the ciphertext.
+ *
+ * V3 is the multi-currency shape: every cached resource names the currency its
+ * amounts are denominated in. A copy prepared before that is still perfectly
+ * good data — it is simply BRL that never said so — and is upgraded in memory
+ * on unlock rather than being thrown away.
+ */
+export const DATA_SCHEMA_VERSION = 3
 export const PBKDF2_ITERATIONS = 310_000
 
 export interface OfflineQuery {
@@ -141,20 +155,29 @@ function validatePayload(value: unknown): VaultPayload {
   ) {
     throw new VaultError()
   }
-  if (payload.dataSchemaVersion === 1) {
-    return migrateV1(payload)
+  // Deterministic chain: V1 → V2 → V3. Each step is a whole shape, so a very
+  // old vault lands on the current one without special cases per pair.
+  let current = payload
+  if (current.dataSchemaVersion === 1) {
+    current = migrateV1(current)
   }
-  if (payload.dataSchemaVersion !== DATA_SCHEMA_VERSION) throw new VaultError()
+  if (current.dataSchemaVersion === 2) {
+    current = migrateV2(current)
+  }
+  // Anything else — a future version this build does not understand — fails
+  // closed. Guessing at its contents could silently drop queued mutations,
+  // which are the only copy of work the server has never seen.
+  if (current.dataSchemaVersion !== DATA_SCHEMA_VERSION) throw new VaultError()
   if (
-    !Array.isArray(payload.outbox) ||
-    !Array.isArray(payload.resourceMappings) ||
-    !Array.isArray(payload.syncHistory) ||
-    !payload.syncPreferences ||
-    typeof payload.syncPreferences.autoSync !== 'boolean'
+    !Array.isArray(current.outbox) ||
+    !Array.isArray(current.resourceMappings) ||
+    !Array.isArray(current.syncHistory) ||
+    !current.syncPreferences ||
+    typeof current.syncPreferences.autoSync !== 'boolean'
   ) {
     throw new VaultError()
   }
-  return payload as VaultPayload
+  return current as VaultPayload
 }
 
 /**
@@ -165,9 +188,9 @@ function validatePayload(value: unknown): VaultPayload {
  * with it, so it is carried forward with its owner, timestamp and cached
  * queries intact and an empty queue alongside.
  */
-function migrateV1(payload: Partial<VaultPayload>): VaultPayload {
+function migrateV1(payload: Partial<VaultPayload>): Partial<VaultPayload> {
   return {
-    dataSchemaVersion: DATA_SCHEMA_VERSION,
+    dataSchemaVersion: 2,
     owner: payload.owner as VaultOwner,
     preparedAt: payload.preparedAt as string,
     queries: payload.queries as OfflineQuery[],
@@ -178,9 +201,38 @@ function migrateV1(payload: Partial<VaultPayload>): VaultPayload {
   }
 }
 
-/** True when the stored record predates the outbox and should be rewritten. */
+/**
+ * Labels a pre-multi-currency copy with the currency it always had.
+ *
+ * The cached queries are migrated per known shape — see `dataMigration` — and
+ * the derived ones that cannot be repaired are dropped rather than guessed at.
+ *
+ * The outbox is deliberately untouched. A queued mutation's payload is the
+ * canonical request the server already hashed into a receipt; adding a field to
+ * it would change that hash, and a resend whose response was lost would come
+ * back as a reused idempotency key. Its currency is interpreted as BRL at read
+ * time instead, by whatever displays or projects it.
+ */
+function migrateV2(payload: Partial<VaultPayload>): Partial<VaultPayload> {
+  return {
+    ...payload,
+    dataSchemaVersion: 3,
+    queries: migrateQueriesToV3((payload.queries ?? []) as OfflineQuery[]),
+  }
+}
+
+/**
+ * True when the stored record's envelope or payload predates the current shape.
+ *
+ * Both versions matter. The envelope has been V2 since the outbox landed, so
+ * checking it alone would decide that a V2 record holding a V2 payload needs
+ * nothing — and the pre-multi-currency data inside it would never be upgraded.
+ */
 export function needsMigration(vault: EncryptedVault): boolean {
-  return vault.vaultSchemaVersion < VAULT_SCHEMA_VERSION
+  return (
+    vault.vaultSchemaVersion < VAULT_SCHEMA_VERSION ||
+    vault.dataSchemaVersion < DATA_SCHEMA_VERSION
+  )
 }
 
 async function seal(
@@ -301,7 +353,7 @@ export async function reopenVault(
   }
 }
 
-/** An empty V2 payload for a freshly enabled vault. */
+/** An empty payload at the current data schema, for a freshly enabled vault. */
 export function emptyPayload(
   owner: VaultOwner,
   preparedAt: string,

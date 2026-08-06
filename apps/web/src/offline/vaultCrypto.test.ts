@@ -46,12 +46,47 @@ const payload: VaultPayload = {
 
 /** A record exactly as the read-only stage wrote it, encrypted with V1's shape. */
 async function makeV1Vault(): Promise<EncryptedVault> {
-  const legacyPayload = {
-    dataSchemaVersion: 1,
-    owner,
-    preparedAt: '2026-07-20T09:00:00.000Z',
-    queries: [{ queryKey: ['goals'], data: [{ id: 7 }], dataUpdatedAt: 5 }],
-  }
+  return sealLegacy(
+    {
+      dataSchemaVersion: 1,
+      owner,
+      preparedAt: '2026-07-20T09:00:00.000Z',
+      queries: [{ queryKey: ['goals'], data: [{ id: 7 }], dataUpdatedAt: 5 }],
+    },
+    1,
+  )
+}
+
+/**
+ * A record from the outbox stage: envelope V2, payload V2. This is the case
+ * that a version check on the envelope alone would wrongly call up to date.
+ */
+async function makeV2Vault(
+  overrides: Partial<Record<string, unknown>> = {},
+): Promise<EncryptedVault> {
+  return sealLegacy(
+    {
+      dataSchemaVersion: 2,
+      owner,
+      preparedAt: '2026-07-25T12:00:00.000Z',
+      queries: [
+        { queryKey: ['accounts'], data: [{ id: 1, currentBalance: 800 }], dataUpdatedAt: 5 },
+        { queryKey: ['dashboard', '2026-07'], data: { income: 5000 }, dataUpdatedAt: 6 },
+      ],
+      outbox: [queuedEntry],
+      resourceMappings: [],
+      syncHistory: [],
+      syncPreferences: { ...DEFAULT_SYNC_PREFERENCES },
+      ...overrides,
+    },
+    2,
+  )
+}
+
+async function sealLegacy(
+  legacyPayload: Record<string, unknown>,
+  vaultSchemaVersion: number,
+): Promise<EncryptedVault> {
   const salt = crypto.getRandomValues(new Uint8Array(16))
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const material = await crypto.subtle.importKey(
@@ -75,8 +110,8 @@ async function makeV1Vault(): Promise<EncryptedVault> {
   )
   const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
   return {
-    vaultSchemaVersion: 1,
-    dataSchemaVersion: 1,
+    vaultSchemaVersion,
+    dataSchemaVersion: legacyPayload.dataSchemaVersion as number,
     kdf: 'PBKDF2-HMAC-SHA-256',
     iterations: PBKDF2_ITERATIONS,
     salt: base64(salt),
@@ -173,7 +208,11 @@ describe('offline vault cryptography', () => {
     expect(migrated.dataSchemaVersion).toBe(DATA_SCHEMA_VERSION)
     expect(migrated.owner).toEqual(owner)
     expect(migrated.preparedAt).toBe('2026-07-20T09:00:00.000Z')
-    expect(migrated.queries).toEqual([{ queryKey: ['goals'], data: [{ id: 7 }], dataUpdatedAt: 5 }])
+    // V1 → V2 → V3 in one pass: the queue appears, and the cached goal is
+    // labelled with the currency it always had.
+    expect(migrated.queries).toEqual([
+      { queryKey: ['goals'], data: [{ id: 7, currency: 'BRL' }], dataUpdatedAt: 5 },
+    ])
     expect(migrated.outbox).toEqual([])
     expect(migrated.resourceMappings).toEqual([])
     expect(migrated.syncHistory).toEqual([])
@@ -183,6 +222,66 @@ describe('offline vault cryptography', () => {
     const upgraded = await resealVault(migrated, session)
     expect(needsMigration(upgraded)).toBe(false)
     await expect(unlockVault(upgraded, password)).resolves.toBeDefined()
+  })
+
+  it('upgrades a V2 payload even though its envelope is already current', async () => {
+    const stored = await makeV2Vault()
+    // The exact case an envelope-only check would call up to date.
+    expect(stored.vaultSchemaVersion).toBe(VAULT_SCHEMA_VERSION)
+    expect(needsMigration(stored)).toBe(true)
+
+    const { payload: migrated, session } = await unlockVault(stored, password)
+    expect(migrated.dataSchemaVersion).toBe(3)
+    expect(migrated.queries.map((entry) => entry.queryKey[0])).toEqual(['accounts'])
+    expect(migrated.queries[0].data).toEqual([{ id: 1, currentBalance: 800, currency: 'BRL' }])
+
+    const upgraded = await resealVault(migrated, session)
+    expect(needsMigration(upgraded)).toBe(false)
+    // Fresh IV on every write, and identity carried across.
+    expect(upgraded.iv).not.toBe(stored.iv)
+    expect(upgraded.createdAt).toBe(stored.createdAt)
+  })
+
+  it('carries a queued mutation across the upgrade byte for byte', async () => {
+    const stored = await makeV2Vault()
+    const { payload: migrated } = await unlockVault(stored, password)
+
+    expect(migrated.outbox).toHaveLength(1)
+    // The canonical request is what the server hashed into a receipt. Adding a
+    // currency to it would change that hash and turn a legitimate resend into
+    // a reused idempotency key.
+    expect(migrated.outbox[0]).toEqual(queuedEntry)
+    expect(migrated.outbox[0].payload).not.toHaveProperty('currency')
+    expect(migrated.outbox[0].clientMutationId).toBe(queuedEntry.clientMutationId)
+    expect(migrated.outbox[0].clientResourceId).toBe(queuedEntry.clientResourceId)
+    expect(migrated.outbox[0].status).toBe('PENDING')
+    expect(migrated.outbox[0].attemptCount).toBe(0)
+  })
+
+  it('is a no-op for a record already at the current data schema', async () => {
+    const { encrypted } = await createVault(payload, password)
+    expect(needsMigration(encrypted)).toBe(false)
+
+    const { payload: opened } = await unlockVault(encrypted, password)
+    expect(opened).toEqual(payload)
+  })
+
+  it('fails closed on a data version this build does not understand', async () => {
+    const future = await makeV2Vault({ dataSchemaVersion: 4 })
+    // Refusing is the safe answer: guessing at a newer shape could silently
+    // drop queued work that exists nowhere else.
+    await expect(unlockVault(future, password)).rejects.toBeInstanceOf(VaultError)
+  })
+
+  it('keeps no migration metadata outside the ciphertext', async () => {
+    const stored = await makeV2Vault()
+    const { payload: migrated, session } = await unlockVault(stored, password)
+    const upgraded = await resealVault(migrated, session)
+
+    const serialized = JSON.stringify(upgraded)
+    expect(serialized).not.toContain('BRL')
+    expect(serialized).not.toContain('accounts')
+    expect(serialized).not.toContain(queuedEntry.clientMutationId)
   })
 
   it('leaves the original record readable when the upgrade is never written', async () => {
