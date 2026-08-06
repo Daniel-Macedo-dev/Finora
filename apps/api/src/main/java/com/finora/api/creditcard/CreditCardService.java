@@ -4,6 +4,8 @@ import com.finora.api.account.Account;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
+import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.CardLimitService.CardLimit;
 import com.finora.api.creditcard.CreditCardDtos.CardLimitResponse;
 import com.finora.api.creditcard.CreditCardDtos.CreditCardRequest;
@@ -16,6 +18,7 @@ import com.finora.api.creditcard.invoice.InvoiceService;
 import com.finora.api.creditcard.invoice.InvoiceStatus;
 import com.finora.api.creditcard.purchase.CardPurchaseRepository;
 import com.finora.api.identity.CurrentUserProvider;
+import com.finora.api.settings.SettingsService;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -39,6 +42,7 @@ public class CreditCardService {
     private final CardLimitService limits;
     private final InvoiceService invoiceService;
     private final CurrentUserProvider currentUser;
+    private final SettingsService settings;
 
     public CreditCardService(CreditCardRepository cards,
                              CardInvoiceRepository invoices,
@@ -46,7 +50,8 @@ public class CreditCardService {
                              AccountRepository accounts,
                              CardLimitService limits,
                              InvoiceService invoiceService,
-                             CurrentUserProvider currentUser) {
+                             CurrentUserProvider currentUser,
+                             SettingsService settings) {
         this.cards = cards;
         this.invoices = invoices;
         this.purchases = purchases;
@@ -54,6 +59,7 @@ public class CreditCardService {
         this.limits = limits;
         this.invoiceService = invoiceService;
         this.currentUser = currentUser;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
@@ -73,13 +79,16 @@ public class CreditCardService {
         cards.findByUserIdAndNameIgnoreCase(userId, request.name().trim()).ifPresent(existing -> {
             throw new BusinessRuleException("CARD_NAME_TAKEN", "Já existe um cartão com esse nome.");
         });
+        CurrencyCode currency = resolveCurrency(request.currency(), userId);
+        MoneyRules.validateScale(request.creditLimit(), currency);
         CreditCard card = new CreditCard(
                 userId,
                 request.name().trim(),
                 request.brand(),
-                request.creditLimit(),
+                MoneyRules.normalize(request.creditLimit(), currency),
                 request.closingDay(),
-                request.dueDay());
+                request.dueDay(),
+                currency);
         applyOptionalFields(userId, card, request);
         return toResponse(cards.save(card), today);
     }
@@ -92,9 +101,11 @@ public class CreditCardService {
                 throw new BusinessRuleException("CARD_NAME_TAKEN", "Já existe um cartão com esse nome.");
             }
         });
+        assertCurrencyUnchanged(card, request.currency());
+        MoneyRules.validateScale(request.creditLimit(), card.getCurrency());
         card.setName(request.name().trim());
         card.setBrand(request.brand());
-        card.setCreditLimit(request.creditLimit());
+        card.setCreditLimit(MoneyRules.normalize(request.creditLimit(), card.getCurrency()));
         // New closing/due days shape only invoices created from now on;
         // existing invoices keep their snapshot dates.
         card.setClosingDay(request.closingDay());
@@ -144,9 +155,42 @@ public class CreditCardService {
                 throw new BusinessRuleException("ACCOUNT_ARCHIVED",
                         "Uma conta arquivada não pode ser a conta padrão de pagamento.");
             }
+            // An invoice is settled from this account, and Finora does not
+            // convert: a differently denominated account could never pay it.
+            if (account.getCurrency() != card.getCurrency()) {
+                throw new BusinessRuleException("CARD_CURRENCY_MISMATCH",
+                        ("Este cartão é em %s e não pode ter uma conta padrão de "
+                                + "pagamento em %s. Não há conversão de moeda.")
+                                .formatted(card.getCurrency().name(),
+                                        account.getCurrency().name()));
+            }
             card.setDefaultPaymentAccount(account);
         } else {
             card.setDefaultPaymentAccount(null);
+        }
+    }
+
+    /**
+     * An omitted currency means the user's base currency; a foreign one is
+     * never inferred.
+     */
+    private CurrencyCode resolveCurrency(String requested, Long userId) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        return explicit != null ? explicit : settings.forUser(userId).getBaseCurrency();
+    }
+
+    /**
+     * A card's currency is immutable: its purchases, installments and invoices
+     * all inherit it, so changing it would reinterpret the whole billing
+     * history. Omitting the field keeps the current currency.
+     */
+    private void assertCurrencyUnchanged(CreditCard card, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (explicit != null && explicit != card.getCurrency()) {
+            throw new BusinessRuleException("CURRENCY_IMMUTABLE",
+                    ("A moeda de um cartão não pode ser alterada (%s). Alterá-la "
+                            + "reinterpretaria compras, parcelas e faturas já registradas.")
+                            .formatted(card.getCurrency().name()));
         }
     }
 
@@ -180,10 +224,12 @@ public class CreditCardService {
                 card.getDueDay(),
                 Optional.ofNullable(card.getDefaultPaymentAccount()).map(Account::getId).orElse(null),
                 Optional.ofNullable(card.getDefaultPaymentAccount()).map(Account::getName).orElse(null),
+                card.getCurrency().name(),
                 card.isArchived(),
                 new CardLimitResponse(
                         limit.creditLimit(), limit.usedLimit(),
-                        limit.availableLimit(), limit.utilizationPercent()),
+                        limit.availableLimit(), limit.utilizationPercent(),
+                        card.getCurrency().name()),
                 new CurrentCycleResponse(
                         currentInvoiceId, cycle.referenceMonth(), cycle.closingDate(), cycle.dueDate()),
                 nextDue);

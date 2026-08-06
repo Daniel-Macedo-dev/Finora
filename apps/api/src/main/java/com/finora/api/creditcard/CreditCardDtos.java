@@ -27,14 +27,31 @@ public final class CreditCardDtos {
             @NotNull @Positive @Digits(integer = 12, fraction = 2) BigDecimal creditLimit,
             @NotNull @Min(1) @Max(31) Integer closingDay,
             @NotNull @Min(1) @Max(31) Integer dueDay,
-            Long defaultPaymentAccountId) {
+            Long defaultPaymentAccountId,
+
+            /**
+             * ISO code this card bills in. Optional for backward compatibility:
+             * an omitted currency means the user's base currency, never a
+             * guessed foreign one. Ignored on update, because a card's currency
+             * is immutable.
+             */
+            String currency) {
     }
 
+    /**
+     * Limit figures for one card. All four share the card's currency, which is
+     * repeated here because this record travels on its own to consumers that
+     * do not hold the card.
+     *
+     * <p>{@code utilizationPercent} is a ratio of two same-currency amounts, so
+     * it stays currency-independent.
+     */
     public record CardLimitResponse(
             BigDecimal creditLimit,
             BigDecimal usedLimit,
             BigDecimal availableLimit,
-            BigDecimal utilizationPercent) {
+            BigDecimal utilizationPercent,
+            String currency) {
     }
 
     /** The cycle a purchase made today would enter; {@code invoiceId} is null while no charge exists. */
@@ -55,6 +72,8 @@ public final class CreditCardDtos {
             Integer dueDay,
             Long defaultPaymentAccountId,
             String defaultPaymentAccountName,
+            /** Authoritative currency of every amount this card carries. */
+            String currency,
             boolean archived,
             CardLimitResponse limit,
             CurrentCycleResponse currentCycle,

@@ -29,6 +29,12 @@ public final class PaymentDtos {
             PaymentStatus status,
             String notes,
             Instant reversedAt,
-            BigDecimal invoiceOutstandingAmount) {
+            BigDecimal invoiceOutstandingAmount,
+            /**
+             * Currency of both amounts above, inherited from the card. Payment
+             * and invoice always share it: cross-currency settlement is
+             * rejected, so there is never a second currency to report.
+             */
+            String currency) {
     }
 }

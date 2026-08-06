@@ -78,12 +78,19 @@ public class CreditCard extends AuditableEntity {
 
     public CreditCard(Long userId, String name, CreditCardBrand brand,
                       BigDecimal creditLimit, int closingDay, int dueDay) {
+        this(userId, name, brand, creditLimit, closingDay, dueDay, CurrencyCode.BRL);
+    }
+
+    public CreditCard(Long userId, String name, CreditCardBrand brand,
+                      BigDecimal creditLimit, int closingDay, int dueDay,
+                      CurrencyCode currency) {
         this.userId = userId;
         this.name = name;
         this.brand = brand;
         this.creditLimit = creditLimit;
         this.closingDay = closingDay;
         this.dueDay = dueDay;
+        this.currency = currency;
     }
 
     public Long getId() {

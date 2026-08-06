@@ -128,7 +128,8 @@ public class CardPurchaseService {
             throw new BusinessRuleException("CARD_ARCHIVED",
                     "Um cartão arquivado não pode receber novas compras.");
         }
-        BigDecimal total = MoneyRules.normalize(request.totalAmount());
+        MoneyRules.validateScale(request.totalAmount(), card.getCurrency());
+        BigDecimal total = MoneyRules.normalize(request.totalAmount(), card.getCurrency());
         requireAvailableLimit(card, total);
         CardPurchase purchase = new CardPurchase(
                 userId,
@@ -272,7 +273,8 @@ public class CardPurchaseService {
             throw new BusinessRuleException("CARD_ARCHIVED",
                     "Um cartão arquivado não pode receber novas compras.");
         }
-        BigDecimal total = MoneyRules.normalize(request.totalAmount());
+        MoneyRules.validateScale(request.totalAmount(), card.getCurrency());
+        BigDecimal total = MoneyRules.normalize(request.totalAmount(), card.getCurrency());
         requireAvailableLimit(card, total);
         CardPurchase purchase = new CardPurchase(
                 userId,
@@ -326,7 +328,8 @@ public class CardPurchaseService {
         if (amount.compareTo(available) > 0) {
             throw new BusinessRuleException("INSUFFICIENT_CARD_LIMIT",
                     "Limite disponível insuficiente: a compra de %s excede o limite livre de %s."
-                            .formatted(MoneyRules.formatBrl(amount), MoneyRules.formatBrl(available)));
+                            .formatted(MoneyRules.format(amount, card.getCurrency()),
+                                    MoneyRules.format(available, card.getCurrency())));
         }
     }
 

@@ -4,6 +4,7 @@ import com.finora.api.account.Account;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.adjustment.InvoiceAdjustmentRepository;
 import com.finora.api.creditcard.installment.CardInstallmentRepository;
@@ -64,12 +65,26 @@ public class InvoicePaymentService {
             throw new BusinessRuleException("ACCOUNT_ARCHIVED",
                     "Uma conta arquivada não pode pagar faturas.");
         }
-        BigDecimal amount = MoneyRules.normalize(request.amount());
+        // Settlement currency is checked before anything financial happens: no
+        // payment row, no outstanding change, no limit restoration and no
+        // balance movement may occur for a mismatched account. Finora has no
+        // exchange rates, so a USD invoice simply cannot be paid from a BRL
+        // account -- there is no rate at which to debit it.
+        CurrencyCode invoiceCurrency = invoice.getCard().getCurrency();
+        if (account.getCurrency() != invoiceCurrency) {
+            throw new BusinessRuleException("INVOICE_PAYMENT_CURRENCY_MISMATCH",
+                    ("Esta fatura é em %s e não pode ser paga por uma conta em %s. "
+                            + "Não há conversão de moeda.")
+                            .formatted(invoiceCurrency.name(), account.getCurrency().name()));
+        }
+        MoneyRules.validateScale(request.amount(), invoiceCurrency);
+        BigDecimal amount = MoneyRules.normalize(request.amount(), invoiceCurrency);
         BigDecimal outstanding = outstandingOf(invoice);
         if (amount.compareTo(outstanding) > 0) {
             throw new BusinessRuleException("PAYMENT_EXCEEDS_OUTSTANDING",
                     "O pagamento de %s excede o valor em aberto da fatura (%s)."
-                            .formatted(MoneyRules.formatBrl(amount), MoneyRules.formatBrl(outstanding)));
+                            .formatted(MoneyRules.format(amount, invoiceCurrency),
+                                    MoneyRules.format(outstanding, invoiceCurrency)));
         }
         InvoicePayment payment = new InvoicePayment(userId, invoice, account, amount, request.paidOn());
         payment.setNotes(request.notes() != null && !request.notes().isBlank()
@@ -107,16 +122,18 @@ public class InvoicePaymentService {
     }
 
     private PaymentResponse toResponse(InvoicePayment payment, BigDecimal outstandingAfter) {
+        CurrencyCode currency = payment.getInvoice().getCard().getCurrency();
         return new PaymentResponse(
                 payment.getId(),
                 payment.getInvoice().getId(),
                 payment.getAccount().getId(),
                 payment.getAccount().getName(),
-                MoneyRules.normalize(payment.getAmount()),
+                MoneyRules.normalize(payment.getAmount(), currency),
                 payment.getPaidOn(),
                 payment.getStatus(),
                 payment.getNotes(),
                 payment.getReversedAt(),
-                MoneyRules.normalize(outstandingAfter));
+                MoneyRules.normalize(outstandingAfter, currency),
+                currency.name());
     }
 }

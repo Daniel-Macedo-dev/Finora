@@ -1,6 +1,7 @@
 package com.finora.api.creditcard.invoice;
 
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.CreditCard;
 import com.finora.api.creditcard.CreditCardRepository;
@@ -207,6 +208,9 @@ public class InvoiceService {
                                              int installmentCount,
                                              LocalDate today) {
         BigDecimal total = purchaseTotal.add(adjustmentsNet);
+        // Every figure below belongs to one card, so the arithmetic above is
+        // currency-homogeneous by construction.
+        CurrencyCode currency = invoice.getCard().getCurrency();
         return new InvoiceSummaryResponse(
                 invoice.getId(),
                 invoice.getCard().getId(),
@@ -214,11 +218,12 @@ public class InvoiceService {
                 invoice.getClosingDate(),
                 invoice.getDueDate(),
                 deriveStatus(today, invoice.getClosingDate(), invoice.getDueDate(), total, paid),
-                MoneyRules.normalize(purchaseTotal),
-                MoneyRules.normalize(adjustmentsNet),
-                MoneyRules.normalize(total),
-                MoneyRules.normalize(paid),
-                MoneyRules.normalize(total.subtract(paid)),
-                installmentCount);
+                MoneyRules.normalize(purchaseTotal, currency),
+                MoneyRules.normalize(adjustmentsNet, currency),
+                MoneyRules.normalize(total, currency),
+                MoneyRules.normalize(paid, currency),
+                MoneyRules.normalize(total.subtract(paid), currency),
+                installmentCount,
+                currency.name());
     }
 }

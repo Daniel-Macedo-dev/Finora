@@ -5,6 +5,7 @@ import com.finora.api.category.CategoryRepository;
 import com.finora.api.category.CategoryType;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.adjustment.AdjustmentDtos.AdjustmentRequest;
 import com.finora.api.creditcard.adjustment.AdjustmentDtos.AdjustmentResponse;
@@ -55,7 +56,9 @@ public class InvoiceAdjustmentService {
         // Locked: adjustments shift the outstanding amount that payments check.
         CardInvoice invoice = invoices.findByIdAndCardIdAndUserIdForUpdate(invoiceId, cardId, userId)
                 .orElseThrow(() -> new NotFoundException("Fatura", invoiceId));
-        BigDecimal amount = MoneyRules.normalize(request.amount());
+        CurrencyCode currency = invoice.getCard().getCurrency();
+        MoneyRules.validateScale(request.amount(), currency);
+        BigDecimal amount = MoneyRules.normalize(request.amount(), currency);
 
         Category category = null;
         if (request.kind().isDebit()) {
@@ -79,8 +82,8 @@ public class InvoiceAdjustmentService {
             if (amount.compareTo(outstanding) > 0) {
                 throw new BusinessRuleException("CREDIT_EXCEEDS_OUTSTANDING",
                         "O crédito de %s excede o valor em aberto da fatura (%s)."
-                                .formatted(MoneyRules.formatBrl(amount),
-                                        MoneyRules.formatBrl(outstanding)));
+                                .formatted(MoneyRules.format(amount, currency),
+                                        MoneyRules.format(outstanding, currency)));
             }
         }
 

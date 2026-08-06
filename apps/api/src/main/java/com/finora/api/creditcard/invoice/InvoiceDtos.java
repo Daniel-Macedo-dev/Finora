@@ -33,7 +33,14 @@ public final class InvoiceDtos {
             BigDecimal invoiceTotal,
             BigDecimal amountPaid,
             BigDecimal outstandingAmount,
-            int installmentCount) {
+            int installmentCount,
+            /**
+             * Currency of every amount above, inherited from the card. The
+             * summary travels alone into dashboards and insights, so it must
+             * carry its own currency rather than rely on the caller holding
+             * the card.
+             */
+            String currency) {
     }
 
     public record InvoiceInstallmentLine(
