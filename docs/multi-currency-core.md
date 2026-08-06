@@ -99,21 +99,84 @@ depois.** Um recurso de outro usuário continua indistinguível de um inexistent
 ## Agregados seguros
 
 `CurrencyTotals` é a representação compartilhada de um total que se recusa a
-mentir:
+mentir. Ele responde a **duas perguntas diferentes**, porque confundi-las é
+exatamente como um número estrangeiro vira uma conclusão em moeda base:
 
-- `byCurrency` — totais nativos agrupados, sempre disponíveis;
-- `complete` — falso quando há moeda estrangeira envolvida;
-- `total` — **ausente** quando `complete` é falso;
-- `unconvertedCurrencies` — exatamente o que uma etapa de câmbio precisaria
-  converter.
+| Campo | Pergunta |
+| --- | --- |
+| `byCurrency` | quanto há em cada moeda — sempre disponível |
+| `homogeneous` / `homogeneousCurrency` | todos os valores compartilham uma moeda? |
+| `nativeTotal` | o total somável nessa moeda; **ausente** quando há mistura |
+| `baseComplete` | tudo já está na moeda base do usuário? |
+| `baseTotal` | o total em moeda base; **ausente** quando `baseComplete` é falso |
+| `unconvertedCurrencies` | exatamente o que uma etapa de câmbio precisaria converter |
 
-Somar as moedas, ou descartar as estrangeiras e apresentar o resto como total,
-produziriam igualmente um número sobre o qual o usuário agiria. O agrupamento é
-limitado pelo catálogo fechado, então nunca cresce com o tamanho do razão.
+Um conjunto inteiramente em USD tem um `nativeTotal` real e útil. Ele **não** é
+uma análise completa em BRL: `baseTotal` continua ausente. Somar as moedas, ou
+descartar as estrangeiras e apresentar o resto como total, produziriam igualmente
+um número sobre o qual o usuário agiria. O agrupamento é limitado pelo catálogo
+fechado, ordenado pela posição no catálogo (um `EnumMap`), então nunca cresce com
+o tamanho do razão e dois conjuntos iguais serializam igual.
 
-Hoje isso já cobre a janela de compromissos futuros e o total projetado do painel.
-No front, `CurrencyTotal` mostra uma linha por moeda e diz explicitamente que a
-consolidação está indisponível.
+### Fluxos versus fotografias
+
+`of(...)` trata **qualquer** lançamento como presença, mesmo quando os valores
+de uma moeda se anulam: +100 e −100 USD são dois eventos em datas diferentes, que
+um razão de câmbio futuro converteria por cotações diferentes — a soma em BRL não
+é zero e não pode ser assumida.
+
+`ofSnapshots(...)` descarta uma moeda cujo total pontual é exatamente zero. Uma
+conta em USD zerada converte para zero sob qualquer cotação, então ela não pode
+tornar indisponível uma análise em BRL que de resto está completa. É usado para
+saldos e limites, nunca para fluxos.
+
+### Onde já está aplicado
+
+- **Contas** — `GET /accounts/overview` devolve a lista mais os saldos agrupados,
+  ativos e arquivados separados. Os saldos vêm de duas consultas agrupadas, não de
+  duas por conta.
+- **Painel** — saldos, receitas, despesas, resultado do mês, despesa do mês
+  anterior, despesa reconhecida de cartão, limite disponível e dívida de cartão
+  são todos `CurrencyTotals`. As **razões derivadas** (taxa de poupança, variação
+  contra o mês anterior) são nulas a menos que os dois operandos estejam completos
+  em moeda base — uma taxa calculada só sobre a fatia em BRL seria lida como uma
+  afirmação sobre o mês inteiro. As participações por categoria passam a ser por
+  categoria **e** moeda, e a porcentagem é medida contra as despesas daquela mesma
+  moeda. A tendência vira **uma série homogênea por moeda**, cada uma com seu
+  próprio eixo.
+- **Caixa futuro** — a previsão ainda dobra tudo num único saldo corrente, então a
+  seção só é exibida quando **todos** os recursos monetários do usuário liquidam
+  na moeda base. Contas e cartões já estão carregados; duas contagens cobrem o que
+  nenhum deles revelaria: um lançamento estrangeiro sem conta e um compromisso
+  estrangeiro só de projeção.
+- **Compromissos futuros** — total projetado agrupado.
+
+No front, `CurrencyTotal` (rodapés) e `CurrencyStat` (números de destaque)
+distinguem os três casos: completo em moeda base, homogêneo mas estrangeiro
+(dito explicitamente), e misto (uma linha por moeda, sem consolidação). Um total
+indisponível nunca é renderizado como zero nem como um travessão sozinho.
+
+## Orçamentos incompletos
+
+Orçamentos são denominados na moeda base — não há moeda editável por orçamento,
+porque um limite descolado da moeda da análise ao redor não significaria nada.
+
+Quando a mesma categoria e mês têm gastos em outra moeda, o consumo em moeda base
+é um **piso**, não uma resposta. Tratar o gasto estrangeiro como zero deixaria um
+orçamento realmente estourado marcado como saudável, que é exatamente a
+tranquilidade sobre a qual alguém agiria. Nesse caso:
+
+- o estado vira `INCOMPLETE` — não é uma quarta severidade, é a ausência de nota;
+- `consumedAmount` continua reportando a parte conhecida em moeda base;
+- `consumedTotals` reporta cada moeda separadamente;
+- `remainingAmount` e `percentUsed` ficam **nulos**, porque um valor subestimado
+  é lido como um valor completo;
+- o resumo do mês expõe `incompleteCount`, e `totalRemaining`/`percentUsed` do
+  resumo também ficam nulos enquanto houver qualquer orçamento incompleto.
+
+Vale para lançamentos comuns, parcelas de cartão e ajustes de fatura. O consumo de
+todos os orçamentos do mês vem de três consultas agrupadas — nunca três por
+orçamento.
 
 ## Compatibilidade offline
 
@@ -151,10 +214,13 @@ campo pelo mesmo motivo.
   moedas, nenhuma análise de compra em moeda estrangeira.
 - Pagamento de fatura entre moedas é recusado, não convertido.
 - Não há ganho/perda cambial, spread, taxa ou reavaliação.
-- A migração dos dados criptografados antigos, os demais agregados mistos
-  (painel completo, orçamentos, previsão, insights, análise de compra), a
-  importação com CURDEF e a interface completa de moeda ainda não estão prontos —
-  ver o roadmap.
+- A **previsão** ainda calcula um único saldo de abertura, fechamento, mínimo e
+  primeira data negativa para todas as contas juntas. Por isso o painel esconde a
+  seção de caixa futuro quando existe qualquer moeda estrangeira, em vez de
+  mostrar um saldo misto.
+- Insights agregados, análise de compra, importação com CURDEF, moeda nas
+  notificações, a migração dos dados criptografados antigos e a interface completa
+  de moeda ainda não estão prontos — ver o roadmap.
 
 ## Próxima etapa
 

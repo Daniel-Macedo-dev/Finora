@@ -73,13 +73,29 @@ de fatura, compromissos, metas, itens da lista, opções e execução de compra;
 da impressão digital das mutações offline anteriores ao multi-moeda; e o sistema
 de formatação por moeda no front.
 
-Ainda em aberto nesta etapa: notificações, importação CSV/OFX com CURDEF,
-agregados mistos restantes (painel completo, orçamentos, previsão, insights,
-análise de compra), migração dos dados criptografados antigos, interface completa
-de moeda (seletores, formulários, tela de moeda base), jornadas E2E de
-multi-moeda, matriz de QA visual e as revisões.
+Concluído nesta fase: o contrato de totais passou a separar **duas perguntas**
+que antes compartilhavam uma única flag `complete` — se um conjunto é homogêneo
+(e portanto tem um total nativo somável) e se ele está inteiramente na moeda base
+(e portanto admite uma análise em moeda base). Um razão inteiramente em USD tem um
+total real em USD; ele não é uma resposta em BRL. Sobre isso vieram: saldos de
+conta agrupados por moeda em `GET /accounts/overview`, com duas consultas
+agrupadas no lugar de duas por conta; o painel inteiro sem aritmética mista —
+saldos, receitas, despesas, resultado, mês anterior, dívida e limite de cartão e
+despesa reconhecida de cartão agora são totais agrupados, a taxa de poupança e a
+variação mensal ficam **indisponíveis** quando qualquer operando não está completo
+em moeda base, as participações por categoria passam a ser por categoria e moeda,
+e a tendência vira uma série homogênea por moeda; e orçamentos com estado
+`INCOMPLETE`, que nunca aparecem como saudáveis quando a categoria tem gastos em
+outra moeda — o restante e a porcentagem ficam nulos em vez de subestimados.
 
-O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
+Ainda em aberto nesta etapa: previsão por moeda (hoje o painel esconde o caixa
+futuro quando existe qualquer moeda estrangeira, em vez de mostrar um saldo
+misto), supressão de insights agregados, análise de compra com
+`EXCHANGE_RATE_REQUIRED`, importação CSV/OFX com CURDEF e reconhecimento
+explícito, moeda nas notificações, migração dos dados criptografados para o
+esquema de dados V3 com proteção da fila offline e da troca de moeda base entre
+dispositivos, interface completa de moeda (seletores, formulários, tela de moeda
+base), jornadas E2E de multi-moeda, matriz de QA visual e as revisões.
 
 O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
 
