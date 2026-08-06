@@ -88,14 +88,25 @@ e a tendência vira uma série homogênea por moeda; e orçamentos com estado
 `INCOMPLETE`, que nunca aparecem como saudáveis quando a categoria tem gastos em
 outra moeda — o restante e a porcentagem ficam nulos em vez de subestimados.
 
+Também concluído: o **esquema de dados criptografados V3**. O envelope continua
+em `VAULT_SCHEMA_VERSION = 2` — nada de PBKDF2, AES-GCM, salt, IV ou formato do
+registro mudou — e só o payload dentro do texto cifrado avançou para
+`DATA_SCHEMA_VERSION = 3`. A detecção de migração passou a considerar as duas
+versões, porque olhando só o envelope um registro V2 com payload V2 era
+declarado atualizado. A cadeia V1 → V2 → V3 roda em memória no desbloqueio,
+rotula cada formato de query conhecido como BRL (nunca como a moeda base atual),
+descarta os derivados que não podem ser consertados e **não toca na fila**: o
+payload canônico de uma mutação enfileirada é o que o servidor já resumiu num
+recibo. Versão futura falha fechado.
+
 Ainda em aberto nesta etapa: previsão por moeda (hoje o painel esconde o caixa
 futuro quando existe qualquer moeda estrangeira, em vez de mostrar um saldo
 misto), supressão de insights agregados, análise de compra com
 `EXCHANGE_RATE_REQUIRED`, importação CSV/OFX com CURDEF e reconhecimento
-explícito, moeda nas notificações, migração dos dados criptografados para o
-esquema de dados V3 com proteção da fila offline e da troca de moeda base entre
-dispositivos, interface completa de moeda (seletores, formulários, tela de moeda
-base), jornadas E2E de multi-moeda, matriz de QA visual e as revisões.
+explícito, moeda nas notificações, proteção da troca de moeda base entre
+dispositivos no replay do servidor, guarda local da moeda base nas configurações,
+interface completa de moeda (seletores, formulários, tela de moeda base),
+jornadas E2E de multi-moeda, matriz de QA visual e as revisões.
 
 O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
 

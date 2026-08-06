@@ -325,20 +325,79 @@ Continuam fora: conteúdo de arquivos de extrato, coleções de itens de importa
 páginas ilimitadas de transações, histórico ilimitado de faturas e notificações,
 cache de mutação, erros de API, valores de CSRF e cookies de sessão.
 
-## Cofre V2
+## Cofre V2, dados V3
 
-`VAULT_SCHEMA_VERSION = 2`, `DATA_SCHEMA_VERSION = 2`. O payload passou a conter
-`owner`, `preparedAt`, `queries`, `outbox`, `resourceMappings`, `syncHistory` e
-`syncPreferences`, tudo dentro do mesmo texto cifrado autenticado.
+`VAULT_SCHEMA_VERSION = 2`, `DATA_SCHEMA_VERSION = 3`.
 
-### Migração V1 → V2
+As duas versões são deliberadamente independentes. O **envelope** descreve como
+o registro é cifrado — PBKDF2, contagem de iterações, AES-GCM, formato de salt e
+IV, formato do registro no IndexedDB — e nada disso mudou, então ele continua em
+V2. Os **dados** descrevem o formato do payload dentro do texto cifrado, e esse
+sim mudou: todo recurso em cache agora nomeia a moeda em que seus valores estão.
 
-Um cofre V1 é dado válido — apenas anterior à fila. Ele é migrado em memória no
-desbloqueio, preservando dono, timestamp e queries, com fila vazia, e só é
-reescrito depois de decifrar corretamente. Se a escrita falhar, o registro
-original continua legível e a migração é tentada de novo no próximo desbloqueio.
-Um schema **futuro** desconhecido continua falhando fechado: adivinhar um formato
-mais novo poderia descartar mutações enfileiradas.
+Por isso a detecção de migração passou a olhar as duas. Ela olhava só o
+envelope, e um registro V2 contendo payload V2 era declarado atualizado — os
+dados anteriores ao multi-moeda nunca seriam rotulados.
+
+### Migração V1 → V2 → V3
+
+A cadeia é determinística e roda em memória no desbloqueio; um cofre muito
+antigo chega ao formato atual sem casos especiais por par de versões.
+
+**V1 → V2.** Um cofre V1 é dado válido — apenas anterior à fila. Dono, timestamp
+e queries são preservados, com fila vazia ao lado.
+
+**V2 → V3.** Um cofre anterior ao multi-moeda guarda valores sem moeda. Eles são
+BRL: todo valor que o razão continha era, e a `V15` rotulou o lado servidor
+exatamente assim sem alterar um único número. O rótulo é a constante `BRL`, e
+**não** a moeda base atual do usuário — uma cópia preparada quando a base era BRL
+não vira dólar porque a base mudou depois.
+
+A migração é **por formato de query conhecido**, nunca uma varredura recursiva
+que carimba `currency` em qualquer objeto com `amount`. Uma varredura rotularia
+objetos aninhados que não entende e continuaria fazendo isso, erradamente, à
+medida que novos formatos aparecessem.
+
+| Query | Tratamento |
+| --- | --- |
+| `settings` | recebe `baseCurrency = BRL` quando ausente |
+| `accounts`, `transactions`, `credit-cards`, `goals`, `commitments` (lista) | cada linha recebe `currency = BRL` quando ausente |
+| `wishlist` (lista, detalhe, histórico) | o item recebe `BRL`; opções e observações **herdam** a moeda do item |
+| `notifications` | rotuladas só quando a linha realmente tem `amount` |
+| `categories`, `notification-preferences` | intocadas — não há dinheiro nelas |
+| `dashboard`, `budgets`, `forecast`, `insights`, `commitments/upcoming` | **descartadas** |
+
+Os derivados são descartados porque não podem ser consertados. Um painel em
+cache guarda escalares produzidos somando o que houvesse; um resumo de
+orçamento guarda um consumo sem qualquer noção de completude. Nenhum dos dois
+vira o formato novo sem inventar as partes que nunca foram registradas. Perder
+uma visão em cache custa **preparar a cópia offline de novo, online**;
+fabricá-la custaria uma decisão tomada sobre um número errado.
+
+### A fila não é tocada
+
+O `outbox` atravessa a migração byte a byte. O payload de uma mutação
+enfileirada é a requisição canônica que o servidor já resumiu num recibo:
+acrescentar um campo mudaria esse hash, e um reenvio cuja resposta se perdeu
+voltaria como `IDEMPOTENCY_KEY_REUSED`. A moeda de uma mutação antiga é
+interpretada como BRL **na leitura** — projeção local e exibição de conflito —
+sem nunca ser escrita na requisição.
+
+Preservados sem alteração: `clientMutationId`, `clientResourceId`, `target`,
+`baseVersion`, `operation`, `dependencies`, `status`, `attemptCount`,
+`nextAttemptAt`, `lastError`, `conflict`, `createdAt`, `updatedAt`, mapeamentos
+de recurso e histórico de sincronização.
+
+### Reescrita atômica e falha fechada
+
+A reescrita só acontece depois de decifrar corretamente, com a mesma chave, IV
+novo, `createdAt` preservado e `updatedAt` atualizado. Se a escrita falhar, o
+registro anterior continua legível e a migração é tentada de novo no próximo
+desbloqueio — nada é apagado e nenhuma mutação pendente é perdida.
+
+Um `dataSchemaVersion` **futuro** desconhecido falha fechado: adivinhar um
+formato mais novo poderia descartar silenciosamente trabalho que não existe em
+nenhum outro lugar. Nenhum metadado de migração aparece em texto claro.
 
 ### Fronteira de criptografia
 

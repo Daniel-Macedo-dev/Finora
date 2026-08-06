@@ -104,4 +104,8 @@ O modo offline deixou de ser somente leitura para um conjunto explícito de
 operações seguras. A fila criptografada, os recibos de idempotência, as versões
 otimistas e a resolução de conflitos estão descritos em
 [offline-sync.md](offline-sync.md); o cofre passou a `VAULT_SCHEMA_VERSION = 2` com
-migração não destrutiva a partir de V1.
+migração não destrutiva a partir de V1. O formato dos dados dentro do texto
+cifrado está em `DATA_SCHEMA_VERSION = 3`, com a cadeia V1 → V2 → V3 rodando em
+memória no desbloqueio; os derivados em cache anteriores ao multi-moeda são
+descartados em vez de reinterpretados, e podem ser recuperados preparando a
+cópia offline de novo, online.
