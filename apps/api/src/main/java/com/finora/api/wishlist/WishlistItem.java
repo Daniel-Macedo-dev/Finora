@@ -111,6 +111,14 @@ public class WishlistItem extends AuditableEntity {
         return currency;
     }
 
+    /**
+     * Set once, at creation. Options, price snapshots and the executed purchase
+     * all inherit it, so the column is insert-only.
+     */
+    public void setCurrency(CurrencyCode currency) {
+        this.currency = currency;
+    }
+
     public String getName() {
         return name;
     }

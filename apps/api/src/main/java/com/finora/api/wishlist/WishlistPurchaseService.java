@@ -7,6 +7,8 @@ import com.finora.api.category.CategoryType;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
 import com.finora.api.common.money.MoneyRules;
+import com.finora.api.creditcard.CreditCard;
+import com.finora.api.creditcard.CreditCardRepository;
 import com.finora.api.creditcard.purchase.CardPurchase;
 import com.finora.api.creditcard.purchase.CardPurchaseService;
 import com.finora.api.creditcard.purchase.PurchaseDtos.PurchaseRequest;
@@ -57,6 +59,7 @@ public class WishlistPurchaseService {
     private final WishlistItemRepository items;
     private final PurchaseOptionRepository options;
     private final AccountRepository accounts;
+    private final CreditCardRepository creditCards;
     private final TransactionRepository transactions;
     private final CardPurchaseService cardPurchases;
     private final CurrentUserProvider currentUser;
@@ -64,12 +67,14 @@ public class WishlistPurchaseService {
     public WishlistPurchaseService(WishlistItemRepository items,
                                    PurchaseOptionRepository options,
                                    AccountRepository accounts,
+                                  CreditCardRepository creditCards,
                                    TransactionRepository transactions,
                                    CardPurchaseService cardPurchases,
                                    CurrentUserProvider currentUser) {
         this.items = items;
         this.options = options;
         this.accounts = accounts;
+        this.creditCards = creditCards;
         this.transactions = transactions;
         this.cardPurchases = cardPurchases;
         this.currentUser = currentUser;
@@ -114,10 +119,13 @@ public class WishlistPurchaseService {
         Transaction transaction = new Transaction(
                 userId,
                 TransactionType.EXPENSE,
-                MoneyRules.normalize(option.nominalCost()),
+                MoneyRules.normalize(option.nominalCost(), item.getCurrency()),
                 item.getName(),
                 purchasedOn,
                 item.getCategory());
+        // The expense is denominated in the item's currency; an accountless
+        // transaction simply carries it.
+        transaction.setCurrency(item.getCurrency());
         if (request.accountId() != null) {
             // Owner-scoped: another user's account id behaves as absent.
             Account account = accounts.findByIdAndUserId(request.accountId(), userId)
@@ -125,6 +133,15 @@ public class WishlistPurchaseService {
             if (account.isArchived()) {
                 throw new BusinessRuleException("ACCOUNT_ARCHIVED",
                         "Uma conta arquivada não pode pagar esta compra.");
+            }
+            // Paying from an account moves real money there, so the account
+            // must be denominated like the item: there is no rate to convert at.
+            if (account.getCurrency() != item.getCurrency()) {
+                throw new BusinessRuleException("WISHLIST_CURRENCY_MISMATCH",
+                        ("Este item é em %s e não pode ser pago por uma conta em %s. "
+                                + "Não há conversão de moeda.")
+                                .formatted(item.getCurrency().name(),
+                                        account.getCurrency().name()));
             }
             transaction.setAccount(account);
         }
@@ -146,6 +163,16 @@ public class WishlistPurchaseService {
             throw new BusinessRuleException("WISHLIST_CARD_REQUIRED",
                     "Escolha um cartão de crédito para executar esta opção parcelada.");
         }
+        // Owner-scoped first, then compared: a foreign card must stay
+        // indistinguishable from a missing one.
+        CreditCard card = creditCards.findByIdAndUserId(cardId, userId)
+                .orElseThrow(() -> new NotFoundException("Cartão", cardId));
+        if (card.getCurrency() != item.getCurrency()) {
+            throw new BusinessRuleException("WISHLIST_CURRENCY_MISMATCH",
+                    ("Este item é em %s e não pode ser parcelado em um cartão em %s. "
+                            + "Não há conversão de moeda.")
+                            .formatted(item.getCurrency().name(), card.getCurrency().name()));
+        }
         // The card purchase carries the exact option total; the deterministic
         // allocator splits it, so the sum always matches what was advertised.
         CardPurchase purchase = cardPurchases.createForWishlistItem(
@@ -156,7 +183,7 @@ public class WishlistPurchaseService {
                         option.getMerchant(),
                         item.getCategory().getId(),
                         purchasedOn,
-                        MoneyRules.normalize(option.nominalCost()),
+                        MoneyRules.normalize(option.nominalCost(), item.getCurrency()),
                         option.getInstallmentCount(),
                         "Compra executada a partir da lista de desejos."),
                 item.getId());

@@ -4,10 +4,12 @@ import com.finora.api.category.Category;
 import com.finora.api.category.CategoryRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.CreditCard;
 import com.finora.api.creditcard.CreditCardRepository;
 import com.finora.api.identity.CurrentUserProvider;
+import com.finora.api.settings.SettingsService;
 import com.finora.api.wishlist.WishlistDtos.PurchaseOptionRequest;
 import com.finora.api.wishlist.WishlistDtos.PurchaseOptionResponse;
 import com.finora.api.wishlist.WishlistDtos.WishlistCategory;
@@ -40,19 +42,22 @@ public class WishlistService {
     private final CreditCardRepository creditCards;
     private final PriceSnapshotRepository priceSnapshots;
     private final CurrentUserProvider currentUser;
+    private final SettingsService settings;
 
     public WishlistService(WishlistItemRepository items,
                            PurchaseOptionRepository options,
                            CategoryRepository categories,
                            CreditCardRepository creditCards,
                            PriceSnapshotRepository priceSnapshots,
-                           CurrentUserProvider currentUser) {
+                           CurrentUserProvider currentUser,
+                           SettingsService settings) {
         this.items = items;
         this.options = options;
         this.categories = categories;
         this.creditCards = creditCards;
         this.priceSnapshots = priceSnapshots;
         this.currentUser = currentUser;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
@@ -86,8 +91,10 @@ public class WishlistService {
      */
     public WishlistItemDetailResponse create(WishlistItemRequest request,
                                              java.util.UUID clientResourceId) {
-        WishlistItem item = new WishlistItem(
-                currentUser.currentUserId(), request.name().trim(), request.priority());
+        Long userId = currentUser.currentUserId();
+        WishlistItem item = new WishlistItem(userId, request.name().trim(), request.priority());
+        CurrencyCode currency = CurrencyCode.parseOrNull(request.currency());
+        item.setCurrency(currency != null ? currency : settings.forUser(userId).getBaseCurrency());
         item.setClientResourceId(clientResourceId);
         apply(item, request);
         return toDetail(items.save(item));
@@ -95,6 +102,7 @@ public class WishlistService {
 
     public WishlistItemDetailResponse update(Long id, WishlistItemRequest request) {
         WishlistItem item = find(id);
+        assertCurrencyUnchanged(item, request.currency());
         item.setName(request.name().trim());
         item.setPriority(request.priority());
         apply(item, request);
@@ -119,13 +127,19 @@ public class WishlistService {
                                             java.util.UUID clientResourceId) {
         WishlistItem item = find(itemId);
         validateOption(request);
+        // Options are priced in the item's currency: they are competing offers
+        // for the same thing, so a foreign one could not be compared to it.
+        CurrencyCode currency = item.getCurrency();
+        MoneyRules.validateScale(request.basePrice(), currency);
+        MoneyRules.validateScale(request.shipping(), currency);
+        MoneyRules.validateScale(request.fees(), currency);
         PurchaseOption option = new PurchaseOption(
                 item,
                 request.merchant().trim(),
                 request.kind(),
-                MoneyRules.normalize(request.basePrice()),
-                MoneyRules.normalize(orZero(request.shipping())),
-                MoneyRules.normalize(orZero(request.fees())));
+                MoneyRules.normalize(request.basePrice(), currency),
+                MoneyRules.normalize(orZero(request.shipping()), currency),
+                MoneyRules.normalize(orZero(request.fees()), currency));
         applyInstallments(option, request);
         option.setNotes(trimmedOrNull(request.notes()));
         option.setClientResourceId(clientResourceId);
@@ -198,6 +212,15 @@ public class WishlistService {
                     throw new BusinessRuleException("CARD_ARCHIVED",
                             "Um cartão arquivado não pode ser vinculado a uma opção de compra.");
                 }
+                // The card will be charged this option's installments, and
+                // Finora cannot convert, so the denominations must agree.
+                if (card.getCurrency() != option.getItem().getCurrency()) {
+                    throw new BusinessRuleException("WISHLIST_CURRENCY_MISMATCH",
+                            ("Este item é em %s e não pode ser parcelado em um cartão "
+                                    + "em %s. Não há conversão de moeda.")
+                                    .formatted(option.getItem().getCurrency().name(),
+                                            card.getCurrency().name()));
+                }
                 option.setCreditCard(card);
             } else {
                 option.setCreditCard(null);
@@ -232,6 +255,21 @@ public class WishlistService {
         }
     }
 
+    /**
+     * A wishlist item's currency is immutable: its options and its whole price
+     * history are denominated in it, so a change would reinterpret the series
+     * rather than convert it.
+     */
+    private void assertCurrencyUnchanged(WishlistItem item, String requested) {
+        CurrencyCode explicit = CurrencyCode.parseOrNull(requested);
+        if (explicit != null && explicit != item.getCurrency()) {
+            throw new BusinessRuleException("CURRENCY_IMMUTABLE",
+                    ("A moeda de um item não pode ser alterada (%s). Alterá-la "
+                            + "reinterpretaria as opções e o histórico de preços.")
+                            .formatted(item.getCurrency().name()));
+        }
+    }
+
     private WishlistItem find(Long id) {
         return items.findByIdAndUserId(id, currentUser.currentUserId())
                 .orElseThrow(() -> new NotFoundException("Item da lista de desejos", id));
@@ -260,6 +298,7 @@ public class WishlistService {
                 history == null ? null : history.getHistoricalMinimum(),
                 history == null || item.getTargetPrice() == null ? null
                         : history.getLatestObservedPrice().compareTo(item.getTargetPrice()) <= 0,
+                item.getCurrency().name(),
                 item.getVersion());
     }
 
@@ -275,6 +314,7 @@ public class WishlistService {
                 item.getDesiredDate(),
                 item.getStatus(),
                 item.getOptions().stream().map(PurchaseOptionResponse::from).toList(),
+                item.getCurrency().name(),
                 item.getVersion());
     }
 

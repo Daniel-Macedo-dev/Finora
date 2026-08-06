@@ -41,6 +41,13 @@ public final class WishlistDtos {
 
             LocalDate desiredDate,
 
+            /**
+             * ISO code this item is priced in. Options, shipping, fees and every
+             * price snapshot inherit it. Omitting it means the user's base
+             * currency; it cannot be changed afterwards.
+             */
+            String currency,
+
             WishlistStatus status) {
     }
 
@@ -134,6 +141,8 @@ public final class WishlistDtos {
             LocalDate latestObservedOn,
             BigDecimal historicalMinimum,
             Boolean targetReached,
+            /** Authoritative currency of every price above. */
+            String currency,
             /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
             long version) {
     }
@@ -149,6 +158,8 @@ public final class WishlistDtos {
             LocalDate desiredDate,
             WishlistStatus status,
             List<PurchaseOptionResponse> options,
+            /** Authoritative currency of every price above and of each option. */
+            String currency,
             /** Optimistic version; offline UPDATE/DELETE must send the one they saw. */
             long version) {
     }

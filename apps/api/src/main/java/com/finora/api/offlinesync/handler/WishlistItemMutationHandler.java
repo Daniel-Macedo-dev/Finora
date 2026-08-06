@@ -56,6 +56,11 @@ public class WishlistItemMutationHandler implements MutationHandler {
                 normalizeOrNull(request.targetPrice()),
                 request.priority(),
                 request.desiredDate(),
+                // Left null when absent so a pre-multi-currency queued item
+                // keeps its legacy canonical shape and its receipt still matches.
+                request.currency() == null || request.currency().isBlank()
+                        ? null
+                        : request.currency().trim().toUpperCase(java.util.Locale.ROOT),
                 request.status());
     }
 
