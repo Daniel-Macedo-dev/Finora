@@ -66,6 +66,24 @@ public interface InvoicePaymentRepository extends JpaRepository<InvoicePayment, 
             """)
     BigDecimal sumCompletedByUser(@Param("userId") Long userId);
 
+    /**
+     * Completed payments grouped by the paid card's currency:
+     * {@code [currency, total]}.
+     *
+     * <p>A payment can only reduce obligations denominated the way it was made.
+     * Subtracting a payment in reais from charges billed in dollars would invent
+     * a discount that never happened, which is why the netting has to be done
+     * per currency rather than on one scalar.
+     */
+    @Query("""
+            select p.invoice.card.currency, coalesce(sum(p.amount), 0)
+            from InvoicePayment p
+            where p.userId = :userId
+              and p.status = com.finora.api.creditcard.payment.PaymentStatus.COMPLETED
+            group by p.invoice.card.currency
+            """)
+    List<Object[]> sumCompletedGroupedByCurrency(@Param("userId") Long userId);
+
     /** Cash settled out of one account by invoice payments (reduces its balance). */
     @Query("""
             select coalesce(sum(p.amount), 0)

@@ -140,6 +140,34 @@ public class CommitmentService {
      * month — a WEEKLY definition contributes once per occurrence.
      */
     @Transactional(readOnly = true)
+    /**
+     * The same monthly commitment load, tagged with each definition's currency.
+     *
+     * <p>Commitments settle in their own denomination, so a single scalar would
+     * add a dollar subscription to a real one. This walks the same single query
+     * and leaves the grouping to the caller, which keeps the two totals honest
+     * without a second round trip.
+     */
+    public java.util.List<com.finora.api.common.money.CurrencyTotals.Entry> monthlyTotalEntries(
+            Long userId, YearMonth month) {
+        LocalDate from = month.atDay(1);
+        LocalDate to = month.atEndOfMonth();
+        java.util.List<com.finora.api.common.money.CurrencyTotals.Entry> entries =
+                new java.util.ArrayList<>();
+        for (Commitment commitment : commitments.findAllByUserIdAndActiveTrue(userId)) {
+            if (commitment.getCategory().getType() != CategoryType.EXPENSE) {
+                continue;
+            }
+            int count = RecurrenceCalculator.occurrencesBetween(commitment, from, to).size();
+            if (count > 0) {
+                entries.add(new com.finora.api.common.money.CurrencyTotals.Entry(
+                        commitment.getAmount().multiply(BigDecimal.valueOf(count)),
+                        commitment.getCurrency()));
+            }
+        }
+        return entries;
+    }
+
     public BigDecimal monthlyTotal(Long userId, YearMonth month) {
         LocalDate from = month.atDay(1);
         LocalDate to = month.atEndOfMonth();

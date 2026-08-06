@@ -88,6 +88,24 @@ public interface InvoiceAdjustmentRepository extends JpaRepository<InvoiceAdjust
             """)
     BigDecimal sumActiveNetByUser(@Param("userId") Long userId);
 
+    /**
+     * Net active adjustments of the user grouped by the billing card's
+     * currency: {@code [currency, net]}.
+     */
+    @Query("""
+            select a.invoice.card.currency,
+                   sum(case when a.kind in (
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.FEE,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.INTEREST,
+                           com.finora.api.creditcard.adjustment.AdjustmentKind.OTHER_DEBIT)
+                       then a.amount else -a.amount end)
+            from InvoiceAdjustment a
+            where a.userId = :userId
+              and a.status = com.finora.api.creditcard.adjustment.AdjustmentStatus.ACTIVE
+            group by a.invoice.card.currency
+            """)
+    List<Object[]> sumActiveNetGroupedByCurrency(@Param("userId") Long userId);
+
     /** Net active adjustment recognized in a month (invoice reference month). */
     @Query("""
             select coalesce(sum(case when a.kind in (

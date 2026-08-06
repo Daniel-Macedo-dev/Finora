@@ -107,6 +107,23 @@ public interface CardInstallmentRepository extends JpaRepository<CardInstallment
             @Param("userId") Long userId,
             @Param("referenceMonth") LocalDate referenceMonth);
 
+    /**
+     * Every active installment obligation of the user grouped by the billing
+     * card's currency: {@code [currency, total]}.
+     *
+     * <p>The currency-blind {@link #sumActiveByUser} adds obligations of cards
+     * that may bill in different denominations. This is its grouped
+     * counterpart, still a single query.
+     */
+    @Query("""
+            select i.invoice.card.currency, sum(i.amount)
+            from CardInstallment i
+            where i.userId = :userId
+              and i.status = com.finora.api.creditcard.installment.InstallmentStatus.ACTIVE
+            group by i.invoice.card.currency
+            """)
+    List<Object[]> sumActiveGroupedByCurrency(@Param("userId") Long userId);
+
     /** Active installments of one category in one invoice month (budget consumption). */
     @Query("""
             select coalesce(sum(i.amount), 0)
