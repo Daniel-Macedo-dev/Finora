@@ -60,7 +60,26 @@ promessa de implementação — é direção.
 
 ## Etapa em andamento
 
-Nenhuma. A próxima grande etapa ainda não foi iniciada.
+**Multi-moeda — núcleo nativo.** Em andamento; **não concluída**. Ver
+[multi-currency-core.md](multi-currency-core.md).
+
+Pronto e validado: catálogo fechado de oito moedas com regra de casas decimais
+(JPY sem centavos); `V15__multi_currency_core.sql`, que rotulou todo o razão
+existente como BRL **sem alterar um único valor numérico**; moeda base por
+usuário com bloqueio de troca depois que existem dados; moeda imutável e
+integridade de mesma moeda em contas, lançamentos, cartões, faturas, pagamentos
+de fatura, compromissos, metas, itens da lista, opções e execução de compra;
+`CurrencyTotals`, o total que se recusa a somar moedas diferentes; compatibilidade
+da impressão digital das mutações offline anteriores ao multi-moeda; e o sistema
+de formatação por moeda no front.
+
+Ainda em aberto nesta etapa: notificações, importação CSV/OFX com CURDEF,
+agregados mistos restantes (painel completo, orçamentos, previsão, insights,
+análise de compra), migração dos dados criptografados antigos, interface completa
+de moeda (seletores, formulários, tela de moeda base), jornadas E2E de
+multi-moeda, matriz de QA visual e as revisões.
+
+O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
 
 O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
 
@@ -96,7 +115,8 @@ nenhuma falha).
 
 ## Próxima grande etapa
 
-**Multi-moeda.**
+**Razão histórico de câmbio, conversão determinística e analytics em moeda base.**
+Só começa depois que o núcleo multi-moeda estiver concluído.
 
 ## Depois disso
 

@@ -82,7 +82,9 @@ usa `SettingsService`; `InsightService` usa `FinancialContextService`).
 ### Dinheiro e datas
 
 - Todo valor monetário é `BigDecimal` com `NUMERIC(14,2)` no banco.
-- `MoneyRules` centraliza escala (2), arredondamento (HALF_UP) e formatação BRL
+- `MoneyRules` centraliza escala (2), arredondamento (HALF_UP) e formatação por
+  moeda; `CurrencyCode` é o catálogo fechado e decide quantas casas decimais têm
+  significado. Ver [multi-currency-core.md](multi-currency-core.md)
   para mensagens; **nenhum cálculo financeiro usa ponto flutuante**.
 - Datas de negócio são `LocalDate`; meses trafegam como `YearMonth` (`YYYY-MM`).
 - Um `Clock` de aplicação (`TimeConfig`) é injetado em toda a lógica recorrente
