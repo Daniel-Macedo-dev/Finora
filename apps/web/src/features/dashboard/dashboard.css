@@ -100,6 +100,42 @@
   font-size: var(--text-sm);
 }
 
+.insight-amount {
+  margin-top: var(--space-1);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A standing limitation, not a failure: styled as an explanation next to the
+   insights that could be produced, never as an error banner over them. */
+.insight-coverage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.insight-coverage-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.insight-coverage-message,
+.insight-coverage-currencies {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  /* Long currency names wrap rather than widen the panel at 390px. */
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .dash-grid {
     grid-template-columns: 1fr;

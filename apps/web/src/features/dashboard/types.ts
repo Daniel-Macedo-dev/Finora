@@ -157,9 +157,33 @@ export interface Insight {
   title: string
   message: string
   amount: number | null
+  /**
+   * Authoritative denomination of `amount`, null exactly when it is.
+   *
+   * Not optional and never inferred: a native card insight is stated in the
+   * card's currency while an aggregate one is stated in the base currency, so
+   * assuming either would mislabel the other.
+   */
+  currency: CurrencyCode | null
+}
+
+/**
+ * Which aggregate conclusions the month's currencies allowed.
+ *
+ * A rule that simply had nothing to say never appears here — this reports only
+ * the ones that had real input and would have needed an exchange rate.
+ */
+export interface AggregateCoverage {
+  complete: boolean
+  /** Non-base currencies that actually blocked a rule, in catalogue order. */
+  missingCurrencies: CurrencyCode[]
+  /** Stable rule identifiers; the UI turns them into prose, never shows them. */
+  unavailableRules: string[]
 }
 
 export interface InsightsData {
   month: string
+  baseCurrency: CurrencyCode
   insights: Insight[]
+  aggregateCoverage: AggregateCoverage
 }

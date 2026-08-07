@@ -6,7 +6,6 @@ import {
   Wallet,
   PiggyBank,
   AlertTriangle,
-  Info,
   CheckCircle2,
   AlertOctagon,
   CreditCard,
@@ -24,45 +23,9 @@ import { formatMoney } from '../../lib/money'
 import { useDashboard, useInsights } from './api'
 import TrendChart from './TrendChart'
 import CategoryBars from './CategoryBars'
+import InsightsPanel from './InsightsPanel'
 import InvoiceStatusBadge from '../credit-cards/InvoiceStatusBadge'
-import type { Insight, InsightSeverity } from './types'
 import './dashboard.css'
-
-const INSIGHT_ICONS: Record<InsightSeverity, typeof Info> = {
-  POSITIVE: CheckCircle2,
-  INFO: Info,
-  WARNING: AlertTriangle,
-  CRITICAL: AlertOctagon,
-}
-
-const INSIGHT_BADGES: Record<InsightSeverity, string> = {
-  POSITIVE: 'badge-positive',
-  INFO: 'badge-info',
-  WARNING: 'badge-warning',
-  CRITICAL: 'badge-negative',
-}
-
-function InsightCard({ insight }: { insight: Insight }) {
-  const Icon = INSIGHT_ICONS[insight.severity]
-  return (
-    <li className="insight-item">
-      <span className={`badge ${INSIGHT_BADGES[insight.severity]}`}>
-        <Icon size={13} aria-hidden="true" />
-        {insight.severity === 'POSITIVE'
-          ? 'Oportunidade'
-          : insight.severity === 'INFO'
-            ? 'Informação'
-            : insight.severity === 'WARNING'
-              ? 'Atenção'
-              : 'Crítico'}
-      </span>
-      <div>
-        <p className="insight-title">{insight.title}</p>
-        <p className="insight-message">{insight.message}</p>
-      </div>
-    </li>
-  )
-}
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(currentMonth())
@@ -405,16 +368,8 @@ export default function DashboardPage() {
               <p className="panel-empty">Analisando dados…</p>
             ) : insights.isError ? (
               <p className="panel-empty">Não foi possível gerar os insights agora.</p>
-            ) : insights.data.insights.length === 0 ? (
-              <p className="panel-empty">
-                Nada digno de nota por enquanto — os insights aparecem conforme os dados evoluem.
-              </p>
             ) : (
-              <ul className="insight-list">
-                {insights.data.insights.map((insight, index) => (
-                  <InsightCard key={`${insight.type}-${index}`} insight={insight} />
-                ))}
-              </ul>
+              <InsightsPanel data={insights.data} />
             )}
           </section>
 
