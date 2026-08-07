@@ -1,4 +1,4 @@
-package com.finora.api.purchaseanalysis;
+package com.finora.api.financialcontext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,12 +29,12 @@ import org.springframework.beans.factory.annotation.Autowired;
  * cannot be compared with. Collapsing the second into the first would present a
  * foreign ledger as a safe absence.
  */
-class PurchaseFinancialContextServiceTest extends AbstractIntegrationTest {
+class FinancialContextServiceTest extends AbstractIntegrationTest {
 
     private static final LocalDate REFERENCE = LocalDate.of(2026, 7, 15);
 
     @Autowired
-    private PurchaseFinancialContextService service;
+    private FinancialContextService service;
 
     @Autowired
     private TransactionRepository transactions;

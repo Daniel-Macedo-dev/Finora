@@ -1,4 +1,4 @@
-package com.finora.api.purchaseanalysis;
+package com.finora.api.financialcontext;
 
 import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.CurrencyTotals;
@@ -8,11 +8,11 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * The purchase engine's view of a user's finances, denominated honestly.
+ * A user's finances as the analysis engines see them, denominated honestly.
  *
- * <p>This is the currency-aware successor to {@link FinancialContext}, which
- * still exists for {@code InsightService} while that migration is a separate
- * task. Nothing new should consume the legacy record.
+ * <p>The single snapshot behind both purchase analysis and insights. A scalar
+ * predecessor added amounts together regardless of denomination; it is gone,
+ * and nothing here consolidates anything it cannot consolidate truthfully.
  *
  * <p>Every dimension carries its own base-currency coverage, because they fail
  * independently: a user can hold all their cash in reais while one month of
@@ -30,7 +30,7 @@ import java.util.List;
  *     deduplicated and in catalogue order — exactly what a future exchange-rate
  *     stage would have to convert
  */
-public record PurchaseFinancialContext(
+public record FinancialContext(
         String baseCurrency,
         CurrencyTotals availableCash,
         HistoricalAverage averageIncome,

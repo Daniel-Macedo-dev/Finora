@@ -1,4 +1,4 @@
-package com.finora.api.purchaseanalysis;
+package com.finora.api.financialcontext;
 
 import com.finora.api.account.Account;
 import com.finora.api.account.AccountBalanceService;
@@ -10,8 +10,8 @@ import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.adjustment.InvoiceAdjustmentRepository;
 import com.finora.api.creditcard.installment.CardInstallmentRepository;
 import com.finora.api.creditcard.payment.InvoicePaymentRepository;
-import com.finora.api.purchaseanalysis.PurchaseFinancialContext.CurrencyAverage;
-import com.finora.api.purchaseanalysis.PurchaseFinancialContext.HistoricalAverage;
+import com.finora.api.financialcontext.FinancialContext.CurrencyAverage;
+import com.finora.api.financialcontext.FinancialContext.HistoricalAverage;
 import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.TransactionRepository;
 import com.finora.api.transaction.TransactionType;
@@ -30,13 +30,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Builds the {@link PurchaseFinancialContext} the purchase engine reasons over.
+ * Builds the {@link FinancialContext} the analysis engines reason over.
  *
- * <p>This runs alongside {@code FinancialContextService}, which stays as it is
- * until {@code InsightService} migrates. The two do not call each other: the
- * whole point of the new path is that no scalar in it was produced by adding
- * denominations together, and delegating to the old one would smuggle exactly
- * that back in.
+ * <p>The only implementation. Purchase analysis and insights share it rather
+ * than each keeping their own query engine, so a semantic fix — what counts as
+ * available cash, how a denominator is chosen, when a dimension is complete in
+ * the base currency — lands in one place and both engines get it. A scalar
+ * predecessor that summed across denominations was deleted rather than kept as
+ * a fallback: a second answer to the same question is how the two drift apart.
  *
  * <p>The history window is unchanged — the {@value #HISTORY_WINDOW_MONTHS}
  * complete months before the reference date, with the current partial month
@@ -51,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
  * payments and next month's installments.
  */
 @Service
-public class PurchaseFinancialContextService {
+public class FinancialContextService {
 
     static final int HISTORY_WINDOW_MONTHS = 3;
 
@@ -64,7 +65,7 @@ public class PurchaseFinancialContextService {
     private final InvoicePaymentRepository payments;
     private final SettingsService settings;
 
-    public PurchaseFinancialContextService(AccountRepository accounts,
+    public FinancialContextService(AccountRepository accounts,
                                            AccountBalanceService balances,
                                            TransactionRepository transactions,
                                            CommitmentService commitments,
@@ -88,7 +89,7 @@ public class PurchaseFinancialContextService {
      * commitments or cards can never influence this context.
      */
     @Transactional(readOnly = true)
-    public PurchaseFinancialContext build(Long userId, LocalDate referenceDate) {
+    public FinancialContext build(Long userId, LocalDate referenceDate) {
         CurrencyCode base = settings.forUser(userId).getBaseCurrency();
         YearMonth reference = YearMonth.from(referenceDate);
 
@@ -102,7 +103,7 @@ public class PurchaseFinancialContextService {
         CurrencyTotals cardOutstanding = cardOutstanding(userId, base);
         CurrencyTotals nextMonthInstallments = nextMonthInstallments(userId, reference, base);
 
-        return new PurchaseFinancialContext(
+        return new FinancialContext(
                 base.name(),
                 availableCash,
                 income,
@@ -111,7 +112,7 @@ public class PurchaseFinancialContextService {
                 monthlyCommitments,
                 cardOutstanding,
                 nextMonthInstallments,
-                PurchaseFinancialContext.collectMissing(base, List.of(
+                FinancialContext.collectMissing(base, List.of(
                         availableCash.unconvertedCurrencies(),
                         income.unconvertedCurrencies(),
                         expenses.unconvertedCurrencies(),

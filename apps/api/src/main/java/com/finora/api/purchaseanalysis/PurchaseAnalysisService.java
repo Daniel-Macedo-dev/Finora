@@ -6,6 +6,8 @@ import com.finora.api.creditcard.CardLimitService;
 import com.finora.api.creditcard.CardLimitService.CardLimit;
 import com.finora.api.creditcard.CreditCard;
 import com.finora.api.creditcard.InvoiceCycleCalculator;
+import com.finora.api.financialcontext.FinancialContext;
+import com.finora.api.financialcontext.FinancialContextService;
 import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.purchaseanalysis.PurchaseAnalysisDtos.AnalysisAssumptions;
 import com.finora.api.common.money.CurrencyCode;
@@ -58,13 +60,13 @@ public class PurchaseAnalysisService {
 
     private final WishlistItemRepository items;
     private final SettingsService settings;
-    private final PurchaseFinancialContextService contextService;
+    private final FinancialContextService contextService;
     private final CardLimitService cardLimits;
     private final CurrentUserProvider currentUser;
 
     public PurchaseAnalysisService(WishlistItemRepository items,
                                    SettingsService settings,
-                                   PurchaseFinancialContextService contextService,
+                                   FinancialContextService contextService,
                                    CardLimitService cardLimits,
                                    CurrentUserProvider currentUser) {
         this.items = items;
@@ -86,7 +88,7 @@ public class PurchaseAnalysisService {
         WishlistItem item = items.findByIdAndUserId(itemId, userId)
                 .orElseThrow(() -> new NotFoundException("Item da lista de desejos", itemId));
         AppSettings config = settings.forUser(userId);
-        PurchaseFinancialContext context = contextService.build(userId, referenceDate);
+        FinancialContext context = contextService.build(userId, referenceDate);
         CurrencyCode base = CurrencyCode.parse(context.baseCurrency());
         CurrencyCode itemCurrency = item.getCurrency();
 
@@ -140,7 +142,7 @@ public class PurchaseAnalysisService {
      * must not suppress an otherwise valid analysis.
      */
     private static List<UnavailableReason> unavailableReasons(WishlistItem item,
-            CurrencyCode itemCurrency, CurrencyCode base, PurchaseFinancialContext context) {
+            CurrencyCode itemCurrency, CurrencyCode base, FinancialContext context) {
         List<UnavailableReason> reasons = new ArrayList<>();
         if (itemCurrency != base) {
             reasons.add(new UnavailableReason("ITEM_CURRENCY_DIFFERS_FROM_BASE",
@@ -191,7 +193,7 @@ public class PurchaseAnalysisService {
     }
 
     /** Context currencies plus the item's own, deduplicated in catalogue order. */
-    private static List<String> missingCurrencies(PurchaseFinancialContext context,
+    private static List<String> missingCurrencies(FinancialContext context,
             CurrencyCode itemCurrency, CurrencyCode base) {
         java.util.EnumSet<CurrencyCode> missing = java.util.EnumSet.noneOf(CurrencyCode.class);
         context.missingCurrencies().forEach(code -> missing.add(CurrencyCode.parse(code)));
@@ -227,7 +229,7 @@ public class PurchaseAnalysisService {
             BigDecimal nextMonthCardInstallments,
             int historyMonthsUsed) {
 
-        static BaseAmounts of(PurchaseFinancialContext context) {
+        static BaseAmounts of(FinancialContext context) {
             return new BaseAmounts(
                     CurrencyCode.parse(context.baseCurrency()),
                     context.availableCash().baseTotal(),

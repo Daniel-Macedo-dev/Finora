@@ -21,8 +21,8 @@ import com.finora.api.insight.InsightDtos.Insight;
 import com.finora.api.insight.InsightDtos.InsightRule;
 import com.finora.api.insight.InsightDtos.InsightSeverity;
 import com.finora.api.insight.InsightDtos.InsightsResponse;
-import com.finora.api.purchaseanalysis.PurchaseFinancialContext;
-import com.finora.api.purchaseanalysis.PurchaseFinancialContextService;
+import com.finora.api.financialcontext.FinancialContext;
+import com.finora.api.financialcontext.FinancialContextService;
 import com.finora.api.settings.AppSettings;
 import com.finora.api.settings.SettingsService;
 import com.finora.api.transaction.TransactionRepository;
@@ -90,7 +90,7 @@ public class InsightService {
     private final BudgetService budgets;
     private final GoalService goals;
     private final WishlistItemRepository wishlist;
-    private final PurchaseFinancialContextService contextService;
+    private final FinancialContextService contextService;
     private final SettingsService settings;
     private final CreditCardRepository cards;
     private final CardLimitService cardLimits;
@@ -101,7 +101,7 @@ public class InsightService {
                           BudgetService budgets,
                           GoalService goals,
                           WishlistItemRepository wishlist,
-                          PurchaseFinancialContextService contextService,
+                          FinancialContextService contextService,
                           SettingsService settings,
                           CreditCardRepository cards,
                           CardLimitService cardLimits,
@@ -160,7 +160,7 @@ public class InsightService {
         List<Insight> insights = new ArrayList<>();
         Coverage coverage = new Coverage();
         AppSettings config = settings.forUser(userId);
-        PurchaseFinancialContext context = contextService.build(userId, today);
+        FinancialContext context = contextService.build(userId, today);
         CurrencyCode base = CurrencyCode.parse(context.baseCurrency());
 
         // One grouped query spans both months; the two totals are split out of
@@ -368,7 +368,7 @@ public class InsightService {
 
     /** Commitments over income: a ratio, so both sides must be base-complete. */
     private void commitmentShare(List<Insight> insights, Coverage coverage,
-                                 PurchaseFinancialContext context, CurrencyCode base) {
+                                 FinancialContext context, CurrencyCode base) {
         if (!context.averageIncome().anyHistory() || !hasValue(context.monthlyCommitments())) {
             return;
         }
@@ -400,7 +400,7 @@ public class InsightService {
 
     /** Next month's card installments already claiming a big slice of the income. */
     private void cardInstallmentBurden(List<Insight> insights, Coverage coverage,
-                                       PurchaseFinancialContext context, CurrencyCode base) {
+                                       FinancialContext context, CurrencyCode base) {
         if (!context.averageIncome().anyHistory()
                 || !hasValue(context.nextMonthCardInstallments())) {
             return;
@@ -440,7 +440,7 @@ public class InsightService {
      * is a verdict derived from a real-denominated surplus.
      */
     private void goalPace(List<Insight> insights, Coverage coverage, Long userId,
-                          PurchaseFinancialContext context, CurrencyCode base) {
+                          FinancialContext context, CurrencyCode base) {
         List<GoalResponse> candidates = goals.listForUser(userId).stream()
                 .filter(goal -> goal.status() == GoalStatus.IN_PROGRESS)
                 .filter(goal -> goal.suggestedMonthlyContribution() != null)
@@ -491,7 +491,7 @@ public class InsightService {
      * it is simply not comparable, and saying nothing is the correct output.
      */
     private void affordableWishlist(List<Insight> insights, Coverage coverage, Long userId,
-                                    PurchaseFinancialContext context, AppSettings config,
+                                    FinancialContext context, AppSettings config,
                                     CurrencyCode base) {
         List<WishlistItem> candidates = wishlist.findAllByUserIdAndStatusIn(
                 userId,
