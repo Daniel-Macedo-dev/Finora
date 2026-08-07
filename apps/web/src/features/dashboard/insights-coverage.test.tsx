@@ -115,7 +115,7 @@ describe('InsightsPanel — cobertura', () => {
     // EXPENSE_INCREASE and CATEGORY_DOMINANT share one phrase; it appears once.
     expect(
       screen.getByText(
-        /a comparação de gastos do mês, a viabilidade das compras planejadas não foi calculada/,
+        /Ficaram de fora: a comparação de gastos do mês, a viabilidade das compras planejadas\./,
       ),
     ).toBeInTheDocument()
   })

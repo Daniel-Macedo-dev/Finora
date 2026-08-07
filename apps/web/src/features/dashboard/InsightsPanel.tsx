@@ -88,10 +88,11 @@ function CoverageNotice({ coverage }: { coverage: AggregateCoverage }) {
       <p className="insight-coverage-title">
         <Info size={15} aria-hidden="true" /> Algumas análises consolidadas ficaram de fora
       </p>
+      {/* Two sentences rather than one: the list of groups can hold one item or
+          four, and a single clause would have to agree with both. */}
       <p className="insight-coverage-message">
-        Existem valores em moedas que o Finora ainda não pode converter com segurança, então{' '}
-        {groups.length > 0 ? groups.join(', ') : 'parte das análises consolidadas'} não foi
-        calculada neste mês.
+        Existem valores em moedas que o Finora ainda não pode converter com segurança. Ficaram de
+        fora: {groups.length > 0 ? groups.join(', ') : 'parte das análises consolidadas'}.
       </p>
       {coverage.missingCurrencies.length > 0 && (
         <p className="insight-coverage-currencies">
