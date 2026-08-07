@@ -46,20 +46,6 @@ public interface TransactionRepository
             select coalesce(sum(t.amount), 0)
             from Transaction t
             where t.userId = :userId
-              and t.type = :type
-              and t.financiallyActive = true
-              and t.occurredOn >= :from
-              and t.occurredOn <= :to
-            """)
-    BigDecimal sumAmountByTypeAndPeriod(@Param("userId") Long userId,
-                                        @Param("type") TransactionType type,
-                                        @Param("from") LocalDate from,
-                                        @Param("to") LocalDate to);
-
-    @Query("""
-            select coalesce(sum(t.amount), 0)
-            from Transaction t
-            where t.userId = :userId
               and t.type = com.finora.api.transaction.TransactionType.EXPENSE
               and t.financiallyActive = true
               and t.category.id = :categoryId
@@ -133,22 +119,6 @@ public interface TransactionRepository
     List<Object[]> sumExpensesGroupedByCategoryAndCurrency(@Param("userId") Long userId,
                                                            @Param("from") LocalDate from,
                                                            @Param("to") LocalDate to);
-
-    /** The user's expense totals grouped by category: [categoryId, categoryName, total]. */
-    @Query("""
-            select t.category.id, t.category.name, sum(t.amount)
-            from Transaction t
-            where t.userId = :userId
-              and t.type = com.finora.api.transaction.TransactionType.EXPENSE
-              and t.financiallyActive = true
-              and t.occurredOn >= :from
-              and t.occurredOn <= :to
-            group by t.category.id, t.category.name
-            order by sum(t.amount) desc
-            """)
-    List<Object[]> sumExpensesGroupedByCategory(@Param("userId") Long userId,
-                                                @Param("from") LocalDate from,
-                                                @Param("to") LocalDate to);
 
     List<Transaction> findTop10ByUserIdOrderByOccurredOnDescIdDesc(Long userId);
 
