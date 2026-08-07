@@ -40,9 +40,12 @@ function UnavailableAnalysis({ analysis }: { analysis: UnavailablePurchaseAnalys
   return (
     <div className="analysis">
       <section className="analysis-unavailable" aria-label="Análise indisponível">
-        <p className="analysis-unavailable-title">
+        {/* A heading, like the available panel's sections: this state is part of
+            the page outline, not a stray paragraph a screen-reader user has to
+            scroll past the analysis to discover. */}
+        <h3 className="analysis-unavailable-title">
           <Info size={16} aria-hidden="true" /> Análise financeira indisponível
-        </p>
+        </h3>
         <p className="analysis-explanation">
           Esta análise precisa comparar valores em moedas diferentes. O Finora ainda não possui
           cotações para fazer essa conversão sem distorcer os resultados.

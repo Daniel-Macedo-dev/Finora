@@ -165,6 +165,13 @@ describe('AnalysisPanel — exchange rate required', () => {
     ).toBeInTheDocument()
   })
 
+  it('announces itself as a heading, like the available panel does', () => {
+    render(<AnalysisPanel analysis={UNAVAILABLE} />)
+    expect(
+      screen.getByRole('heading', { name: /Análise financeira indisponível/ }),
+    ).toBeInTheDocument()
+  })
+
   it('keeps JPY free of invented decimals', () => {
     render(
       <AnalysisPanel
