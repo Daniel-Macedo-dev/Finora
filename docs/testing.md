@@ -296,6 +296,20 @@ para Cartões; falha parcial retentável até tudo importar; desfazer item e
 lote preservando o ledger de auditoria; isolamento entre usuários; e o fluxo
 CSV principal completo a 390px — arquivos sintéticos em memória, datas
 fixas em 2026-06, sem dados bancários reais).
+**análise de compra e moedas** (`purchase-analysis-multi-currency.spec.ts`,
+11 jornadas: contexto completo em reais recomendando comprar à vista; o mesmo
+contexto recomendando parcelado quando o à vista fura a reserva; nenhuma opção
+segura ainda virando aguardar; usuário sem histórico nenhum recebendo a análise
+de caixa com aviso — não indisponibilidade; item estrangeiro devolvendo o estado
+indisponível sem `Comprar à vista`, `Comprar parcelado`, `Aguardar`, badge de
+segurança, premissas ou comparação de opções, com as opções e o histórico de
+preços continuando visíveis e operáveis pelo teclado; saldo, histórico e
+compromisso recorrente estrangeiros bloqueando cada um por si; rótulos separando
+`USD`, `CAD` e `AUD`; uma análise em ienes sem centavos inventados; e o item de
+outra pessoa devolvendo 404 pela API e nada pela UI). As asserções de ausência
+usam `toHaveCount(0)` sobre roles e texto exato, então um veredito escondido
+visualmente ainda reprovaria.
+
 As datas dos cenários recorrentes são calculadas por offset a partir de hoje —
 as asserções derivam dos mesmos offsets, então o resultado independe do dia de
 execução. Localizadores acessíveis (roles e labels), sem seletores CSS frágeis.
@@ -334,6 +348,28 @@ Remove-Item Env:VISUAL_QA
 
 Os treze estados exigidos, mais o descarte de uma linha da fila, em quatro
 viewports (1440, 1280, 768, 390) e dois temas: **112 capturas**.
+
+A análise de compra tem a sua própria suíte, com os mesmos cuidados e uma conta
+por cenário — os dois estados não cabem no mesmo usuário, porque a conta em euros
+que torna a análise indisponível tornaria a outra indisponível também:
+
+```powershell
+$env:VISUAL_QA = "1"
+npx playwright test e2e/purchase-analysis-visual.spec.ts
+Remove-Item Env:VISUAL_QA
+```
+
+| Estado | O que precisa estar visível |
+| --- | --- |
+| `available` | recomendação, premissas, comparação de opções, valores com a moeda explícita |
+| `exchange-rate-required` | explicação, moeda do item, moeda base, moedas a converter, motivos — e nenhum veredito, premissa ou badge |
+
+Dois estados × quatro viewports × dois temas: **16 capturas**, em
+`qa-screenshots/purchase-analysis/`, com o estado, o viewport e o tema no nome do
+arquivo. Além das checagens comuns, cada quadro confere a rota, o e-mail do
+usuário autenticado, o nome do item, e — no estado indisponível — que nenhum
+veredito, badge de segurança, bloco de premissas ou valor monetário chegou à tela.
+Um zero disfarçado de valor ausente reprovaria pela mesma asserção.
 
 Nada é fotografado no escuro. Antes de cada quadro o teste confere o tema no
 documento renderizado (não a preferência armazenada), lê a largura de volta da

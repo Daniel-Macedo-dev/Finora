@@ -152,6 +152,27 @@ estrangeiro *e* caixa misto merece ver os dois.
 de recomendação divide ou subtrai com ele, então uma cobertura incompleta ali não
 distorce conclusão nenhuma — e não deve suprimir uma análise válida.
 
+O motivo `CARD_CONTEXT_INCOMPATIBLE` é defesa em profundidade: a escrita já recusa
+vincular uma opção a um cartão de outra moeda (`WISHLIST_CURRENCY_MISMATCH`), e
+tanto a moeda do item quanto a do cartão são imutáveis. Ele existe para dados que
+cheguem por outro caminho, não para um fluxo alcançável pela API pública.
+
+### Invariantes do contrato
+
+O construtor canônico de `AnalysisResponse` recusa as combinações ilegais, não só
+as fábricas: uma resposta indisponível com premissas, opções ou recomendação, uma
+indisponível sem motivo, e uma disponível sem premissas ou sem recomendação. A
+garantia é do tipo, não da disciplina de quem chama.
+
+### Moeda das mensagens
+
+Toda mensagem em pt-BR da análise — explicação, avisos e issues de opção — é
+formatada **na moeda em que a análise está**, obtida do contexto já provado
+homogêneo. A moeda base é configurável, então uma análise disponível pode ser em
+dólares ou em ienes; imprimi-la com `R$` não seria um detalhe visual, seria
+declarar um valor errado. Iene, sem centavos, não recebe casas decimais
+inventadas.
+
 ### Sem lista de opções quando indisponível
 
 Valor presente dentro de um item é homogêneo por construção: todas as opções, o

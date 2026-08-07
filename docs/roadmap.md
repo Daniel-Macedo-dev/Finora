@@ -122,12 +122,35 @@ sempre; um cujo histórico existe só em outra moeda não, porque isso não é
 ausência. `FinancialContext` continua existindo apenas para `InsightService`,
 cuja migração é a próxima tarefa.
 
+**Segurança de moeda e disponibilidade da análise de compra — concluída.** O QA
+que faltava fechou a fatia: 11 jornadas Playwright dedicadas
+(`purchase-analysis-multi-currency.spec.ts`), a matriz visual de 16 capturas
+(dois estados × quatro viewports × dois temas, todas inspecionadas) e as sete
+revisões. A auditoria confirmou cada afirmação publicada contra o código, e as
+revisões acharam três defeitos reais, todos corrigidos:
+
+- as mensagens em pt-BR da análise disponível eram formatadas com o helper BRL
+  obsoleto, então um usuário com moeda base em dólares ou ienes leria os próprios
+  valores com `R$` — um valor errado, não um símbolo feio;
+- o construtor canônico de `AnalysisResponse` aceitava as combinações que a
+  documentação dizia serem impossíveis; agora as recusa;
+- o estado indisponível se anunciava como parágrafo, não como cabeçalho, ficando
+  fora do sumário da página para quem navega por títulos.
+
+Também entrou a cobertura que faltava: compromissos e obrigações de cartão
+agrupados por moeda nunca tinham sido testados em nenhuma das duas direções, e o
+teste de disponibilidade enviava uma `referenceDate` que o endpoint ignora — os
+cenários estavam presos a meses fixos de 2026 contra o relógio real e teriam
+passado pelo motivo errado antes de falhar por data.
+
 Ainda em aberto nesta etapa: supressão de insights agregados e remoção do
 contexto legado, importação CSV/OFX com CURDEF e reconhecimento
 explícito, moeda nas notificações, proteção da troca de moeda base entre
 dispositivos no replay do servidor, guarda local da moeda base nas configurações,
-interface completa de moeda (seletores, formulários, tela de moeda base),
-jornadas E2E de multi-moeda, matriz de QA visual e as revisões.
+interface completa de moeda (seletores, formulários, tela de moeda base) — o QA
+visual mostrou o efeito concreto disso: na página de um item em USD os preços
+fora do painel de análise ainda saem com `R$` — e o E2E e o QA visual de
+fechamento da etapa multi-moeda inteira.
 
 O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
 
@@ -155,11 +178,17 @@ shell cobrindo as ações do cabeçalho e o botão do banner de conexão, e a
 comparação de conflito empurrando a coluna da alteração offline para fora da tela
 a 390px.
 
-Verificação verde: backend `test` e `verify` (377 testes), lint, typecheck,
-216 testes unitários, build e verificação de PWA no frontend, `scripts/verify.ps1`,
-a suíte focada `offline-sync.spec.ts` (35 de 35) e a suíte E2E completa
-(123 aprovados, 10 pulados — as suítes visuais, que exigem `VISUAL_QA=1` — e
-nenhuma falha).
+Verificação verde no fechamento desta fatia: backend `test` e `verify`
+(**559 testes**, nenhuma falha), lint, typecheck, **279 testes unitários**, build
+e verificação de PWA no frontend, `scripts/verify.ps1`, as suítes de regressão
+rodadas separadamente (lista de desejos, planejamento de compra, histórico de
+preços, dashboard, orçamentos, previsão, isolamento e conversões legadas), a
+suíte focada `purchase-analysis-multi-currency.spec.ts` (11 de 11) e a suíte E2E
+completa (**134 aprovados, 14 pulados** — as suítes visuais, que exigem
+`VISUAL_QA=1` — e nenhuma falha).
+
+**Próxima tarefa desta etapa:** insights cientes de cobertura e remoção do
+`FinancialContext` legado. É a última coisa que segura o contexto escalar de pé.
 
 ## Próxima grande etapa
 

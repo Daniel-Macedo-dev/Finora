@@ -217,7 +217,8 @@ campo pelo mesmo motivo.
 - Não há ganho/perda cambial, spread, taxa ou reavaliação.
 - **Análise de compra** — o contexto de compra é ciente de moeda e a análise tem
   disponibilidade tipada: um item estrangeiro ou um contexto incompleto em moeda
-  base devolve `EXCHANGE_RATE_REQUIRED` em vez de `BUY`/`WAIT`. Ver
+  base devolve `EXCHANGE_RATE_REQUIRED` em vez de `BUY`/`WAIT`, e as mensagens de
+  uma análise disponível são formatadas na moeda base real, não em BRL. Ver
   [purchase-analysis.md](purchase-analysis.md).
 - Insights agregados ainda consomem o `FinancialContext` escalar legado, que
   existe apenas para eles; migrá-lo e removê-lo é a próxima tarefa.

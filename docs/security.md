@@ -5,6 +5,12 @@ nenhum usuário consegue ler, inferir, alterar, excluir ou influenciar os dados 
 outro — nem por CRUD direto, nem por agregações (dashboard, orçamentos, contexto
 financeiro, análise de compra, insights).
 
+A resposta indisponível da análise de compra (`EXCHANGE_RATE_REQUIRED`) não abre
+exceção: o item é resolvido por dono **antes** de qualquer moeda ser lida, e os
+motivos de bloqueio carregam apenas códigos de moeda e o nome do próprio item do
+usuário — nenhum saldo, nenhuma média, nada de outro dono. A moeda é sempre
+derivada do recurso, nunca aceita do cliente.
+
 ## Autenticação
 
 - **Sessão server-side** (Spring Security + Spring Session JDBC), identificada por

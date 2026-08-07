@@ -61,7 +61,11 @@ fallback.
 3. ~~Análise de compra (`AnalysisPanel`)~~ — **concluído** junto com o estado
    tipado `EXCHANGE_RATE_REQUIRED`. O restante da lista de desejos
    (`WishlistItemPage`, `ExecutePurchaseDialog`, histórico de preços) continua
-   pendente.
+   pendente, e o QA visual da análise confirmou o efeito visível: na página de um
+   item em USD o painel de análise nomeia as duas moedas corretamente enquanto
+   preço de referência, preço alvo e os custos das opções logo acima ainda saem
+   com `R$`. É o fallback documentado, não uma regressão — e é o argumento mais
+   concreto para fechar esta lista.
 4. Importação de extratos — depende da moeda da conta na pré-visualização.
 5. Cartões, metas, conversões legadas e comparação de conflito — moeda já
    disponível no recurso, migração puramente de apresentação.
