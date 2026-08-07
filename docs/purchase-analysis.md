@@ -55,13 +55,13 @@ Um usuário genuinamente novo continua recebendo a análise de caixa que sempre
 recebeu. Um usuário cujo histórico existe em outra moeda **não** — tratar isso
 como ausência apresentaria um razão estrangeiro como uma ausência segura.
 
-### Contexto legado
+### Contexto compartilhado
 
-`FinancialContext` e `FinancialContextService` continuam existindo **apenas**
-porque `InsightService` ainda os consome; migrá-lo é uma tarefa separada. Nenhum
-consumidor novo deve depender deles, e eles serão removidos quando os insights
-migrarem. Os dois caminhos não se chamam: delegar de um para o outro traria a
-aritmética escalar misturada de volta.
+`FinancialContext` e `FinancialContextService` (em `com.finora.api.financialcontext`)
+são a **única** implementação: a análise de compra e os [insights](insights.md)
+leem o mesmo retrato. O contexto escalar que somava denominações foi removido —
+não depreciado — porque uma segunda resposta para a mesma pergunta é exatamente
+como as duas divergem.
 
 **Premissas** (`app_settings`): reserva mínima, teto de comprometimento da renda,
 taxa de oportunidade mensal e limiar de orçamento (ver `domain-model.md`).

@@ -143,8 +143,7 @@ teste de disponibilidade enviava uma `referenceDate` que o endpoint ignora — o
 cenários estavam presos a meses fixos de 2026 contra o relógio real e teriam
 passado pelo motivo errado antes de falhar por data.
 
-Ainda em aberto nesta etapa: supressão de insights agregados e remoção do
-contexto legado, importação CSV/OFX com CURDEF e reconhecimento
+Ainda em aberto nesta etapa: importação CSV/OFX com CURDEF e reconhecimento
 explícito, moeda nas notificações, proteção da troca de moeda base entre
 dispositivos no replay do servidor, guarda local da moeda base nas configurações,
 interface completa de moeda (seletores, formulários, tela de moeda base) — o QA
@@ -178,17 +177,44 @@ shell cobrindo as ações do cabeçalho e o botão do banner de conexão, e a
 comparação de conflito empurrando a coluna da alteração offline para fora da tela
 a 390px.
 
-Verificação verde no fechamento desta fatia: backend `test` e `verify`
-(**559 testes**, nenhuma falha), lint, typecheck, **279 testes unitários**, build
+Verificação verde no fechamento desta etapa: backend `test` e `verify`
+(**591 testes**, nenhuma falha), lint, typecheck, **292 testes unitários**, build
 e verificação de PWA no frontend, `scripts/verify.ps1`, as suítes de regressão
-rodadas separadamente (lista de desejos, planejamento de compra, histórico de
-preços, dashboard, orçamentos, previsão, isolamento e conversões legadas), a
-suíte focada `purchase-analysis-multi-currency.spec.ts` (11 de 11) e a suíte E2E
-completa (**134 aprovados, 14 pulados** — as suítes visuais, que exigem
-`VISUAL_QA=1` — e nenhuma falha).
+rodadas separadamente (insights, análise de compra, dashboard, orçamentos,
+cartões, lista de desejos, previsão e isolamento), as suítes focadas
+`insights-multi-currency.spec.ts` (14 de 14) e
+`purchase-analysis-multi-currency.spec.ts` (11 de 11), e a suíte E2E completa
+(**148 aprovados, 20 pulados** — as suítes visuais, que exigem `VISUAL_QA=1` — e
+nenhuma falha).
 
-**Próxima tarefa desta etapa:** insights cientes de cobertura e remoção do
-`FinancialContext` legado. É a última coisa que segura o contexto escalar de pé.
+**Insights cientes de cobertura e remoção do contexto escalar — concluído.**
+Os insights eram o último consumidor do `FinancialContext` currency-blind, e
+cada regra agregada ali lia números produzidos somando denominações: despesas em
+dólar dobradas numa única porcentagem de crescimento contra reais, uma categoria
+em reais declarada dominante sobre gastos que o denominador não enxergava,
+compromissos em dólar divididos por renda em reais, uma meta em dólar medida
+contra a sobra em reais, e um item em dólar declarado viável a partir do caixa em
+reais depois de subtrair a reserva de um valor que nunca foi de uma moeda só.
+Valores nativos de cartão e fatura saíam com símbolo de real qualquer que fosse o
+cartão.
+
+As regras nativas — fatura vencida, fatura a vencer, limite comprometido —
+continuam sempre visíveis e passaram a ser enunciadas na moeda do cartão. As
+agregadas só rodam com operandos provadamente completos em moeda base; quando não
+estão, o Finora se cala e diz por quê, uma vez, em `aggregateCoverage`. Esse
+silêncio é distinguível do comum: sem mês anterior, sem histórico, sem meta ou
+sem item candidato, nada é reportado, porque uma conta vazia não pode parecer
+quebrada. Todo valor monetário carrega agora a moeda em que está, garantido pelo
+construtor. Ver [insights.md](insights.md).
+
+Com isso o contexto escalar perdeu o último consumidor e foi **removido**, não
+depreciado. A implementação ciente de moeda foi promovida a contexto financeiro
+canônico em `com.finora.api.financialcontext`, renomeada em vez de copiada, e a
+análise de compra e os insights leem a mesma. Sobrou uma implementação.
+
+**Próxima tarefa desta etapa:** moeda na importação de extratos e CURDEF do OFX,
+com moeda nas notificações logo em seguida. Os dois tocam superfícies diferentes
+— parser e caixa de entrada — e acoplá-los num commit só não traz ganho.
 
 ## Próxima grande etapa
 

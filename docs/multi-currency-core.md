@@ -220,8 +220,10 @@ campo pelo mesmo motivo.
   base devolve `EXCHANGE_RATE_REQUIRED` em vez de `BUY`/`WAIT`, e as mensagens de
   uma análise disponível são formatadas na moeda base real, não em BRL. Ver
   [purchase-analysis.md](purchase-analysis.md).
-- Insights agregados ainda consomem o `FinancialContext` escalar legado, que
-  existe apenas para eles; migrá-lo e removê-lo é a próxima tarefa.
+- **Insights** — regras nativas de cartão continuam visíveis e na moeda do
+  cartão sob qualquer razão misto; regras agregadas só rodam com operandos
+  completos em moeda base e, quando retidas, aparecem em `aggregateCoverage`.
+  Ver [insights.md](insights.md).
 - Importação com CURDEF, moeda nas notificações e a interface completa de moeda
   ainda não estão prontas — ver o roadmap.
 

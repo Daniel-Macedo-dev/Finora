@@ -296,6 +296,18 @@ para Cartões; falha parcial retentável até tudo importar; desfazer item e
 lote preservando o ledger de auditoria; isolamento entre usuários; e o fluxo
 CSV principal completo a 390px — arquivos sintéticos em memória, datas
 fixas em 2026-06, sem dados bancários reais).
+**insights e moedas** (`insights-multi-currency.spec.ts`, 14 jornadas: um mês
+inteiramente em reais mantendo crescimento de gastos, categoria dominante,
+peso dos compromissos e viabilidade de compra; uma fatura vencida em dólares e
+um cartão em ienes anunciados na própria moeda, sem centavos inventados e sem
+símbolo de real em lugar nenhum do painel; gastos mistos suprimindo crescimento
+e dominância enquanto o alerta nativo de fatura permanece ao lado, com **uma**
+explicação de cobertura; compromisso estrangeiro, meta em dólar e item
+estrangeiro cada um suprimindo a sua regra; caixa misto impedindo a viabilidade;
+conta vazia sem aviso nenhum; dados estrangeiros de outra pessoa não produzindo
+nem suprimindo nada; e o contrato conferido diretamente na API — todo valor com
+moeda, nenhum código de regra na tela);
+
 **análise de compra e moedas** (`purchase-analysis-multi-currency.spec.ts`,
 11 jornadas: contexto completo em reais recomendando comprar à vista; o mesmo
 contexto recomendando parcelado quando o à vista fura a reserva; nenhuma opção
@@ -363,6 +375,22 @@ Remove-Item Env:VISUAL_QA
 | --- | --- |
 | `available` | recomendação, premissas, comparação de opções, valores com a moeda explícita |
 | `exchange-rate-required` | explicação, moeda do item, moeda base, moedas a converter, motivos — e nenhum veredito, premissa ou badge |
+
+Os insights têm a sua, com três estados — tudo comparável, um mês em dólares com
+os agregados retidos, e um cartão em ienes:
+
+```powershell
+$env:VISUAL_QA = "1"
+npx playwright test e2e/insights-visual.spec.ts
+Remove-Item Env:VISUAL_QA
+```
+
+Três estados × quatro viewports × dois temas: **24 capturas**, em
+`qa-screenshots/insights/`. Cada quadro confere, antes do disparo, que o estado é
+o esperado: exatamente uma explicação de cobertura quando deve haver e nenhuma
+quando não deve, nenhum agregado retido vazando de volta, nenhum valor ausente
+virando zero, nenhum símbolo de real num valor estrangeiro e nenhum tooltip de
+gráfico congelado por onde o ponteiro parou.
 
 Dois estados × quatro viewports × dois temas: **16 capturas**, em
 `qa-screenshots/purchase-analysis/`, com o estado, o viewport e o tema no nome do

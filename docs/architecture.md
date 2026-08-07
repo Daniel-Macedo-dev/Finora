@@ -69,15 +69,19 @@ com.finora.api
 ├── forecast/      # previsão de caixa determinística + eventos de vencimento
 ├── goal/          # metas de poupança e aportes
 ├── wishlist/      # itens + opções de compra validadas
-├── purchaseanalysis/  # FinancialContext + motor determinístico de recomendação
+├── financialcontext/  # o retrato financeiro do usuário, agrupado por moeda:
+│                      # caixa, médias históricas, compromissos e cartões, com
+│                      # cobertura em moeda base por dimensão. Único.
+├── purchaseanalysis/  # motor determinístico de recomendação de compra
 ├── dashboard/     # agregação de leitura para a visão geral
-├── insight/       # regras determinísticas de insight
+├── insight/       # regras determinísticas de insight, nativas e agregadas
 └── settings/      # premissas configuráveis (linha singleton app_settings)
 ```
 
 Cada domínio contém entidade, repositório, DTOs, service e controller. Serviços
 conversam entre domínios via services/repositórios públicos (ex.: `BudgetService`
-usa `SettingsService`; `InsightService` usa `FinancialContextService`).
+usa `SettingsService`; `PurchaseAnalysisService` e `InsightService` usam **o
+mesmo** `FinancialContextService`).
 
 ### Dinheiro e datas
 
