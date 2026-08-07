@@ -40,7 +40,7 @@ const COVERAGE_GROUPS: Record<string, string> = {
   WISHLIST_AFFORDABLE: 'a viabilidade das compras planejadas',
 }
 
-export function coverageGroups(rules: string[]): string[] {
+function coverageGroups(rules: string[]): string[] {
   const groups: string[] = []
   for (const rule of rules) {
     const label = COVERAGE_GROUPS[rule]
