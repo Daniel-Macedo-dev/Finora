@@ -120,9 +120,11 @@ public final class PurchaseAnalysisDtos {
      * in for "unknown" reads as financial advice, which is the specific failure
      * this contract exists to prevent.
      *
-     * <p>The two factory methods are the only way to build a response, so the
-     * illegal combinations (a recommendation alongside an unavailable status, or
-     * an available status with no assumptions) cannot be assembled by accident.
+     * <p>The two factory methods are the intended way to build a response, and
+     * the canonical constructor rejects the illegal combinations outright — a
+     * recommendation alongside an unavailable status, or an available status
+     * without assumptions — so neither a future factory nor a direct call can
+     * assemble one by accident.
      *
      * @param itemCurrency the currency of the item and all of its options
      * @param missingCurrencies what a future exchange-rate stage would convert
@@ -139,6 +141,37 @@ public final class PurchaseAnalysisDtos {
             AnalysisAssumptions assumptions,
             List<OptionAnalysis> options,
             Recommendation recommendation) {
+
+        /**
+         * Enforces the invariants the availability contract rests on.
+         *
+         * @throws IllegalArgumentException when an unavailable response carries
+         *     assumptions, option analyses or a recommendation, or when an
+         *     available one is missing them
+         */
+        public AnalysisResponse {
+            if (availability == AnalysisAvailability.EXCHANGE_RATE_REQUIRED) {
+                if (assumptions != null || recommendation != null
+                        || (options != null && !options.isEmpty())) {
+                    throw new IllegalArgumentException(
+                            "An unavailable analysis carries no assumptions, options or "
+                                    + "recommendation: a conclusion here would have needed a rate.");
+                }
+                if (unavailableReasons == null || unavailableReasons.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "An unavailable analysis must state why it is unavailable.");
+                }
+            } else {
+                if (assumptions == null || recommendation == null) {
+                    throw new IllegalArgumentException(
+                            "An available analysis carries its assumptions and recommendation.");
+                }
+                if (unavailableReasons != null && !unavailableReasons.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "An available analysis has no blocking reasons.");
+                }
+            }
+        }
 
         /** The complete analysis. Item and base currency are the same here. */
         public static AnalysisResponse available(Long itemId, String itemName, String baseCurrency,
