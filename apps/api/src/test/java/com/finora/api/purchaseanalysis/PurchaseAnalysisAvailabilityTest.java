@@ -10,13 +10,15 @@ import com.finora.api.account.Account;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.account.AccountType;
 import com.finora.api.category.CategoryType;
+import com.finora.api.commitment.Commitment;
+import com.finora.api.commitment.CommitmentCadence;
+import com.finora.api.commitment.CommitmentRepository;
 import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.transaction.Transaction;
 import com.finora.api.transaction.TransactionRepository;
 import com.finora.api.transaction.TransactionType;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,13 +36,25 @@ import org.springframework.http.MediaType;
  */
 class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
 
-    private static final LocalDate REFERENCE = LocalDate.of(2026, 7, 15);
+    /**
+     * A month the endpoint's history window genuinely covers.
+     *
+     * <p>{@code GET /analysis} analyses as of today and takes no reference date,
+     * so the window is always the three complete months before the run. A fixed
+     * calendar month drifts out of it and the scenario silently stops being the
+     * one the test names — passing for the wrong reason first, then failing on a
+     * date rather than on a change.
+     */
+    private static final YearMonth IN_WINDOW = YearMonth.now().minusMonths(1);
 
     @Autowired
     private TransactionRepository transactions;
 
     @Autowired
     private AccountRepository accounts;
+
+    @Autowired
+    private CommitmentRepository commitments;
 
     private TestUser user;
 
@@ -91,11 +105,57 @@ class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
         transactions.save(transaction);
     }
 
+    /** An active monthly expense commitment, settled in the given currency. */
+    private void commitment(TestUser owner, String amount, CurrencyCode currency) {
+        var category = categoryRepository
+                .findByUserIdAndNameIgnoreCaseAndType(owner.id(), "Moradia", CategoryType.EXPENSE)
+                .orElseThrow();
+        Commitment commitment = new Commitment(owner.id(), "Aluguel", new BigDecimal(amount),
+                category, CommitmentCadence.MONTHLY, 10, IN_WINDOW.atDay(10));
+        commitment.setCurrency(currency);
+        commitments.save(commitment);
+    }
+
+    /** A credit card of the given currency, created through the normal API. */
+    private long card(TestUser owner, String name, CurrencyCode currency) throws Exception {
+        String response = mockMvc.perform(post("/api/credit-cards")
+                        .cookie(owner.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "%s", "brand": "VISA", "creditLimit": 20000,
+                                 "closingDay": 10, "dueDay": 17, "currency": "%s"}
+                                """.formatted(name, currency.name())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        return objectMapper.readTree(response).get("id").asLong();
+    }
+
+    /**
+     * A three-installment purchase on that card.
+     *
+     * <p>Three rather than one on purpose: whichever cycle the first installment
+     * lands on, one of the three necessarily falls on next month's invoice, so
+     * the next-month burden exists without the test having to reason about the
+     * closing day relative to whatever today happens to be.
+     */
+    private void cardPurchase(TestUser owner, long cardId, String total) throws Exception {
+        var category = categoryRepository
+                .findByUserIdAndNameIgnoreCaseAndType(owner.id(), "Compras", CategoryType.EXPENSE)
+                .orElseThrow();
+        mockMvc.perform(post("/api/credit-cards/{id}/purchases", cardId)
+                        .cookie(owner.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"description": "Compra", "merchant": "Loja", "categoryId": %d,
+                                 "purchaseDate": "%s", "totalAmount": %s, "installmentCount": 3}
+                                """.formatted(category.getId(), java.time.LocalDate.now(), total)))
+                .andExpect(status().isCreated());
+    }
+
     private org.springframework.test.web.servlet.ResultActions analyze(TestUser owner, long itemId)
             throws Exception {
         return mockMvc.perform(get("/api/wishlist/{id}/analysis", itemId)
-                .cookie(owner.session())
-                .param("referenceDate", REFERENCE.toString()));
+                .cookie(owner.session()));
     }
 
     // ── Available: existing behaviour preserved ──────────────────────────────
@@ -221,8 +281,8 @@ class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
     @Test
     void foreignIncomeHistoryMakesTheAnalysisUnavailable() throws Exception {
         account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
-        income(user, "3000.00", YearMonth.of(2026, 6), CurrencyCode.BRL);
-        income(user, "500.00", YearMonth.of(2026, 6), CurrencyCode.USD);
+        income(user, "3000.00", IN_WINDOW, CurrencyCode.BRL);
+        income(user, "500.00", IN_WINDOW, CurrencyCode.USD);
         long item = createItem(user, "Notebook", "5000.00", null);
         addCashOption(user, item, "Loja A", "4800.00");
 
@@ -239,7 +299,7 @@ class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
         // The dangerous case: a USD-only history must not be read as "no
         // history" and silently fall through to the cash-only analysis.
         account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
-        income(user, "3000.00", YearMonth.of(2026, 6), CurrencyCode.USD);
+        income(user, "3000.00", IN_WINDOW, CurrencyCode.USD);
         long item = createItem(user, "Notebook", "5000.00", null);
         addCashOption(user, item, "Loja A", "4800.00");
 
@@ -251,10 +311,77 @@ class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void aForeignRecurringCommitmentMakesTheAnalysisUnavailable() throws Exception {
+        account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
+        commitment(user, "1200.00", CurrencyCode.BRL);
+        commitment(user, "90.00", CurrencyCode.USD);
+        long item = createItem(user, "Notebook", "5000.00", null);
+        addCashOption(user, item, "Loja A", "4800.00");
+
+        // The installment-pressure rule divides by commitments, so an
+        // incomplete commitment total would distort a real conclusion.
+        analyze(user, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("EXCHANGE_RATE_REQUIRED"))
+                .andExpect(jsonPath("$.unavailableReasons[?(@.code == 'COMMITMENTS_INCOMPLETE')]")
+                        .exists())
+                .andExpect(jsonPath("$.missingCurrencies").value(
+                        org.hamcrest.Matchers.contains("USD")))
+                .andExpect(jsonPath("$.recommendation").doesNotExist())
+                .andExpect(jsonPath("$.assumptions").doesNotExist());
+    }
+
+    @Test
+    void baseCurrencyCommitmentsAloneKeepTheAnalysisAvailable() throws Exception {
+        account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
+        commitment(user, "1200.00", CurrencyCode.BRL);
+        long item = createItem(user, "Notebook", "5000.00", null);
+        addCashOption(user, item, "Loja A", "4800.00");
+
+        analyze(user, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("AVAILABLE"))
+                .andExpect(jsonPath("$.assumptions.monthlyCommitments").value(1200.00));
+    }
+
+    @Test
+    void aForeignCardBurdenNextMonthMakesTheAnalysisUnavailable() throws Exception {
+        account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
+        long foreignCard = card(user, "Cartão USD", CurrencyCode.USD);
+        cardPurchase(user, foreignCard, "900.00");
+        long item = createItem(user, "Notebook", "5000.00", null);
+        addCashOption(user, item, "Loja A", "4800.00");
+
+        analyze(user, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("EXCHANGE_RATE_REQUIRED"))
+                .andExpect(
+                        jsonPath("$.unavailableReasons[?(@.code == 'CARD_INSTALLMENTS_INCOMPLETE')]")
+                                .exists())
+                .andExpect(jsonPath("$.recommendation").doesNotExist());
+    }
+
+    @Test
+    void aBaseCurrencyCardBurdenKeepsTheAnalysisAvailable() throws Exception {
+        account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
+        long baseCard = card(user, "Cartão BRL", CurrencyCode.BRL);
+        cardPurchase(user, baseCard, "900.00");
+        long item = createItem(user, "Notebook", "5000.00", null);
+        addCashOption(user, item, "Loja A", "4800.00");
+
+        analyze(user, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("AVAILABLE"))
+                // Card obligations are informational; they never block, and the
+                // grouped total is the card's own currency, not a mixed sum.
+                .andExpect(jsonPath("$.assumptions.nextMonthCardInstallments").exists());
+    }
+
+    @Test
     void missingCurrenciesFollowCatalogueOrderAcrossDimensions() throws Exception {
         account(user, "Conta", "10000.00", CurrencyCode.BRL, 0);
         account(user, "Checking JPY", "5000", CurrencyCode.JPY, 1);
-        income(user, "500.00", YearMonth.of(2026, 6), CurrencyCode.EUR);
+        income(user, "500.00", IN_WINDOW, CurrencyCode.EUR);
         long item = createItem(user, "Camera", "1200.00", "USD");
 
         analyze(user, item)
@@ -278,6 +405,66 @@ class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
                         .exists());
     }
 
+    // ── A base currency that is not BRL ──────────────────────────────────────
+
+    /**
+     * Only possible while the ledger is empty, which is exactly when the guard
+     * allows it — so these two tests set it before creating anything.
+     */
+    private void setBaseCurrency(TestUser owner, CurrencyCode currency) throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/settings")
+                        .cookie(owner.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"baseCurrency": "%s", "minimumCashBuffer": 0,
+                                 "maxInstallmentCommitmentRatio": 0.3,
+                                 "monthlyOpportunityRate": 0, "budgetWarningThreshold": 0.8}
+                                """.formatted(currency.name())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baseCurrency").value(currency.name()));
+    }
+
+    @Test
+    void anAvailableAnalysisIsExplainedInItsOwnBaseCurrency() throws Exception {
+        setBaseCurrency(user, CurrencyCode.USD);
+        account(user, "Checking", "10000.00", CurrencyCode.USD, 0);
+        long item = createItem(user, "Notebook", "5000.00", "USD");
+        addCashOption(user, item, "Store A", "4800.00");
+
+        // The whole analysis is denominated in dollars. Printing those figures
+        // with a reais symbol would misstate the amount, not merely look wrong.
+        analyze(user, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("AVAILABLE"))
+                .andExpect(jsonPath("$.baseCurrency").value("USD"))
+                .andExpect(jsonPath("$.recommendation.type").value("BUY_CASH"))
+                .andExpect(jsonPath("$.recommendation.explanation")
+                        .value(org.hamcrest.Matchers.containsString("US$")))
+                .andExpect(jsonPath("$.recommendation.explanation")
+                        .value(org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString("R$ "))));
+    }
+
+    @Test
+    void aZeroDecimalBaseCurrencyIsNeverGivenCents() throws Exception {
+        setBaseCurrency(user, CurrencyCode.JPY);
+        account(user, "Checking", "100", CurrencyCode.JPY, 0);
+        long item = createItem(user, "Notebook", "500000", "JPY");
+        addCashOption(user, item, "Store A", "480000");
+
+        // Not affordable, so the WAIT explanation states the gap — in yen, which
+        // has no cents at all. An invented ",00" would describe money that does
+        // not exist.
+        analyze(user, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availability").value("AVAILABLE"))
+                .andExpect(jsonPath("$.recommendation.type").value("WAIT"))
+                .andExpect(jsonPath("$.recommendation.explanation")
+                        .value(org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString(",00"))));
+    }
+
     // ── Isolation ────────────────────────────────────────────────────────────
 
     @Test
@@ -296,7 +483,7 @@ class PurchaseAnalysisAvailabilityTest extends AbstractIntegrationTest {
 
         TestUser other = registerUser();
         account(other, "Checking USD", "99999.00", CurrencyCode.USD, 0);
-        income(other, "9999.00", YearMonth.of(2026, 6), CurrencyCode.USD);
+        income(other, "9999.00", IN_WINDOW, CurrencyCode.USD);
 
         analyze(user, item)
                 .andExpect(status().isOk())

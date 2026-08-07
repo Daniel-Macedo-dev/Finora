@@ -216,6 +216,8 @@ public class PurchaseAnalysisService {
      * longer be a mix of two.
      */
     private record BaseAmounts(
+            /** The single currency every amount below is denominated in. */
+            CurrencyCode currency,
             BigDecimal availableCash,
             BigDecimal avgMonthlyIncome,
             BigDecimal avgMonthlyExpense,
@@ -227,6 +229,7 @@ public class PurchaseAnalysisService {
 
         static BaseAmounts of(PurchaseFinancialContext context) {
             return new BaseAmounts(
+                    CurrencyCode.parse(context.baseCurrency()),
                     context.availableCash().baseTotal(),
                     context.averageIncome().baseAverage(),
                     context.averageExpenses().baseAverage(),
@@ -255,7 +258,7 @@ public class PurchaseAnalysisService {
             upfront = MoneyRules.normalize(option.getShipping().add(option.getFees()));
             monthlyBurden = option.getInstallmentAmount();
             checkInstallmentPressure(option, config, context, issues);
-            card = analyzeCard(option, nominal, referenceDate, issues);
+            card = analyzeCard(option, nominal, referenceDate, context.currency(), issues);
         }
 
         BigDecimal cashAfter = MoneyRules.normalize(context.availableCash().subtract(upfront));
@@ -263,7 +266,9 @@ public class PurchaseAnalysisService {
             issues.add(new OptionIssue(
                     "BUFFER_VIOLATION",
                     "Pagar %s deixaria o caixa em %s, abaixo da reserva mínima de %s."
-                            .formatted(brl(upfront), brl(cashAfter), brl(config.getMinimumCashBuffer())),
+                            .formatted(money(upfront, context.currency()),
+                                    money(cashAfter, context.currency()),
+                                    money(config.getMinimumCashBuffer(), context.currency())),
                     true));
         }
 
@@ -290,7 +295,8 @@ public class PurchaseAnalysisService {
      * cannot make an option safe, only unavailable.
      */
     private CardAnalysis analyzeCard(PurchaseOption option, BigDecimal nominal,
-                                     LocalDate referenceDate, List<OptionIssue> issues) {
+                                     LocalDate referenceDate, CurrencyCode currency,
+                                     List<OptionIssue> issues) {
         CreditCard card = option.getCreditCard();
         if (card == null) {
             return null;
@@ -307,7 +313,8 @@ public class PurchaseAnalysisService {
             issues.add(new OptionIssue(
                     "CARD_LIMIT_INSUFFICIENT",
                     "A compra de %s excede o limite disponível de %s no cartão %s."
-                            .formatted(brl(nominal), brl(limit.availableLimit()), card.getName()),
+                            .formatted(money(nominal, currency),
+                                    money(limit.availableLimit(), currency), card.getName()),
                     true));
         }
         BigDecimal usedAfter = limit.usedLimit().add(nominal);
@@ -336,7 +343,8 @@ public class PurchaseAnalysisService {
                         "INSTALLMENT_EXCEEDS_SURPLUS",
                         ("A parcela de %s é maior que a sobra média mensal de %s — os próximos %d meses "
                                 + "tendem a fechar no vermelho.")
-                                .formatted(brl(installment), brl(context.avgMonthlySurplus()),
+                                .formatted(money(installment, context.currency()),
+                                        money(context.avgMonthlySurplus(), context.currency()),
                                         option.getInstallmentCount()),
                         true));
             }
@@ -360,7 +368,7 @@ public class PurchaseAnalysisService {
                         "INSTALLMENT_PRESSURE_HIGH",
                         ("Parcela + compromissos recorrentes + parcelas de cartão já assumidas (%s) "
                                 + "comprometeriam %s%% da renda média, acima do limite configurado de %s%%.")
-                                .formatted(brl(committed),
+                                .formatted(money(committed, context.currency()),
                                         toPercent(ratio),
                                         toPercent(config.getMaxInstallmentCommitmentRatio())),
                         true));
@@ -413,13 +421,14 @@ public class PurchaseAnalysisService {
                             .thenComparing(a -> a.kind() == PurchaseOptionKind.CASH ? 0 : 1)
                             .thenComparing(OptionAnalysis::optionId))
                     .orElseThrow();
-            return buildBuyRecommendation(best, analyses, config, warnings);
+            return buildBuyRecommendation(best, analyses, config, context.currency(), warnings);
         }
         return buildWaitRecommendation(analyses, config, context, warnings);
     }
 
     private Recommendation buildBuyRecommendation(OptionAnalysis best, List<OptionAnalysis> all,
-                                                  AppSettings config, List<String> warnings) {
+                                                  AppSettings config, CurrencyCode currency,
+                                                  List<String> warnings) {
         List<String> reasons = new ArrayList<>();
         reasons.add("LOWEST_PRESENT_VALUE");
         if (config.getMonthlyOpportunityRate().signum() == 0) {
@@ -444,11 +453,13 @@ public class PurchaseAnalysisService {
         String explanation = isCash
                 ? ("Comprar à vista em %s custa %s, o menor valor presente entre as opções, e mantém o caixa "
                         + "acima da reserva mínima (%s após a compra).")
-                        .formatted(best.merchant(), brl(best.presentValue()), brl(best.cashAfterPurchase()))
+                        .formatted(best.merchant(), money(best.presentValue(), currency),
+                                money(best.cashAfterPurchase(), currency))
                 : ("Parcelar em %s (%d× de %s) tem o menor valor presente (%s) considerando a taxa de "
                         + "oportunidade configurada, e a parcela cabe nas margens definidas.")
-                        .formatted(best.merchant(), best.installmentCount(), brl(best.monthlyBurden()),
-                                brl(best.presentValue()));
+                        .formatted(best.merchant(), best.installmentCount(),
+                                money(best.monthlyBurden(), currency),
+                                money(best.presentValue(), currency));
 
         return new Recommendation(
                 isCash ? RecommendationType.BUY_CASH : RecommendationType.BUY_INSTALLMENT,
@@ -482,7 +493,7 @@ public class PurchaseAnalysisService {
         String explanation = months != null
                 ? ("Nenhuma opção é segura agora. Guardando a sobra média mensal, a projeção é de que faltem "
                         + "cerca de %d mês(es) para acumular os %s que separam o caixa atual de uma compra segura.")
-                        .formatted(months, brl(requiredAdditionalCash))
+                        .formatted(months, money(requiredAdditionalCash, context.currency()))
                 : "Nenhuma opção é segura agora: os valores violariam a reserva mínima de caixa ou as margens "
                         + "mensais configuradas.";
 
@@ -490,8 +501,17 @@ public class PurchaseAnalysisService {
                 explanation, warnings, requiredAdditionalCash, months);
     }
 
-    private static String brl(BigDecimal value) {
-        return MoneyRules.formatBrl(value);
+    /**
+     * Formats an amount in the currency the analysis is actually denominated in.
+     *
+     * <p>Every message below is produced only after eligibility proved the item,
+     * the context and the base currency agree, so that one currency labels all
+     * of them. It is not necessarily BRL: a user whose base currency is USD gets
+     * an available analysis whose figures are dollars, and printing those with a
+     * reais symbol would misstate the amount rather than merely look wrong.
+     */
+    private static String money(BigDecimal value, CurrencyCode currency) {
+        return MoneyRules.format(value, currency);
     }
 
     private static String toPercent(BigDecimal ratio) {
