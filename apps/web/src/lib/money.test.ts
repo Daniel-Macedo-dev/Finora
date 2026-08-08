@@ -20,6 +20,16 @@ describe('formatMoney', () => {
     expect(formatMoney(1250.5, 'BRL')).toContain('1.250,50')
   })
 
+  it('never rounds a fractional amount away in a zero-decimal currency', () => {
+    // 100,50 yen is not a quantity of money that exists — but when a stored
+    // value carries it, showing "JP¥ 101" would display a different amount from
+    // the one being validated. It stays visible so it can be corrected.
+    expect(formatMoney(100.5, 'JPY')).toContain('100,50')
+    expect(formatMoney(100.5, 'JPY')).not.toContain('101')
+    // Whole amounts keep the currency's own precision.
+    expect(formatMoney(1200, 'JPY')).not.toContain(',')
+  })
+
   it('renders JPY without decimals', () => {
     const formatted = formatMoney(1250, 'JPY')
     expect(formatted).toContain('1.250')

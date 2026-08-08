@@ -65,11 +65,10 @@ export function currencyLabel(currency: CurrencyCode): string {
  */
 const formatterCache = new Map<string, Intl.NumberFormat>()
 
-function formatterFor(currency: CurrencyCode): Intl.NumberFormat {
-  const key = `pt-BR:${currency}`
+function formatterFor(currency: CurrencyCode, digits: number): Intl.NumberFormat {
+  const key = `pt-BR:${currency}:${digits}`
   let formatter = formatterCache.get(key)
   if (!formatter) {
-    const digits = currencyFractionDigits(currency)
     formatter = new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency,
@@ -88,6 +87,13 @@ function formatterFor(currency: CurrencyCode): Intl.NumberFormat {
  * distinguishable. Any locale output that would collapse to a bare "$" is
  * prefixed with the ISO code instead, because "$ 1.250,00" does not say whose
  * dollars those are.
+ *
+ * <p>A zero-decimal currency is normally rendered without decimals — 1.250 yen,
+ * never "1.250,00". But a value that *does* carry a fractional part is still a
+ * real stored value, and hiding it would display an amount that differs from the
+ * one on screen: a 100,50 awaiting correction would read as "JP¥ 101" directly
+ * above a message explaining that yen has no centavos. Such a value is printed
+ * as it is, and stays visibly wrong so it can be fixed rather than rounded.
  */
 export function formatMoney(
   value: number | null | undefined,
@@ -96,7 +102,9 @@ export function formatMoney(
   if (value === null || value === undefined || Number.isNaN(value)) {
     return '—'
   }
-  const formatted = formatterFor(currency).format(value)
+  const digits = currencyFractionDigits(currency)
+  const shown = digits === 0 && !Number.isInteger(value) ? 2 : digits
+  const formatted = formatterFor(currency, shown).format(value)
   return /(?:^|[\s ])\$/.test(formatted) ? `${currency} ${formatted}` : formatted
 }
 

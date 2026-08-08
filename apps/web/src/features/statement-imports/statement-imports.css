@@ -459,10 +459,30 @@
   font-size: var(--text-xs);
 }
 
+.si-destination-field {
+  min-width: 0;
+}
+
+/* Wider than a plain meta cell: the option text carries the account name, its
+   type and its currency, and a select narrow enough to clip all three hides the
+   very thing that decides what the imported amounts mean. Only applied once the
+   grid actually has two tracks to span — on a single-column layout the field is
+   already full width, and spanning would invent a second column and push the
+   card into horizontal scroll. */
+@media (min-width: 640px) {
+  .si-destination-field {
+    grid-column: span 2;
+  }
+}
+
 .si-destination-field dd {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.si-destination-field select {
+  max-width: 100%;
 }
 
 .si-destination-hint {
