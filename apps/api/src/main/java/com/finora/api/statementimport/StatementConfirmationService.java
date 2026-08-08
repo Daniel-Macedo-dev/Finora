@@ -22,6 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
  * transaction across thousands of rows. Retrying (FAILED/SKIPPED items) and
  * repeating a confirmation are safe — the per-item claim plus the partial
  * unique index guarantee at most one live transaction per item.
+ *
+ * <p>A batch whose denomination is an assumption rather than a declaration
+ * needs {@code acknowledgeAccountCurrency} before anything is materialized.
+ * That confirmation is consent only: it enters no fingerprint and no identity,
+ * so an acknowledged confirmation is exactly as idempotent as any other.
  */
 @Service
 public class StatementConfirmationService {
@@ -96,12 +101,50 @@ public class StatementConfirmationService {
                     "Confirme no máximo %d lançamentos por requisição."
                             .formatted(MAX_CONFIRM_ITEMS));
         }
+        requireCurrencyAcknowledgement(batch, all, targetIds,
+                request != null && request.acknowledged());
 
         List<ItemResult> results = new ArrayList<>(targetIds.size());
         for (Long itemId : targetIds) {
             results.add(materializeSafely(userId, batch.getId(), itemId));
         }
         return batchStatus.confirmOutcome(batch.getId(), userId, results);
+    }
+
+    /**
+     * Refuses a confirmation that would create money under an unacknowledged
+     * currency assumption.
+     *
+     * <p>Thrown before the first item is touched, and deliberately not recorded
+     * on the items: a missing acknowledgement makes the <em>request</em>
+     * invalid, so marking rows FAILED would blame the data for a consent that
+     * was simply never given, and force the user to retry rows that were fine.
+     *
+     * <p>Only a confirmation that would actually materialize something needs
+     * consent. Re-confirming a finished batch, or one whose remaining rows are
+     * all duplicates and exclusions, creates nothing and stays available.
+     */
+    private static void requireCurrencyAcknowledgement(StatementImportBatch batch,
+                                                       List<StatementImportItem> all,
+                                                       List<Long> targetIds,
+                                                       boolean acknowledged) {
+        if (acknowledged
+                || !batch.getCurrencySource().requiresAccountCurrencyAcknowledgement()) {
+            return;
+        }
+        boolean wouldMaterialize = all.stream()
+                .filter(item -> targetIds.contains(item.getId()))
+                .anyMatch(StatementImportAssembler::importable);
+        if (!wouldMaterialize) {
+            return;
+        }
+        throw new BusinessRuleException("STATEMENT_CURRENCY_ACK_REQUIRED",
+                batch.getCurrencySource() == StatementCurrencySource.LEGACY_UNKNOWN
+                        ? "Esta importação foi criada antes de o Finora registrar a moeda "
+                                + "declarada pelo arquivo. Confirme que os lançamentos "
+                                + "restantes devem usar a moeda da conta selecionada."
+                        : "Este arquivo não declarou uma moeda. Confirme que os valores "
+                                + "devem ser interpretados na moeda da conta selecionada.");
     }
 
     private ItemResult materializeSafely(Long userId, Long batchId, Long itemId) {

@@ -1,7 +1,9 @@
 package com.finora.api.statementimport;
 
+import com.finora.api.account.Account;
 import com.finora.api.category.Category;
 import com.finora.api.category.CategoryRepository;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.statementimport.CategoryRuleEngine.RuleConfidence;
 import com.finora.api.statementimport.StatementImportDtos.BatchDetailResponse;
 import com.finora.api.statementimport.StatementImportDtos.BatchTotals;
@@ -9,6 +11,7 @@ import com.finora.api.statementimport.StatementImportDtos.CsvMappingRequest;
 import com.finora.api.statementimport.StatementImportDtos.CsvMappingSuggestion;
 import com.finora.api.statementimport.StatementImportDtos.ItemResponse;
 import com.finora.api.statementimport.StatementImportDtos.MatchedTransactionSummary;
+import com.finora.api.statementimport.StatementImportDtos.StatementCurrencyContext;
 import com.finora.api.transaction.Transaction;
 import com.finora.api.transaction.TransactionRepository;
 import com.finora.api.transaction.TransactionType;
@@ -40,17 +43,19 @@ public class StatementImportAssembler {
         this.rules = rules;
     }
 
-    public BatchDetailResponse detail(StatementImportBatch batch, String accountName,
+    public BatchDetailResponse detail(StatementImportBatch batch, Account account,
                                       List<StatementImportItem> items, String sourceAccountHint,
                                       boolean fileAlreadyImported, CsvMappingRequest csvMapping,
                                       CsvMappingSuggestion suggestion,
                                       List<List<String>> csvRawPreview) {
-        List<ItemResponse> itemResponses = toItemResponses(batch.getUserId(), items);
+        CurrencyCode currency = account.getCurrency();
+        List<ItemResponse> itemResponses = toItemResponses(batch.getUserId(), items, currency);
         return new BatchDetailResponse(
                 batch.getId(),
                 batch.getCreatedAt(),
                 batch.getAccountId(),
-                accountName,
+                account.getName(),
+                currencyContext(batch, currency),
                 batch.getOriginalFilename(),
                 batch.getFormat(),
                 batch.getStatus(),
@@ -63,11 +68,39 @@ public class StatementImportAssembler {
                 csvRawPreview,
                 batch.getConfirmedAt(),
                 batch.getUndoneAt(),
-                totals(batch, items),
+                totals(batch, items, currency),
                 itemResponses);
     }
 
-    public List<ItemResponse> toItemResponses(Long userId, List<StatementImportItem> items) {
+    /**
+     * The batch's self-describing currency contract.
+     *
+     * <p>{@code effectiveCurrency} is the account currency for every source
+     * without exception — a FILE batch cannot exist unless the declaration
+     * matched — and {@code valuesAreConverted} is structurally false: no
+     * exchange rate exists anywhere in Finora to convert with.
+     *
+     * <p>Acknowledgement is asked for only where it can still change an
+     * outcome: a source whose denomination is an assumption, in a batch that
+     * can still materialize something. A finished LEGACY_UNKNOWN import stays
+     * truthfully LEGACY_UNKNOWN without demanding consent for work that is
+     * already done.
+     */
+    public static StatementCurrencyContext currencyContext(StatementImportBatch batch,
+                                                           CurrencyCode accountCurrency) {
+        boolean pending = batch.getStatus() == StatementImportStatus.PREVIEW_READY
+                || batch.getStatus() == StatementImportStatus.PARTIALLY_COMPLETED;
+        return new StatementCurrencyContext(
+                accountCurrency,
+                batch.getCurrencySource(),
+                batch.getDeclaredCurrency(),
+                accountCurrency,
+                false,
+                batch.getCurrencySource().requiresAccountCurrencyAcknowledgement() && pending);
+    }
+
+    public List<ItemResponse> toItemResponses(Long userId, List<StatementImportItem> items,
+                                              CurrencyCode currency) {
         Map<Long, String> categoryNames = categoryNames(userId);
         Map<Long, CategoryMappingRule> ruleById = new HashMap<>();
         for (CategoryMappingRule rule : rules.findAllByUserIdOrderByPriorityDescIdAsc(userId)) {
@@ -93,13 +126,14 @@ public class StatementImportAssembler {
             }
         }
         return items.stream()
-                .map(item -> toResponse(item, categoryNames, ruleById,
+                .map(item -> toResponse(item, currency, categoryNames, ruleById,
                         matched.get(item.getMatchedTransactionId()),
                         generated.get(item.getId())))
                 .toList();
     }
 
-    private ItemResponse toResponse(StatementImportItem item, Map<Long, String> categoryNames,
+    private ItemResponse toResponse(StatementImportItem item, CurrencyCode currency,
+                                    Map<Long, String> categoryNames,
                                     Map<Long, CategoryMappingRule> ruleById,
                                     Transaction matchedTransaction, Transaction generated) {
         CategoryMappingRule matchedRule = item.getMatchedRuleId() == null ? null
@@ -111,6 +145,7 @@ public class StatementImportAssembler {
                 item.getSourceType(),
                 item.getPostedDate(),
                 item.getAmount(),
+                currency,
                 item.getType(),
                 item.getDescription(),
                 item.getMemo(),
@@ -133,6 +168,11 @@ public class StatementImportAssembler {
                         matchedTransaction.getOccurredOn(),
                         matchedTransaction.getDescription(),
                         matchedTransaction.getAmount(),
+                        // The matched transaction's own currency, not the
+                        // batch's: duplicate matching is account-scoped so they
+                        // agree, and reporting the transaction's own value
+                        // keeps that agreement observable instead of assumed.
+                        matchedTransaction.getCurrency(),
                         matchedTransaction.getType(),
                         matchedTransaction.getCategory().getName()),
                 item.getStatus(),
@@ -164,7 +204,8 @@ public class StatementImportAssembler {
                 || item.isDuplicateOverride();
     }
 
-    public BatchTotals totals(StatementImportBatch batch, List<StatementImportItem> items) {
+    public BatchTotals totals(StatementImportBatch batch, List<StatementImportItem> items,
+                              CurrencyCode currency) {
         int ready = 0;
         int invalid = 0;
         int imported = 0;
@@ -213,8 +254,8 @@ public class StatementImportAssembler {
                 }
             }
         }
-        return new BatchTotals(batch.getTotalRows(), ready, invalid, imported, failed, skipped,
-                undone, excluded, includedPending, exact, possible, withinFile, unmapped,
+        return new BatchTotals(currency, batch.getTotalRows(), ready, invalid, imported, failed,
+                skipped, undone, excluded, includedPending, exact, possible, withinFile, unmapped,
                 income, expense, income.subtract(expense));
     }
 

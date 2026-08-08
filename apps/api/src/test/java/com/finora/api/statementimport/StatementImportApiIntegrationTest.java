@@ -38,6 +38,7 @@ class StatementImportApiIntegrationTest extends AbstractIntegrationTest {
 
             <OFX>
             <BANKMSGSRSV1><STMTTRNRS><STMTRS>
+            <CURDEF>BRL
             <BANKACCTFROM><BANKID>0260<ACCTID>12345-678<ACCTTYPE>CHECKING</BANKACCTFROM>
             <BANKTRANLIST>
             <STMTTRN>

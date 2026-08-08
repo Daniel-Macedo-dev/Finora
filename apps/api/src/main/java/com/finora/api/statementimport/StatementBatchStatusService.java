@@ -1,5 +1,8 @@
 package com.finora.api.statementimport;
 
+import com.finora.api.account.Account;
+import com.finora.api.account.AccountRepository;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.statementimport.StatementImportDtos.ConfirmResponse;
 import com.finora.api.statementimport.StatementImportDtos.ItemResult;
 import java.time.Instant;
@@ -18,14 +21,30 @@ public class StatementBatchStatusService {
 
     private final StatementImportBatchRepository batches;
     private final StatementImportItemRepository items;
+    private final AccountRepository accounts;
     private final StatementImportAssembler assembler;
 
     public StatementBatchStatusService(StatementImportBatchRepository batches,
                                        StatementImportItemRepository items,
+                                       AccountRepository accounts,
                                        StatementImportAssembler assembler) {
         this.batches = batches;
         this.items = items;
+        this.accounts = accounts;
         this.assembler = assembler;
+    }
+
+    /**
+     * The batch's denomination, read once per outcome rather than per item.
+     * Owner-scoped: a batch is tied by a composite foreign key to an account of
+     * the same user, so this can only be absent if the database is inconsistent.
+     */
+    private CurrencyCode currencyOf(StatementImportBatch batch) {
+        return accounts.findByIdAndUserId(batch.getAccountId(), batch.getUserId())
+                .map(Account::getCurrency)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Lote de importação sem conta de destino acessível: "
+                                + batch.getAccountId()));
     }
 
     /** COMPLETED when nothing importable or failed remains; else partial. */
@@ -49,7 +68,7 @@ public class StatementBatchStatusService {
             }
         }
         return new ConfirmResponse(batch.getId(), batch.getStatus(), List.copyOf(results),
-                assembler.totals(batch, all));
+                assembler.totals(batch, all, currencyOf(batch)));
     }
 
     /**
@@ -80,6 +99,6 @@ public class StatementBatchStatusService {
             batch.setUndoneAt(Instant.now());
         }
         return new ConfirmResponse(batch.getId(), batch.getStatus(), List.copyOf(results),
-                assembler.totals(batch, all));
+                assembler.totals(batch, all, currencyOf(batch)));
     }
 }

@@ -37,6 +37,7 @@ class StatementImportOwnershipTest extends AbstractIntegrationTest {
 
             <OFX>
             <BANKMSGSRSV1><STMTTRNRS><STMTRS>
+            <CURDEF>BRL
             <BANKTRANLIST>
             <STMTTRN>
             <TRNTYPE>DEBIT

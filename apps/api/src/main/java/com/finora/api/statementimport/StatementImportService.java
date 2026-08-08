@@ -122,7 +122,7 @@ public class StatementImportService {
                     StatementImportStatus.PREVIEW_READY);
             batch.setTotalRows(result.entries().size());
             batch = batches.save(batch);
-            materializePreviewItems(batch, result.entries());
+            materializePreviewItems(batch, result.entries(), account.getCurrency());
             return detailInternal(batch, result.accountHint(), null, null);
         }
 
@@ -188,27 +188,41 @@ public class StatementImportService {
         byte[] content = rawFile(batch);
         StatementParseResult result = parseCsv(content, config);
         batch.setCsvMapping(writeMapping(request));
+        CurrencyCode currency = requireAccount(userId, batch.getAccountId()).getCurrency();
 
         List<StatementEntry> sample = result.entries().stream()
                 .limit(MAPPING_PREVIEW_ROWS)
                 .toList();
-        int valid = (int) result.entries().stream().filter(StatementEntry::valid).count();
+        // The candidate preview counts a row the destination currency cannot
+        // represent as invalid too, so the mapping step never promises rows
+        // that the authoritative parse would then refuse.
+        int valid = (int) result.entries().stream()
+                .filter(entry -> entry.valid()
+                        && fractionIssue(entry.absoluteAmount(), currency) == null)
+                .count();
         return new MappingPreviewResponse(
                 batch.getId(),
+                currency,
                 sample.size(),
                 valid,
                 result.entries().size() - valid,
-                sample.stream().map(entry -> new MappingPreviewResponse.ItemPreview(
-                        entry.sourceIndex(),
-                        entry.postedDate(),
-                        entry.absoluteAmount(),
-                        entry.type(),
-                        entry.description(),
-                        entry.memo(),
-                        entry.externalId(),
-                        entry.issues().isEmpty() ? null : entry.issues().getFirst().code(),
-                        entry.issues().isEmpty() ? null : entry.issues().getFirst().message()))
-                        .toList());
+                sample.stream().map(entry -> {
+                    String scaleIssue = entry.valid()
+                            ? fractionIssue(entry.absoluteAmount(), currency) : null;
+                    return new MappingPreviewResponse.ItemPreview(
+                            entry.sourceIndex(),
+                            entry.postedDate(),
+                            entry.absoluteAmount(),
+                            entry.type(),
+                            entry.description(),
+                            entry.memo(),
+                            entry.externalId(),
+                            entry.issues().isEmpty()
+                                    ? (scaleIssue == null ? null : "CURRENCY_FRACTION_INVALID")
+                                    : entry.issues().getFirst().code(),
+                            entry.issues().isEmpty() ? scaleIssue
+                                    : entry.issues().getFirst().message());
+                }).toList());
     }
 
     /** Authoritative parse with the stored mapping; discards the raw bytes. */
@@ -233,7 +247,8 @@ public class StatementImportService {
         items.flush();
         batch.setTotalRows(result.entries().size());
         batch.setStatus(StatementImportStatus.PREVIEW_READY);
-        materializePreviewItems(batch, result.entries());
+        materializePreviewItems(batch, result.entries(),
+                requireAccount(userId, batch.getAccountId()).getCurrency());
         tempStore.discard(batch.getTempFileToken());
         batch.setTempFileToken(null);
         return detailInternal(batch, null, null, null);
@@ -275,6 +290,11 @@ public class StatementImportService {
         // must be recomputed, and old preview decisions re-derived.
         duplicates.classify(userId, account.getId(), batchItems);
         applySuggestions(userId, batchItems);
+        // The effective currency may have changed with the account. No value is
+        // converted — the same numbers are simply read in the newly selected
+        // account's currency — but a currency that cannot represent a row's
+        // fractional part must invalidate it before it becomes money.
+        revalidateCurrencyScale(batchItems, account.getCurrency());
         return detailInternal(batch, null, null, batchItems);
     }
 
@@ -296,6 +316,7 @@ public class StatementImportService {
             throw new BusinessRuleException("STATEMENT_ITEM_LOCKED",
                     "Um lançamento já importado (ou desfeito) não pode ser editado.");
         }
+        CurrencyCode currency = requireAccount(userId, batch.getAccountId()).getCurrency();
 
         boolean identityChanged = false;
         if (request.description() != null) {
@@ -316,7 +337,11 @@ public class StatementImportService {
             identityChanged = true;
         }
         if (request.amount() != null) {
-            item.setAmount(MoneyRules.normalize(request.amount()));
+            // The DTO's global two-decimal limit is not enough: JPY has none.
+            // Rejecting the edit is deliberate — normalizing here would round
+            // 100,50 into 101 yen the user never typed.
+            MoneyRules.validateScale(request.amount(), currency);
+            item.setAmount(MoneyRules.normalize(request.amount(), currency));
             identityChanged = true;
         }
         if (request.type() != null && request.type() != item.getType()) {
@@ -361,7 +386,8 @@ public class StatementImportService {
             item.setDuplicateOverride(request.duplicateOverride());
         }
 
-        if (item.getStatus() == StatementImportItemStatus.INVALID && coreFieldsComplete(item)) {
+        if (item.getStatus() == StatementImportItemStatus.INVALID && coreFieldsComplete(item)
+                && fractionIssue(item.getAmount(), currency) == null) {
             item.setStatus(StatementImportItemStatus.READY);
             item.setValidation(null, null);
         }
@@ -373,7 +399,7 @@ public class StatementImportService {
                 applySuggestions(userId, List.of(item));
             }
         }
-        return assembler.toItemResponses(userId, List.of(item)).getFirst();
+        return assembler.toItemResponses(userId, List.of(item), currency).getFirst();
     }
 
     // ── History and detail ──────────────────────────────────────────────────
@@ -386,15 +412,21 @@ public class StatementImportService {
         var result = accountId != null
                 ? batches.findAllByUserIdAndAccountId(userId, accountId, pageable)
                 : batches.findAllByUserId(userId, pageable);
-        Map<Long, String> accountNames = accountNames(userId);
+        // One owner-scoped account load for the whole page: name and currency
+        // come from the same rows, never one lookup per history entry.
+        Map<Long, Account> ownedAccounts = accountsById(userId);
         return PageResponse.from(result.map(batch -> {
             long imported = items.countByBatchIdAndStatus(batch.getId(),
                     StatementImportItemStatus.IMPORTED);
             long failed = items.countByBatchIdAndStatus(batch.getId(),
                     StatementImportItemStatus.FAILED);
+            Account account = ownedAccounts.get(batch.getAccountId());
             return new BatchSummaryResponse(
                     batch.getId(), batch.getCreatedAt(), batch.getAccountId(),
-                    accountNames.get(batch.getAccountId()), batch.getOriginalFilename(),
+                    account == null ? null : account.getName(),
+                    account == null ? null : account.getCurrency(),
+                    batch.getCurrencySource(), batch.getDeclaredCurrency(),
+                    batch.getOriginalFilename(),
                     batch.getFormat(), batch.getStatus(), batch.getTotalRows(),
                     imported, failed, batch.getConfirmedAt(), batch.getUndoneAt());
         }));
@@ -415,8 +447,9 @@ public class StatementImportService {
         Long userId = batch.getUserId();
         List<StatementImportItem> batchItems = loadedItems != null ? loadedItems
                 : items.findAllByBatchIdAndUserIdOrderBySourceIndexAsc(batch.getId(), userId);
-        String accountName = accounts.findByIdAndUserId(batch.getAccountId(), userId)
-                .map(Account::getName).orElse(null);
+        // One owner-scoped account read per batch operation, never one per
+        // item: name and authoritative currency come from the same row.
+        Account account = requireAccount(userId, batch.getAccountId());
         boolean reupload = batches.existsByUserIdAndAccountIdAndFileSha256AndIdNot(
                 userId, batch.getAccountId(), batch.getFileSha256(), batch.getId());
 
@@ -440,16 +473,27 @@ public class StatementImportService {
                         CsvMappingConfig.DATE_PATTERN_OPTIONS);
             }
         }
-        return assembler.detail(batch, accountName, batchItems, accountHint, reupload,
+        return assembler.detail(batch, account, batchItems, accountHint, reupload,
                 mapping, suggestion, rawPreview);
+    }
+
+    /**
+     * The destination account of an existing batch. A V11 composite foreign key
+     * ties the batch to an account of the same owner, so absence here means the
+     * database itself is inconsistent — not a routine 404.
+     */
+    private Account requireAccount(Long userId, Long accountId) {
+        return accounts.findByIdAndUserId(accountId, userId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Lote de importação sem conta de destino acessível: " + accountId));
     }
 
     /** Persists parsed entries as preview items, classifies and suggests. */
     private void materializePreviewItems(StatementImportBatch batch,
-                                         List<StatementEntry> entries) {
+                                         List<StatementEntry> entries, CurrencyCode currency) {
         Long userId = batch.getUserId();
         List<StatementImportItem> created = entries.stream()
-                .map(entry -> toItem(batch, entry))
+                .map(entry -> toItem(batch, entry, currency))
                 .toList();
         items.saveAll(created);
         items.flush();
@@ -457,10 +501,17 @@ public class StatementImportService {
         applySuggestions(userId, created);
     }
 
-    private StatementImportItem toItem(StatementImportBatch batch, StatementEntry entry) {
+    private StatementImportItem toItem(StatementImportBatch batch, StatementEntry entry,
+                                       CurrencyCode currency) {
+        // A row the destination currency cannot represent is invalid from the
+        // start, so the user sees and can correct it in the preview instead of
+        // discovering it at confirmation — or worse, having 100,50 JPY quietly
+        // rounded into 101 yen they never wrote.
+        String scaleIssue = fractionIssue(entry.absoluteAmount(), currency);
+        boolean valid = entry.valid() && scaleIssue == null;
         StatementImportItem item = new StatementImportItem(batch.getUserId(), batch.getId(),
                 batch.getAccountId(), entry.sourceIndex(),
-                entry.valid() ? StatementImportItemStatus.READY
+                valid ? StatementImportItemStatus.READY
                         : StatementImportItemStatus.INVALID);
         item.setExternalId(entry.externalId());
         item.setSourceType(entry.sourceType());
@@ -478,8 +529,64 @@ public class StatementImportService {
             var issue = entry.issues().getFirst();
             item.setValidation(issue.code(), issue.message());
             item.setIncluded(false);
+        } else if (scaleIssue != null) {
+            item.setValidation("CURRENCY_FRACTION_INVALID", scaleIssue);
+            item.setIncluded(false);
         }
         return item;
+    }
+
+    /**
+     * The currency-precision message for an amount the destination currency
+     * cannot represent, or {@code null} when the amount is fine.
+     *
+     * <p>Reuses {@link MoneyRules#validateScale} as the single authority on both
+     * the rule and its wording, converted here into a row-level verdict: a
+     * preview marks the row invalid rather than failing the whole request, so
+     * the user can fix one editable line.
+     */
+    private static String fractionIssue(java.math.BigDecimal amount, CurrencyCode currency) {
+        if (amount == null) {
+            return null;
+        }
+        try {
+            MoneyRules.validateScale(amount, currency);
+            return null;
+        } catch (BusinessRuleException e) {
+            return e.getMessage();
+        }
+    }
+
+    /**
+     * Re-runs currency-precision validation after the destination currency may
+     * have changed, in both directions.
+     *
+     * <p>A READY row whose fractional value the new currency cannot represent
+     * becomes INVALID; a row that was invalid for exactly that reason becomes
+     * READY again once the new currency can represent it. Only the
+     * scale verdict is touched — inclusion, category choices and duplicate
+     * decisions are the user's and survive an account change, and an INVALID
+     * row is already non-importable regardless of them.
+     */
+    private static void revalidateCurrencyScale(List<StatementImportItem> batchItems,
+                                                CurrencyCode currency) {
+        for (StatementImportItem item : batchItems) {
+            boolean editable = item.getStatus() == StatementImportItemStatus.READY
+                    || item.getStatus() == StatementImportItemStatus.INVALID;
+            if (!editable) {
+                continue;
+            }
+            String issue = fractionIssue(item.getAmount(), currency);
+            if (issue != null) {
+                item.setStatus(StatementImportItemStatus.INVALID);
+                item.setValidation("CURRENCY_FRACTION_INVALID", issue);
+            } else if (item.getStatus() == StatementImportItemStatus.INVALID
+                    && "CURRENCY_FRACTION_INVALID".equals(item.getValidationCode())
+                    && coreFieldsComplete(item)) {
+                item.setStatus(StatementImportItemStatus.READY);
+                item.setValidation(null, null);
+            }
+        }
     }
 
     /** One rule load per call; suggestions never overwrite a user selection. */
@@ -600,12 +707,12 @@ public class StatementImportService {
         return objectMapper.readValue(json, CsvMappingRequest.class);
     }
 
-    private Map<Long, String> accountNames(Long userId) {
-        Map<Long, String> names = new java.util.HashMap<>();
+    private Map<Long, Account> accountsById(Long userId) {
+        Map<Long, Account> byId = new java.util.HashMap<>();
         for (Account account : accounts.findAllByUserIdOrderByDisplayOrderAscNameAsc(userId)) {
-            names.put(account.getId(), account.getName());
+            byId.put(account.getId(), account);
         }
-        return names;
+        return byId;
     }
 
     private static StatementImportFormat detectFormat(byte[] content, String filename) {
