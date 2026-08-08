@@ -4,6 +4,7 @@ import com.finora.api.account.Account;
 import com.finora.api.account.AccountRepository;
 import com.finora.api.category.Category;
 import com.finora.api.category.CategoryRepository;
+import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.statementimport.StatementImportDtos.ItemResult;
 import com.finora.api.statementimport.StatementImportDtos.ItemResultCode;
@@ -26,6 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
  * money normalization) and writes the immutable
  * {@code statement_import_item_id} link whose partial unique index is the
  * database backstop against double materialization under concurrency.
+ *
+ * <p>Currency invariant: every transaction this service creates is denominated
+ * in its destination account's currency, set explicitly. No conversion happens
+ * anywhere — Finora has no exchange rates — so the account is not one candidate
+ * among several, it is the definition of what the imported amount means.
  */
 @Service
 public class StatementMaterializationService {
@@ -120,10 +126,27 @@ public class StatementMaterializationService {
                     "Um lançamento com esta identidade já foi importado nesta conta.");
         }
 
+        // The destination account is the single authority on denomination.
+        // Not the user's base currency, not the batch's creation date, not the
+        // filename, not the OFX description, not the current settings: the
+        // account the money moves in decides what the amount means. Validating
+        // the scale here is defense in depth — the preview already rejects a
+        // fractional amount in a zero-decimal currency, and this is the last
+        // point before the value becomes real money.
+        try {
+            MoneyRules.validateScale(item.getAmount(), account.getCurrency());
+        } catch (BusinessRuleException e) {
+            return fail(item, e.getCode(), e.getMessage());
+        }
+
         Transaction transaction = new Transaction(userId, item.getType(),
-                MoneyRules.normalize(item.getAmount()), item.getDescription(),
-                item.getPostedDate(), category);
+                MoneyRules.normalize(item.getAmount(), account.getCurrency()),
+                item.getDescription(), item.getPostedDate(), category);
         transaction.setAccount(account);
+        // Explicit, never inherited: Transaction.currency defaults to BRL, and
+        // relying on that default is how a foreign-currency import ends up
+        // disagreeing with the account it was imported into.
+        transaction.setCurrency(account.getCurrency());
         // A bank statement cannot reveal the instrument; OTHER is the honest
         // non-card representation (never the legacy CREDIT method).
         transaction.setPaymentMethod(PaymentMethod.OTHER);
