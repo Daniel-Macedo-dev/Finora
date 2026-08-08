@@ -198,7 +198,7 @@ public class StatementImportService {
         // that the authoritative parse would then refuse.
         int valid = (int) result.entries().stream()
                 .filter(entry -> entry.valid()
-                        && fractionIssue(entry.absoluteAmount(), currency) == null)
+                        && MoneyRules.fractionViolation(entry.absoluteAmount(), currency) == null)
                 .count();
         return new MappingPreviewResponse(
                 batch.getId(),
@@ -208,7 +208,7 @@ public class StatementImportService {
                 result.entries().size() - valid,
                 sample.stream().map(entry -> {
                     String scaleIssue = entry.valid()
-                            ? fractionIssue(entry.absoluteAmount(), currency) : null;
+                            ? MoneyRules.fractionViolation(entry.absoluteAmount(), currency) : null;
                     return new MappingPreviewResponse.ItemPreview(
                             entry.sourceIndex(),
                             entry.postedDate(),
@@ -387,7 +387,7 @@ public class StatementImportService {
         }
 
         if (item.getStatus() == StatementImportItemStatus.INVALID && coreFieldsComplete(item)
-                && fractionIssue(item.getAmount(), currency) == null) {
+                && MoneyRules.fractionViolation(item.getAmount(), currency) == null) {
             item.setStatus(StatementImportItemStatus.READY);
             item.setValidation(null, null);
         }
@@ -507,7 +507,7 @@ public class StatementImportService {
         // start, so the user sees and can correct it in the preview instead of
         // discovering it at confirmation — or worse, having 100,50 JPY quietly
         // rounded into 101 yen they never wrote.
-        String scaleIssue = fractionIssue(entry.absoluteAmount(), currency);
+        String scaleIssue = MoneyRules.fractionViolation(entry.absoluteAmount(), currency);
         boolean valid = entry.valid() && scaleIssue == null;
         StatementImportItem item = new StatementImportItem(batch.getUserId(), batch.getId(),
                 batch.getAccountId(), entry.sourceIndex(),
@@ -544,27 +544,6 @@ public class StatementImportService {
     }
 
     /**
-     * The currency-precision message for an amount the destination currency
-     * cannot represent, or {@code null} when the amount is fine.
-     *
-     * <p>Reuses {@link MoneyRules#validateScale} as the single authority on both
-     * the rule and its wording, converted here into a row-level verdict: a
-     * preview marks the row invalid rather than failing the whole request, so
-     * the user can fix one editable line.
-     */
-    private static String fractionIssue(java.math.BigDecimal amount, CurrencyCode currency) {
-        if (amount == null) {
-            return null;
-        }
-        try {
-            MoneyRules.validateScale(amount, currency);
-            return null;
-        } catch (BusinessRuleException e) {
-            return e.getMessage();
-        }
-    }
-
-    /**
      * Re-runs currency-precision validation after the destination currency may
      * have changed, in both directions.
      *
@@ -583,7 +562,7 @@ public class StatementImportService {
             if (!editable) {
                 continue;
             }
-            String issue = fractionIssue(item.getAmount(), currency);
+            String issue = MoneyRules.fractionViolation(item.getAmount(), currency);
             if (issue != null) {
                 item.setStatus(StatementImportItemStatus.INVALID);
                 item.setValidation("CURRENCY_FRACTION_INVALID", issue);

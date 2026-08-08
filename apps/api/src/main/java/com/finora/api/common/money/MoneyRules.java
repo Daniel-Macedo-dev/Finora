@@ -57,19 +57,35 @@ public final class MoneyRules {
      * @throws BusinessRuleException with code {@code CURRENCY_FRACTION_INVALID}
      */
     public static void validateScale(BigDecimal value, CurrencyCode currency) {
+        String violation = fractionViolation(value, currency);
+        if (violation != null) {
+            throw new BusinessRuleException("CURRENCY_FRACTION_INVALID", violation);
+        }
+    }
+
+    /**
+     * The same rule as {@link #validateScale}, reported instead of thrown.
+     *
+     * <p>Exists for callers that judge many values in one pass and turn the
+     * verdict into row-level state — a statement preview marks the offending row
+     * invalid rather than failing the whole file. Building an exception per row
+     * would fill thousands of stack traces just to read this message, and
+     * duplicating the condition at the call site would give the rule two
+     * definitions. This keeps one.
+     *
+     * @return the user-facing violation, or {@code null} when the amount fits
+     */
+    public static String fractionViolation(BigDecimal value, CurrencyCode currency) {
         if (value == null) {
-            return;
+            return null;
         }
         int digits = currency.getFractionDigits();
-        if (value.stripTrailingZeros().scale() > digits) {
-            throw new BusinessRuleException(
-                    "CURRENCY_FRACTION_INVALID",
-                    digits == 0
-                            ? "%s não aceita centavos: informe um valor inteiro."
-                                    .formatted(currency.name())
-                            : "%s aceita no máximo %d casas decimais."
-                                    .formatted(currency.name(), digits));
+        if (value.stripTrailingZeros().scale() <= digits) {
+            return null;
         }
+        return digits == 0
+                ? "%s não aceita centavos: informe um valor inteiro.".formatted(currency.name())
+                : "%s aceita no máximo %d casas decimais.".formatted(currency.name(), digits);
     }
 
     /** Formats a value in its own currency for human-readable API messages. */

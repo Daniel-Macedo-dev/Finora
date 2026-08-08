@@ -34,6 +34,10 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
   const [saveAsRule, setSaveAsRule] = useState(false)
   const [rulePattern, setRulePattern] = useState(item.description ?? '')
   const [localError, setLocalError] = useState<string | null>(null)
+  // Kept apart from `localError` so it can be wired to the amount field itself:
+  // a precision refusal is about that input, and FormField is what associates
+  // the message with it (aria-describedby + aria-invalid).
+  const [amountError, setAmountError] = useState<string | null>(null)
 
   const categories = useCategories(type)
   // The row's own denomination, so the parser follows the currency's real
@@ -44,6 +48,8 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const parsedAmount = parseMoneyInput(amount, currency)
+    setLocalError(null)
+    setAmountError(null)
     if (!description.trim()) {
       setLocalError('A descrição não pode ficar vazia.')
       return
@@ -51,18 +57,17 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
     if (parsedAmount === null && wholeUnitsOnly && amount.trim() !== '') {
       // parseMoneyInput refuses a fractional amount in a zero-decimal currency
       // rather than rounding it: say so instead of reporting a generic error.
-      setLocalError(`${currency} não aceita centavos: informe um valor inteiro.`)
+      setAmountError(`${currency} não aceita centavos: informe um valor inteiro.`)
       return
     }
     if (parsedAmount === null || parsedAmount <= 0) {
-      setLocalError('Informe um valor maior que zero.')
+      setAmountError('Informe um valor maior que zero.')
       return
     }
     if (saveAsRule && (!rulePattern.trim() || !categoryId)) {
       setLocalError('Para salvar a regra, informe o texto e a categoria.')
       return
     }
-    setLocalError(null)
     patchItem.mutate(
       {
         batchId,
@@ -132,6 +137,7 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
           <FormField
             label={`Valor (${currency})`}
             hint={wholeUnitsOnly ? `${currency} não usa centavos.` : undefined}
+            error={amountError ?? undefined}
           >
             <input
               className="input"

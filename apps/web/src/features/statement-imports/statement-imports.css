@@ -426,7 +426,7 @@
 .si-currency-notice {
   background: var(--info-soft);
   color: var(--ink-primary);
-  border-left: 3px solid var(--info);
+  border-left: 4px solid var(--info);
   border-radius: var(--radius-md);
   padding: var(--space-3);
   margin-bottom: var(--space-4);
@@ -459,19 +459,20 @@
   font-size: var(--text-xs);
 }
 
+/* Wider than a plain meta cell: the option text carries the account name, its
+   type and its currency, and a select narrow enough to clip all three hides the
+   very thing that decides what the imported amounts mean. */
 .si-destination-field {
+  grid-column: span 2;
   min-width: 0;
 }
 
-/* Wider than a plain meta cell: the option text carries the account name, its
-   type and its currency, and a select narrow enough to clip all three hides the
-   very thing that decides what the imported amounts mean. Only applied once the
-   grid actually has two tracks to span — on a single-column layout the field is
-   already full width, and spanning would invent a second column and push the
-   card into horizontal scroll. */
-@media (min-width: 640px) {
+/* One meta track at this width, so spanning two would invent a second column
+   and push the card into horizontal scroll. Declared after the rule it
+   overrides: a media query adds no specificity, so source order decides. */
+@media (max-width: 480px) {
   .si-destination-field {
-    grid-column: span 2;
+    grid-column: auto;
   }
 }
 

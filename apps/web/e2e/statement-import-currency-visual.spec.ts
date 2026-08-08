@@ -207,7 +207,10 @@ async function seedJpyEditing(page: Page): Promise<Scenario> {
     filename: 'extrato-iene.csv',
     currency: 'JPY',
     sourceLabel: 'Moeda da conta de destino',
-    present: [/JPY não aceita centavos/, /JPY não usa centavos/],
+    // The precision refusal replaces the field's hint while it is showing —
+    // FormField deliberately never renders both, and the error carries the same
+    // rule more urgently.
+    present: [/JPY não aceita centavos/, /Valor \(JPY\)/],
     absent: [/não declarou uma moeda/],
     acknowledgement: false,
     async reopen(page) {

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useId, useMemo } from 'react'
 import { errorMessage } from '../../components/states'
 import { currencyLabel } from '../../lib/money'
 import { ACCOUNT_TYPE_LABELS } from '../shared/types'
@@ -26,6 +26,12 @@ interface DestinationAccountFieldProps {
 export default function DestinationAccountField({ batch }: DestinationAccountFieldProps) {
   const accounts = useAccounts()
   const changeAccount = useChangeAccount()
+  // The select lives in a definition list rather than a FormField, so the hint
+  // and the currency refusal are associated by hand — without this, a reader
+  // reaching the control hears its label and nothing about the constraint.
+  const fieldId = useId()
+  const hintId = `${fieldId}-hint`
+  const errorId = `${fieldId}-error`
 
   const editable = batch.status === 'NEEDS_MAPPING' || batch.status === 'PREVIEW_READY'
   const declared = batch.currency.currencySource === 'FILE'
@@ -62,6 +68,8 @@ export default function DestinationAccountField({ batch }: DestinationAccountFie
           id="si-destination-account"
           className="select"
           value={String(batch.accountId)}
+          aria-describedby={changeAccount.isError ? `${hintId} ${errorId}` : hintId}
+          aria-invalid={changeAccount.isError ? true : undefined}
           disabled={changeAccount.isPending || eligible.length === 0}
           onChange={(event) =>
             changeAccount.mutate({ batchId: batch.id, accountId: Number(event.target.value) })
@@ -74,13 +82,13 @@ export default function DestinationAccountField({ batch }: DestinationAccountFie
             </option>
           ))}
         </select>
-        <span className="si-destination-hint">
+        <span id={hintId} className="si-destination-hint">
           {declared !== null
             ? `O arquivo declara ${declared}: só contas em ${declared} podem receber este extrato.`
             : 'Trocar a conta muda a moeda em que os mesmos valores serão lidos. Nenhuma conversão é realizada.'}
         </span>
         {changeAccount.isError && (
-          <p className="field-error" role="alert">
+          <p id={errorId} className="field-error" role="alert">
             {errorMessage(changeAccount.error)}
           </p>
         )}
