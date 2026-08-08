@@ -102,6 +102,30 @@ class CurrencyCodeTest {
         MoneyRules.validateScale(new BigDecimal("100.00"), CurrencyCode.JPY);
     }
 
+    /**
+     * The reported form of the same rule, used by callers that judge many values
+     * in one pass and turn the verdict into row-level state.
+     */
+    @Test
+    void fractionViolationReportsWhatValidateScaleWouldThrow() {
+        assertThat(MoneyRules.fractionViolation(new BigDecimal("100.50"), CurrencyCode.JPY))
+                .isNotNull()
+                .contains("JPY")
+                .contains("centavos");
+        assertThat(MoneyRules.fractionViolation(new BigDecimal("10.005"), CurrencyCode.USD))
+                .isNotNull()
+                .contains("USD")
+                .contains("2");
+        // Silence means the amount fits — including a null amount and a whole
+        // value written with trailing zeros.
+        assertThat(MoneyRules.fractionViolation(new BigDecimal("1200"), CurrencyCode.JPY)).isNull();
+        assertThat(MoneyRules.fractionViolation(new BigDecimal("100.00"), CurrencyCode.JPY))
+                .isNull();
+        assertThat(MoneyRules.fractionViolation(new BigDecimal("10.55"), CurrencyCode.USD))
+                .isNull();
+        assertThat(MoneyRules.fractionViolation(null, CurrencyCode.JPY)).isNull();
+    }
+
     @Test
     void twoDecimalCurrenciesRejectSubCentPrecision() {
         assertThatThrownBy(

@@ -361,8 +361,9 @@ class OfflineSyncDomainTest extends OfflineSyncTestSupport {
         jdbc.update("""
                 INSERT INTO statement_import_batches
                     (user_id, account_id, original_filename, format, file_sha256,
-                     file_size_bytes, parser_version, fingerprint_version, status)
-                VALUES (?, ?, 'sync.csv', 'CSV', ?, 10, 1, 1, 'COMPLETED')
+                     file_size_bytes, parser_version, fingerprint_version, status,
+                     currency_source)
+                VALUES (?, ?, 'sync.csv', 'CSV', ?, 10, 2, 1, 'COMPLETED', 'ACCOUNT')
                 """, user.id(), account, "d".repeat(64));
         long batch = lastId("statement_import_batches");
         jdbc.update("""

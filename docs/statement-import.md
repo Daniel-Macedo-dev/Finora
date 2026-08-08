@@ -26,6 +26,13 @@ O arquivo enviado nunca é a fonte de verdade financeira; o ledger de
 importação (lote + itens) e o vínculo com a transação gerada são a trilha de
 auditoria.
 
+> Todo lote tem **exatamente uma moeda efetiva**: a da conta de destino. **Nada é
+> convertido em nenhum momento** — o Finora não tem taxas de câmbio, então um
+> extrato estrangeiro é lido na moeda da conta ou recusado, nunca reinterpretado.
+
+`valuesAreConverted` é `false` por construção na resposta do lote. O campo existe
+para que o cliente **afirme** esse fato em vez de assumi-lo.
+
 ## Upload e privacidade
 
 - Tamanho máximo: **5 MB**, reforçado tanto pelo container servlet
@@ -102,9 +109,128 @@ entre contas **não** são inferidas automaticamente: um extrato não prova que 
 outra ponta existe em outra conta Finora, então cada lançamento entra como
 receita/despesa comum.
 
+## Moeda da importação
+
+A conta de destino é a autoridade sobre a denominação. O que varia entre os lotes
+não é a moeda efetiva, e sim a **evidência** por trás dela — e é a evidência que
+decide se o usuário precisa confirmar uma suposição antes de criar dinheiro.
+
+`statement_import_batches.currency_source` (enum `StatementCurrencySource`):
+
+| Origem | Quando | `declared_currency` | Exige confirmação |
+|---|---|---|---|
+| `ACCOUNT` | CSV. O contrato CSV do Finora não tem coluna de moeda, então **escolher a conta já é** a declaração de denominação. | `NULL` | não |
+| `FILE` | OFX cujo `CURDEF` foi lido **e** coincide com a conta. | código suportado | não |
+| `ACCOUNT_ASSUMED` | OFX que não trouxe `CURDEF` algum. A moeda da conta será usada, mas isso é suposição do Finora, não afirmação do arquivo. | `NULL` | **sim** |
+| `LEGACY_UNKNOWN` | Lote OFX criado antes da V16, quando o parser não registrava se havia `CURDEF`. | `NULL` | **sim**, se ainda houver item a materializar |
+
+`LEGACY_UNKNOWN` não é o mesmo que `ACCOUNT_ASSUMED`, e a diferença importa: o
+parser da época **nunca olhou** para o `CURDEF`. Dizer que aqueles arquivos não
+declararam moeda seria inventar evidência sobre um documento que o Finora já não
+tem. A interface reflete isso com texto diferente — "esta importação foi criada
+antes de o Finora registrar a moeda declarada pelo arquivo", nunca "o arquivo não
+declarou uma moeda".
+
+Um lote `FILE` **não pode existir** sem o código que leu, e nenhuma outra origem
+pode carregar um; a restrição vale no construtor da entidade e como `CHECK` no
+banco.
+
+### `CURDEF` do OFX
+
+O scanner limitado existente passou a ler o `CURDEF` de **metadados de extrato**.
+Nada mudou nos limites de segurança: sem parser XML, sem DTD, sem entidades
+externas, com todos os limites de tamanho, profundidade e comprimento intactos.
+
+- Só metadados de extrato declaram a moeda do extrato. Um `<CURDEF>` dentro de um
+  `STMTTRN`, um agregado `CURRENCY`/`ORIGCURRENCY` por transação e a palavra num
+  `MEMO` são todos ignorados.
+- Normalização: espaços em volta são removidos e o código sai em maiúsculas
+  canônicas (`usd`, ` USD `, `uSd` todos viram `USD`).
+- **Repetição do mesmo código é aceita** — arquivos com vários extratos
+  legitimamente repetem o `CURDEF`.
+- **Códigos diferentes são recusados** (`STATEMENT_CURRENCY_CONFLICT`). Escolher o
+  primeiro ou o último denominaria dinheiro real por uma leitura arbitrária de um
+  documento ambíguo.
+- Um valor que não tenha a forma de três letras é recusado
+  (`STATEMENT_CURRENCY_INVALID`) **sem eco do conteúdo**, que é texto de arquivo
+  não validado.
+- Um código válido fora do catálogo fechado é recusado (`CURRENCY_UNSUPPORTED`).
+  Nunca há remapeamento silencioso para algo que o Finora suporte.
+
+### Recusas e o momento delas
+
+| Situação | Código | Efeito |
+|---|---|---|
+| `CURDEF` diverge da conta | `STATEMENT_CURRENCY_MISMATCH` | recusado **antes** de o lote existir; nada é persistido |
+| `CURDEF` fora do catálogo | `CURRENCY_UNSUPPORTED` | idem |
+| Dois `CURDEF` diferentes | `STATEMENT_CURRENCY_CONFLICT` | idem |
+| Confirmação sem o consentimento exigido | `STATEMENT_CURRENCY_ACK_REQUIRED` | recusada antes do primeiro item; **nenhum item vira `FAILED`** |
+
+A ordem importa para privacidade tanto quanto para correção: a conta é resolvida
+**pelo dono atual** antes de qualquer comparação de moeda. A conta de outra pessoa
+continua indistinguível de inexistente e não pode ter a moeda sondada por upload.
+
+### O consentimento não é identidade financeira
+
+`ConfirmRequest.acknowledgeAccountCurrency` é consentimento, não identidade. Ele
+**não** entra no hash do arquivo, no fingerprint de conteúdo, na identidade forte,
+na classificação de duplicidade, na transação gerada nem no undo. Uma confirmação
+consentida é tão idempotente quanto qualquer outra, e o consentimento nunca é
+gravado nos itens.
+
+Uma confirmação que **não materializaria nada** (lote concluído, ou só duplicatas
+e exclusões restando) não exige o consentimento: não há suposição em jogo, e
+recusá-la quebraria uma retentativa idempotente inofensiva.
+
+### Troca de conta de destino
+
+A conta decide a denominação, então trocá-la muda **o que os valores significam**,
+nunca o valor deles. A interface diz isso em texto.
+
+- `ACCOUNT` (CSV): permitido. A moeda efetiva passa a ser a da nova conta.
+- `FILE`: só entre contas da moeda declarada. Outra moeda é recusada com
+  `STATEMENT_CURRENCY_MISMATCH` **antes de qualquer campo mudar** — nada é
+  gravado e revertido.
+- `ACCOUNT_ASSUMED` / `LEGACY_UNKNOWN`: permitido. A suposição acompanha a conta
+  e o consentimento continua exigido; a interface o **limpa**, porque a suposição
+  aceita deixou de valer.
+
+Em todos os casos a classificação de duplicidade, que é escopada por conta, é
+recalculada como já era, e a precisão da moeda é reavaliada nas duas direções.
+
+### Precisão e moedas sem centavos
+
+`MoneyRules` é a autoridade única da regra e da mensagem. BRL, USD, EUR, GBP, CAD,
+AUD e CHF aceitam até 2 casas; **JPY aceita 0**.
+
+`JPY 100,50` **nunca** é arredondado para 101. A linha é marcada inválida com
+`CURRENCY_FRACTION_INVALID` — na pré-visualização do mapeamento, na
+pré-visualização autoritativa e novamente na materialização como defesa em
+profundidade — e a edição do valor é recusada em vez de arredondada. O veredito de
+precisão **não** mexe na escolha de inclusão do usuário: uma linha pode virar
+inválida só porque a conta de destino mudou, sem edição alguma, e `INVALID` já
+impede a materialização por conta própria.
+
+Na apresentação, uma moeda de zero casas é formatada sem decimais para os valores
+inteiros que normalmente carrega; um valor que **de fato** traga fração é impresso
+como está, para não exibir uma quantia diferente da que está armazenada logo acima
+da mensagem que pede a correção.
+
 ## Fingerprints e deduplicação
 
-Três conceitos distintos, todos versionados (`Fingerprints.PARSER_VERSION`):
+Duas versões distintas, e confundi-las é caro:
+
+- **`Fingerprints.VERSION`** (1) é a composição do fingerprint — a lista de
+  valores que entram no hash. É **identidade financeira**: decide se duas linhas
+  são a mesma linha, e portanto se uma importação é duplicata. Movê-la sem
+  necessidade tornaria todo fingerprint armazenado incomparável e reimportaria
+  dinheiro já importado.
+- **`Fingerprints.PARSER_VERSION`** (2) registra qual parser produziu um lote. A
+  versão 2 acrescentou o `CURDEF` à saída do parser, que é saída observável nova
+  — mas o `CURDEF` **não contribui** para o fingerprint de conteúdo, então a
+  identidade de linha não mudou e `VERSION` permaneceu 1.
+
+Três conceitos de identidade, distintos:
 
 - **Hash do arquivo** (`SHA-256` dos bytes): identifica reenvio do mesmo
   arquivo (`fileAlreadyImported` no detalhe do lote).
@@ -175,6 +301,27 @@ o `CREDIT` legado. Cada transação gerada carrega o vínculo imutável
 `statement_import_item_id`, protegido por índice único parcial contra dupla
 materialização sob concorrência.
 
+A moeda é definida **explicitamente** a partir da conta de destino:
+
+```java
+MoneyRules.validateScale(item.getAmount(), account.getCurrency());
+transaction.setAccount(account);
+transaction.setCurrency(account.getCurrency());   // nunca o default da entidade
+```
+
+Não é o default `BRL` de `Transaction`, não é a `baseCurrency` do usuário, não é a
+data do lote, o nome do arquivo, a descrição do OFX ou qualquer configuração: a
+conta em que o dinheiro se move **é** o significado do valor importado. Antes
+desta etapa a linha faltava, e com a FK composta `(account_id, currency)` da V15
+no lugar o resultado não era uma linha mal rotulada — era um insert recusado,
+item por item, reportado como conflito genérico. O defeito de integridade e o
+defeito de usabilidade eram a mesma linha ausente.
+
+Um lote cuja denominação é suposição (`ACCOUNT_ASSUMED`, `LEGACY_UNKNOWN`) exige
+`acknowledgeAccountCurrency` antes de qualquer materialização — recusado antes do
+primeiro item, sem marcar linha alguma como `FAILED`, porque quem está inválido é
+o **pedido**, não o dado.
+
 Cada item recebe um resultado estruturado: `SUCCESS`, `FAILED`, `SKIPPED`,
 `EXACT_DUPLICATE`, `ALREADY_IMPORTED`, `BLOCKED`, `UNDONE` ou `ALREADY_UNDONE`,
 com código e mensagem seguros em português. Confirmar de novo é idempotente —
@@ -226,6 +373,26 @@ PUT    /api/category-mapping-rules/{id}
 DELETE /api/category-mapping-rules/{id}
 ```
 
+### Moeda nas respostas
+
+O detalhe do lote traz um bloco `currency` com `accountCurrency`,
+`currencySource`, `declaredCurrency`, `effectiveCurrency`, `valuesAreConverted`
+(sempre `false`) e `currencyAcknowledgementRequired`. `effectiveCurrency` é igual
+a `accountCurrency` em todas as origens — um lote `FILE` só existe quando a
+declaração coincidiu.
+
+Valor monetário nunca viaja sem denominação onde possa ser renderizado sozinho:
+`ItemResponse.currency` (o endpoint de edição devolve um item isolado),
+`BatchTotals.currency` (os totais viajam dentro de `ConfirmResponse`, que não tem
+outra moeda), `MatchedTransactionSummary.currency` (da própria transação casada) e
+`MappingPreviewResponse.accountCurrency`. O histórico expõe `accountCurrency`,
+`currencySource` e `declaredCurrency` por lote.
+
+`POST /{id}/confirm` aceita `{ itemIds?, acknowledgeAccountCurrency? }`. Erros
+próprios desta etapa: `STATEMENT_CURRENCY_MISMATCH`, `CURRENCY_UNSUPPORTED`,
+`STATEMENT_CURRENCY_CONFLICT`, `STATEMENT_CURRENCY_INVALID`,
+`STATEMENT_CURRENCY_ACK_REQUIRED` e `CURRENCY_FRACTION_INVALID`.
+
 ## Interface
 
 - **`/statement-imports` ("Importar extrato")**: rota autenticada com lazy
@@ -266,6 +433,36 @@ sustentam a proteção contra duplicata exata e dupla materialização.
 categorias, transações, orçamentos, compromissos, cartões, faturas, conversões
 de crédito legado) sobrevivem à migração e que nenhuma transação antiga nasce
 marcada como importada.
+
+## Migração V16
+
+`V16__statement_import_currency_metadata.sql` acrescenta
+`statement_import_batches.currency_source` (`NOT NULL` depois do backfill, com
+`CHECK` sobre o enum) e `declared_currency` (`VARCHAR(3)`, `NULL`, restrito ao
+catálogo fechado), mais o `CHECK` que amarra os dois: `FILE` exige o código,
+qualquer outra origem exige `NULL`.
+
+Backfill determinístico: CSV existente vira `ACCOUNT` (era exatamente o que já
+era), OFX existente vira `LEGACY_UNKNOWN` — nunca `ACCOUNT_ASSUMED`, que
+afirmaria que aqueles arquivos omitiram o `CURDEF`. Nenhum default sobrevive ao
+backfill: depois da V16 a aplicação classifica cada lote explicitamente, como a
+V15 já fez para as colunas de moeda.
+
+A migração também traz um reparo **estreitamente delimitado** da denominação de
+transações geradas por importação: para linhas com `statement_import_item_id`
+não nulo, do mesmo dono da conta, cuja moeda discorda da conta, a moeda passa a
+ser a da conta. Só o rótulo se move, e só para a conta que já é a fonte de
+verdade dele — valor, data, tipo, categoria, conta, descrição, notas e a
+identidade de importação ficam intactos, e nenhuma transação fora da importação é
+considerada. **Não é conversão**: o Finora não tem taxas.
+
+Numa linhagem que carrega a FK composta `fk_transactions_account_currency` da V15
+esse `UPDATE` não encontra nada e é no-op — a FK torna a linha impersistível. Ele
+roda de todo modo porque "não havia nada a reparar" precisa ser um resultado
+verificado, não uma suposição: um dump restaurado ou uma linhagem sem a restrição
+poderia carregar tal linha. `MigrationFromPopulatedV15Test` cria a linha sintética
+removendo a FK, prova o reparo e então **reinstala a FK** para demonstrar que o
+estado reparado é consistente com ela.
 
 ## Limitações conhecidas
 

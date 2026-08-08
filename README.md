@@ -21,7 +21,11 @@ Interface em português do Brasil; código, banco e API em inglês.
   mapeamento de colunas para formatos brasileiros, deduplicação em três níveis
   (arquivo, identidade forte, conteúdo), categorização por regras
   determinísticas e confirmação idempotente com desfazer auditável — o arquivo
-  bruto nunca é retido além do necessário para o parse. Ver
+  bruto nunca é retido além do necessário para o parse. Cada lote tem **uma
+  moeda**, a da conta de destino, e **nada é convertido**: o `CURDEF` do OFX é
+  confrontado com a conta, moeda divergente ou fora do catálogo é recusada antes
+  de o lote existir, e um arquivo que não declarou moeda exige confirmação
+  explícita antes de criar transações. Ver
   [docs/statement-import.md](docs/statement-import.md).
 - **Contas** — contas correntes, poupança e dinheiro físico com saldo derivado do
   histórico (nunca armazenado).

@@ -84,6 +84,12 @@ parseadas são só pré-visualização até a confirmação; um item incluído g
 máximo uma transação real (`statement_import_item_id` único e parcial), e
 desfazer remove o efeito financeiro sem apagar o ledger de importação.
 
+O lote também registra a **procedência da denominação** (`currency_source`, e
+`declared_currency` só para a origem `FILE`). A moeda efetiva é sempre a da conta
+de destino e nada é convertido; o que a procedência decide é se o usuário precisa
+confirmar uma suposição antes de materializar. Toda transação gerada recebe a
+moeda da conta explicitamente, nunca o default da entidade.
+
 ### Cartão de crédito (`credit_cards` e satélites)
 Cartões, faturas, compras, parcelas, pagamentos e ajustes têm documento
 dedicado: [credit-cards.md](credit-cards.md). Invariante central: despesa de

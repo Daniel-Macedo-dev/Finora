@@ -151,6 +151,13 @@ saldos e limites, nunca para fluxos.
   escalares. O painel consome esses resumos diretamente — um saldo projetado por
   moeda, sem consolidação. Ver [forecast.md](forecast.md).
 - **Compromissos futuros** — total projetado agrupado.
+- **Importação de extratos** — todo lote tem exatamente uma moeda efetiva, a da
+  conta de destino, e nada é convertido. O `CURDEF` do OFX é lido e **confrontado**
+  com a conta; divergência e moeda fora do catálogo são recusadas antes de o lote
+  existir. Um arquivo que não declarou moeda, e um lote anterior ao registro dessa
+  evidência, exigem confirmação explícita antes de materializar. Toda transação
+  gerada recebe a moeda da conta explicitamente. Ver
+  [statement-import.md](statement-import.md).
 
 No front, `CurrencyTotal` (rodapés) e `CurrencyStat` (números de destaque)
 distinguem os três casos: completo em moeda base, homogêneo mas estrangeiro
@@ -224,9 +231,17 @@ campo pelo mesmo motivo.
   cartão sob qualquer razão misto; regras agregadas só rodam com operandos
   completos em moeda base e, quando retidas, aparecem em `aggregateCoverage`.
   Ver [insights.md](insights.md).
-- Importação com CURDEF, moeda nas notificações e a interface completa de moeda
-  ainda não estão prontas — ver o roadmap.
+- **Importação de extratos** — moeda por lote, `CURDEF` do OFX, confirmação da
+  suposição, precisão por moeda e denominação explícita na materialização. Ver
+  [statement-import.md](statement-import.md).
+- Moeda nas notificações e a interface completa de moeda ainda não estão prontas —
+  ver o roadmap.
 
 ## Próxima etapa
 
-Razão histórico de câmbio, conversão determinística e analytics em moeda base.
+Moeda nas notificações e privacidade das reivindicações de navegador. Depois
+disso, o fechamento da interface de moeda e a remoção dos últimos fallbacks em
+BRL fixo — ver [multi-currency-fallbacks.md](multi-currency-fallbacks.md).
+
+O núcleo multi-moeda **segue em andamento**. Razão histórico de câmbio, conversão
+determinística e analytics em moeda base só começam depois que ele fechar.

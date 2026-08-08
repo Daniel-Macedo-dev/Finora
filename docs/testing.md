@@ -127,7 +127,37 @@
   sufixo de fuso não move a data, aninhamento malformado, tipo de conta não
   suportado, fatura de cartão detectada e bloqueada, `<!DOCTYPE`/`<!ENTITY`
   rejeitados, limites de entrada/campo — todos com fixtures sintéticas, nunca
-  dados reais.
+  dados reais. Moeda declarada: `CURDEF` em OFX 1.x e 2.x, normalização de caixa
+  e de espaços, repetição do mesmo código aceita, códigos divergentes recusados,
+  ausência reportada como nula, `<CURDEF>` dentro de `STMTTRN` e agregado
+  `CURRENCY` por transação ignorados, valor sem forma de código recusado **sem
+  eco do conteúdo**, `CURDEF` junto a `DOCTYPE`/`ENTITY` ainda rejeitado pela
+  barreira de declarações, campo acima do limite ainda limitado, fatura de cartão
+  que declara moeda ainda bloqueada.
+- **Contrato de origem de moeda** (`StatementCurrencySourceTest`): quais origens
+  exigem consentimento e qual delas pode carregar uma moeda declarada, mais o
+  construtor da entidade recusando cada pareamento ilegal — a regra é afirmada
+  para todo valor do enum, não inferida dos fluxos que a consomem.
+- **Moeda da importação pela API** (`StatementImportCurrencyTest`, 20 casos): CSV
+  em BRL sem regressão e em USD expondo a moeda da conta sem conversão; troca de
+  conta movendo a moeda efetiva e recalculando duplicidade; iene inteiro
+  importável e fracionado inválido antes da confirmação, recuperado por edição, e
+  revalidado nas duas direções ao trocar de conta; `CURDEF` coincidente virando
+  origem `FILE` para BRL/USD/JPY; divergente, fora do catálogo e conflitante
+  recusados **sem criar lote ou transação**; ausência virando `ACCOUNT_ASSUMED`
+  que bloqueia a confirmação, importa uma vez após o consentimento e permanece
+  idempotente; consentimento provado fora da identidade financeira ao reimportar
+  a mesma linha de outro arquivo; confirmação que não materializaria nada
+  dispensando o consentimento; lote `FILE` que só troca entre contas da moeda
+  declarada, com a recusa não alterando o destino anterior; lote legado exigindo
+  consentimento **sem afirmar** que o arquivo omitiu o `CURDEF` e sem reescrever a
+  procedência; lote legado concluído legível; e isolamento provando que a conta de
+  outro dono responde 404 sem vazar a moeda.
+- **Denominação da materialização**
+  (`StatementImportMaterializationCurrencyTest`): a transação importada usa a
+  moeda da conta em todo o catálogo, a conta vence a `baseCurrency` do usuário,
+  iene sai inteiro, e desfazer um importado estrangeiro preserva a moeda da conta
+  e os metadados de moeda do lote.
 - **Ciclo de vida pela API** (`StatementImportApiIntegrationTest`): upload CSV
   aguardando mapeamento e OFX direto para pré-visualização; mapeamento
   contraditório rejeitado; prévia e parse autoritativo; edição de item antes
@@ -214,8 +244,16 @@ destino, sem `CREDIT` genérico, validação de destino, submit completo),
 rótulos pt-BR de status de ocorrência, invalidação de queries após
 materialização; página de previsão (KPIs, alerta de saldo negativo, fluxos sem
 conta, rótulos de fonte por evento, link para fatura, estado vazio); a
-experiência de importação de extratos (`statement-imports.test.tsx`) — texto
-de privacidade no upload, mapeamento CSV com débito/crédito e delimitador,
+experiência de importação de extratos (`statement-imports.test.tsx` e
+`statement-imports-currency.test.tsx`, o segundo cobrindo apresentação de moeda:
+CSV em BRL e em USD, valores nunca renderizados na moeda errada, CAD e AUD
+distinguíveis de outros dólares, iene sem centavos, valor ausente como travessão e
+não zero, duplicata comparada na moeda da transação casada, totais na moeda do
+lote, as quatro explicações de origem com texto genuinamente diferente,
+consentimento começando desmarcado e bloqueando a confirmação com motivo,
+consentimento descartado ao trocar de conta, recusa de troca nomeando as duas
+moedas, e uma guarda que falha se `formatBRL` reaparecer em qualquer componente de
+produção da feature) — texto de privacidade no upload, mapeamento CSV com débito/crédito e delimitador,
 renderização da prévia e de linhas inválidas, sugestão e correção de
 categoria com salvar-como-regra, revisão de duplicata lado a lado com
 duplicata exata bloqueada e possível duplicata com override explícito,
@@ -286,6 +324,22 @@ após pagamento concluído; lote com sucesso e falha convivendo e retentativa s�
 das falhas; mapeamento de recorrente legado sem retroativos; isolamento entre
 usuários; e o fluxo principal completo a 390px — fontes legadas são forjadas
 via SQL no contêiner, exatamente como a migração V7 as criou);
+**moeda na importação de extratos** (`statement-import-currency.spec.ts`, 12
+jornadas: CSV em BRL sem regressão; CSV em USD declarando a moeda de destino,
+importando em dólar e nunca exibindo `R$`; CSV em iene sem decimais cuja linha
+fracionada não pode ser confirmada até ser corrigida; OFX declarando a moeda da
+conta sem pedir nada; declaração divergente recusada sem lote nem transação;
+moeda fora do catálogo recusada; OFX sem declaração que pré-visualiza, bloqueia a
+confirmação, importa uma vez após o consentimento e não duplica ao repetir; troca
+de conta de um lote suposto movendo a suposição e descartando o consentimento;
+lote com moeda declarada que não pode ir para outra moeda, com o destino anterior
+intacto; revisão de duplicidade, categorias e desfazer funcionando numa importação
+estrangeira; conta de outro dono inacessível sem vazar moeda; e OFX malicioso que
+declara moeda por entidade ainda rejeitado) e a matriz visual dedicada
+(`statement-import-currency-visual.spec.ts`, três estados × quatro viewports ×
+dois temas = 24 capturas, cada uma com rota, lote, dono, moeda, procedência,
+viewport, tema, ausência de skeleton, transições assentadas, ausência de rolagem
+horizontal e de explicação cortada afirmados **antes** do disparo);
 **importação de extratos** (`statement-imports.spec.ts`: jornada CSV completa
 com mapeamento, categorização, efeito contábil e reenvio idempotente
 detectando duplicatas; colunas separadas de débito/crédito; possível

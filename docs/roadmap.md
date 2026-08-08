@@ -212,9 +212,38 @@ depreciado. A implementação ciente de moeda foi promovida a contexto financeir
 canônico em `com.finora.api.financialcontext`, renomeada em vez de copiada, e a
 análise de compra e os insights leem a mesma. Sobrou uma implementação.
 
-**Próxima tarefa desta etapa:** moeda na importação de extratos e CURDEF do OFX,
-com moeda nas notificações logo em seguida. Os dois tocam superfícies diferentes
-— parser e caixa de entrada — e acoplá-los num commit só não traz ganho.
+**Moeda na importação de extratos e CURDEF do OFX — concluída.** O domínio de
+importação era anterior ao núcleo multi-moeda e tinha três lacunas. O parser nunca
+lia o `CURDEF`, e como os bytes enviados são deliberadamente descartados essa
+leitura não podia ser recuperada depois: virou estado durável do lote. A
+materialização definia a conta de destino mas não a moeda, então o default `BRL`
+da entidade sobrevivia — e com a FK composta `(account_id, currency)` da V15 no
+lugar o resultado não era uma linha mal rotulada, era um insert recusado, ou seja,
+importar num extrato não-BRL simplesmente falhava. E o lote não tinha onde guardar
+a procedência da denominação.
+
+A V16 registra procedência, não só valor: um lote OFX existente vira
+`LEGACY_UNKNOWN`, nunca `ACCOUNT_ASSUMED`, porque o parser da época **nunca
+olhou** — afirmar que aqueles arquivos omitiram o `CURDEF` seria inventar
+evidência sobre um documento que o Finora já não tem. CSV vira `ACCOUNT`, que é
+exatamente o que sempre foi. `CURDEF` repetido igual é aceito; dois diferentes são
+recusados, porque escolher o primeiro ou o último denominaria dinheiro real por
+uma leitura arbitrária de um documento ambíguo. `PARSER_VERSION` foi para 2 porque
+a saída observável do parser mudou; `Fingerprints.VERSION` ficou em 1 porque a
+identidade de linha não mudou, e movê-la reimportaria dinheiro já importado.
+
+A suposição virou consentimento explícito (`acknowledgeAccountCurrency`), que é
+consentimento e não identidade: fora de todo fingerprint, da duplicidade, da
+transação gerada e do undo. `JPY 100,50` é recusado, nunca arredondado para 101 —
+inclusive na apresentação, onde arredondar exibiria uma quantia diferente da
+armazenada logo acima da mensagem que pede a correção. Toda a importação saiu do
+fallback em BRL fixo (9 chamadas), e o QA fechou a fatia: 12 jornadas Playwright
+dedicadas, a matriz visual de 24 capturas (três estados × quatro viewports × dois
+temas, todas inspecionadas) e as sete revisões, que acharam defeitos reais em
+quatro áreas, todos corrigidos.
+
+**Próxima tarefa desta etapa:** moeda nas notificações e privacidade das
+reivindicações de navegador.
 
 ## Próxima grande etapa
 

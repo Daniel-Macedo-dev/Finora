@@ -57,6 +57,28 @@ public final class OfxStatementParser {
     private OfxStatementParser() {
     }
 
+    /**
+     * Parses one uploaded OFX statement.
+     *
+     * <p>Row-level problems become validation issues on the row; only
+     * file-level problems fail the whole parse, and each does so with a stable
+     * code the API layer maps to a user-facing error.
+     *
+     * @param content raw uploaded bytes, already size-bounded by the caller
+     * @return the parsed rows, the masked account hint and the currency the file
+     *     declared (or {@code null} when it declared none)
+     * @throws StatementParseException {@code STATEMENT_OFX_DTD} for a DOCTYPE or
+     *     ENTITY declaration; {@code STATEMENT_FILE_BINARY} for non-text input;
+     *     {@code STATEMENT_OFX_MALFORMED} for anything that is not a readable
+     *     OFX; {@code STATEMENT_CARD_NOT_SUPPORTED} for a credit-card statement;
+     *     {@code STATEMENT_OFX_ACCOUNT_TYPE} for an account type imports do not
+     *     cover; {@code STATEMENT_OFX_FIELD_TOO_LONG} and
+     *     {@code STATEMENT_TOO_MANY_ROWS} at the size boundaries;
+     *     {@code STATEMENT_CURRENCY_INVALID} when {@code CURDEF} is not a
+     *     three-letter code; and {@code STATEMENT_CURRENCY_CONFLICT} when the
+     *     file declares two different currencies. Whether a validly shaped code
+     *     is one Finora supports is decided by the service, not here.
+     */
     public static StatementParseResult parse(byte[] content) {
         String text = decode(content);
         rejectDoctype(text);

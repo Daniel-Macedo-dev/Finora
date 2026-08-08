@@ -379,6 +379,39 @@ class StatementImportCurrencyTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void confirmationThatWouldCreateNothingNeedsNoAcknowledgement() throws Exception {
+        long account = createAccount("Conta internacional", "USD");
+        JsonNode batch = upload(account, "extrato.ofx", ofx(null, "25.90", "FIT-NOOP"),
+                status().isCreated());
+        long batchId = batch.get("id").asLong();
+        selectCategoryForAll(batchId);
+        confirmRaw(batchId, true, status().isOk());
+
+        // Nothing importable is left, so a repeat confirmation creates no money
+        // and there is no assumption left to consent to. Demanding the flag here
+        // would block a harmless idempotent retry — and a client that simply
+        // resends its last request must not get an error for it.
+        JsonNode again = confirmRaw(batchId, null, status().isOk());
+        assertThat(again.get("results")).isEmpty();
+        assertThat(again.get("batchStatus").asString()).isEqualTo("COMPLETED");
+        assertThat(transactions().get("totalElements").asLong()).isEqualTo(1);
+
+        // An explicit item list that resolves to nothing importable behaves the
+        // same way: the item is already IMPORTED, so no new money is at stake.
+        long itemId = itemByIndex(detail(batchId), 1).get("id").asLong();
+        MvcResult targeted = mockMvc.perform(post("/api/statement-imports/%d/confirm"
+                        .formatted(batchId))
+                        .cookie(user.session()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"itemIds\": [%d]}".formatted(itemId)))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(json(targeted).get("results").get(0).get("result").asString())
+                .isEqualTo("ALREADY_IMPORTED");
+        assertThat(transactions().get("totalElements").asLong()).isEqualTo(1);
+    }
+
+    @Test
     void acknowledgementDoesNotChangeAnyFinancialIdentity() throws Exception {
         long account = createAccount("Conta internacional", "USD");
         // An import that needed consent to happen at all.

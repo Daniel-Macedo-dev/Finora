@@ -260,17 +260,21 @@ class MigrationFromPopulatedV10Test {
             assertThatThrownBy(() -> statement.execute("""
                     INSERT INTO statement_import_batches
                         (user_id, account_id, original_filename, format, file_sha256,
-                         file_size_bytes, parser_version, fingerprint_version, status)
+                         file_size_bytes, parser_version, fingerprint_version, status,
+                         currency_source)
                     VALUES (2, (SELECT id FROM accounts WHERE user_id = 1 AND type = 'CHECKING'),
-                            'extrato.ofx', 'OFX', repeat('a', 64), 100, 1, 1, 'PREVIEW_READY')
+                            'extrato.ofx', 'OFX', repeat('a', 64), 100, 2, 1, 'PREVIEW_READY',
+                            'LEGACY_UNKNOWN')
                     """)).hasMessageContaining("fk_import_batches_account_owner");
             // A legitimate batch with two items for user A.
             statement.execute("""
                     INSERT INTO statement_import_batches
                         (user_id, account_id, original_filename, format, file_sha256,
-                         file_size_bytes, parser_version, fingerprint_version, status)
+                         file_size_bytes, parser_version, fingerprint_version, status,
+                         currency_source)
                     VALUES (1, (SELECT id FROM accounts WHERE user_id = 1 AND type = 'CHECKING'),
-                            'extrato.ofx', 'OFX', repeat('a', 64), 100, 1, 1, 'PREVIEW_READY')
+                            'extrato.ofx', 'OFX', repeat('a', 64), 100, 2, 1, 'PREVIEW_READY',
+                            'LEGACY_UNKNOWN')
                     """);
             statement.execute("""
                     INSERT INTO statement_import_items

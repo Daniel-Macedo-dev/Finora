@@ -90,6 +90,20 @@ resolvem para **404 Not Found** (nunca 403), evitando confirmar sua existência.
   OFX não usa nenhum parser XML (sem XXE possível) e rejeita `<!DOCTYPE`/
   `<!ENTITY` mesmo assim, por defesa em profundidade — provado em
   `StatementImportOwnershipTest`. Ver [statement-import.md](statement-import.md).
+- Ler o `CURDEF` do OFX não afrouxou nada disso: o scanner continua sendo o mesmo
+  tokenizador limitado, a barreira de declarações roda antes dele, e o valor é
+  limitado pelo comprimento de campo existente. Um `CURDEF` sem forma de código de
+  três letras é recusado **sem eco do conteúdo** — texto de arquivo não validado
+  nunca volta numa mensagem —, o que também limita o que a mensagem de moeda não
+  suportada pode refletir a três letras maiúsculas.
+- A conta de destino é resolvida **pelo dono atual antes** de qualquer comparação
+  de moeda, no upload e na troca de conta. A conta de outra pessoa continua
+  indistinguível de inexistente e não pode ter a moeda sondada por upload — a
+  mensagem de divergência só nomeia a moeda de uma conta que o requisitante
+  possui.
+- Persistir a moeda declarada como metadado limitado do lote é o que **remove**
+  qualquer motivo para reler o arquivo ou retardar o descarte dos bytes enviados: o
+  resultado do parse sobrevive sem o arquivo.
 
 ## Migração de dados v1 (claim legado)
 
