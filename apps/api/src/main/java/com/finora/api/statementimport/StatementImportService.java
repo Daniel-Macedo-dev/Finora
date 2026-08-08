@@ -7,6 +7,7 @@ import com.finora.api.category.Category;
 import com.finora.api.category.CategoryRepository;
 import com.finora.api.common.error.BusinessRuleException;
 import com.finora.api.common.error.NotFoundException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.common.web.PageResponse;
 import com.finora.api.identity.CurrentUserProvider;
@@ -108,9 +109,16 @@ public class StatementImportService {
                 throw new BusinessRuleException("STATEMENT_EMPTY",
                         "O arquivo não contém lançamentos para importar.");
             }
+            // Refused uploads leave nothing behind: an unsupported or
+            // disagreeing currency throws here, before the batch, its items,
+            // any transaction or any other financial effect exists.
+            CurrencyCode declaredCurrency = resolveDeclaredCurrency(result, account);
             StatementImportBatch batch = new StatementImportBatch(userId, account.getId(),
                     filename, StatementImportFormat.OFX, Fingerprints.fileSha256(content),
                     content.length, Fingerprints.PARSER_VERSION, Fingerprints.VERSION,
+                    declaredCurrency == null ? StatementCurrencySource.ACCOUNT_ASSUMED
+                            : StatementCurrencySource.FILE,
+                    declaredCurrency,
                     StatementImportStatus.PREVIEW_READY);
             batch.setTotalRows(result.entries().size());
             batch = batches.save(batch);
@@ -124,10 +132,49 @@ public class StatementImportService {
         StatementImportBatch batch = new StatementImportBatch(userId, account.getId(),
                 filename, StatementImportFormat.CSV, Fingerprints.fileSha256(content),
                 content.length, Fingerprints.PARSER_VERSION, Fingerprints.VERSION,
+                // The Finora CSV contract has no currency column, so choosing
+                // the destination account is itself the denomination decision.
+                StatementCurrencySource.ACCOUNT, null,
                 StatementImportStatus.NEEDS_MAPPING);
         batch.setTempFileToken(tempStore.store(content));
         batch = batches.save(batch);
         return detailInternal(batch, null, content, null);
+    }
+
+    /**
+     * Turns the file's own raw declaration into a currency Finora supports that
+     * agrees with the destination account — or refuses the upload.
+     *
+     * <p>Order matters for privacy as much as for correctness: the account has
+     * already been resolved against the current user by the caller, so a
+     * mismatch message can name the selected account's currency. Another user's
+     * account never reaches this point — it behaves as missing — and therefore
+     * cannot have its currency disclosed by probing an upload.
+     *
+     * @return the declared currency, or {@code null} when the file declared none
+     * @throws BusinessRuleException {@code CURRENCY_UNSUPPORTED} for a valid
+     *     code outside the closed catalogue, or
+     *     {@code STATEMENT_CURRENCY_MISMATCH} when the file and the account
+     *     disagree. Neither case ever falls back to the account currency: a
+     *     file that states its denomination is believed or refused, never
+     *     silently reinterpreted.
+     */
+    private static CurrencyCode resolveDeclaredCurrency(StatementParseResult result,
+                                                        Account account) {
+        if (result.declaredCurrency() == null) {
+            return null;
+        }
+        CurrencyCode declared = CurrencyCode.parse(result.declaredCurrency());
+        if (declared != account.getCurrency()) {
+            throw new BusinessRuleException("STATEMENT_CURRENCY_MISMATCH",
+                    ("O arquivo declara %s — %s e a conta selecionada usa %s — %s. "
+                            + "Os valores não são convertidos: selecione uma conta em %s "
+                            + "ou envie outro extrato.")
+                            .formatted(declared.name(), declared.getDisplayName(),
+                                    account.getCurrency().name(),
+                                    account.getCurrency().getDisplayName(), declared.name()));
+        }
+        return declared;
     }
 
     // ── CSV mapping ─────────────────────────────────────────────────────────
@@ -204,6 +251,20 @@ public class StatementImportService {
                     "A conta de destino não pode mudar após a confirmação da importação.");
         }
         Account account = resolveDestination(userId, request.accountId());
+        // Checked before a single field moves: the batch, its items and their
+        // account-scoped duplicate state must never briefly hold a destination
+        // that contradicts the file's own declaration and then be rolled back.
+        if (batch.getCurrencySource().declaresFileCurrency()
+                && batch.getDeclaredCurrency() != account.getCurrency()) {
+            throw new BusinessRuleException("STATEMENT_CURRENCY_MISMATCH",
+                    ("O arquivo declara %s — %s e a conta escolhida usa %s — %s. "
+                            + "Os valores não são convertidos: escolha uma conta em %s.")
+                            .formatted(batch.getDeclaredCurrency().name(),
+                                    batch.getDeclaredCurrency().getDisplayName(),
+                                    account.getCurrency().name(),
+                                    account.getCurrency().getDisplayName(),
+                                    batch.getDeclaredCurrency().name()));
+        }
         batch.setAccountId(account.getId());
         List<StatementImportItem> batchItems =
                 items.findAllByBatchIdAndUserIdOrderBySourceIndexAsc(batch.getId(), userId);

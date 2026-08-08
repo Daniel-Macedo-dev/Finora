@@ -35,12 +35,21 @@ class OfxStatementParserTest {
     }
 
     private static byte[] sgml(String transactions) {
+        return sgmlDeclaring("<CURDEF>BRL\n", transactions);
+    }
+
+    /**
+     * The same synthetic statement with an arbitrary statement-level metadata
+     * block, so CURDEF can be omitted, repeated, conflicting or malformed
+     * without duplicating the whole envelope.
+     */
+    private static byte[] sgmlDeclaring(String statementMetadata, String transactions) {
         return (SGML_HEADER + """
                 <OFX>
                 <BANKMSGSRSV1>
                 <STMTTRNRS>
                 <STMTRS>
-                <CURDEF>BRL
+                """ + statementMetadata + """
                 <BANKACCTFROM>
                 <BANKID>0260
                 <ACCTID>12345-6789
@@ -55,6 +64,16 @@ class OfxStatementParserTest {
                 </OFX>
                 """).getBytes(StandardCharsets.UTF_8);
     }
+
+    private static final String ONE_TRANSACTION = """
+            <STMTTRN>
+            <TRNTYPE>DEBIT
+            <DTPOSTED>20260601
+            <TRNAMT>-10.00
+            <FITID>CUR-1
+            <NAME>Mercado
+            </STMTTRN>
+            """;
 
     @Test
     void parsesSgmlWithMultipleTransactions() {
@@ -292,5 +311,214 @@ class OfxStatementParserTest {
                 + "x".repeat(StatementLimits.MAX_FIELD_LENGTH + 1) + "</STMTTRN>";
         assertThatThrownBy(() -> OfxStatementParser.parse(sgml(longField)))
                 .hasFieldOrPropertyWithValue("code", "STATEMENT_OFX_FIELD_TOO_LONG");
+    }
+
+    /* ---------- declared currency (CURDEF) ---------- */
+
+    @Test
+    void readsDeclaredCurrencyFromSgmlStatementMetadata() {
+        var result = OfxStatementParser.parse(sgml(ONE_TRANSACTION));
+        assertThat(result.declaredCurrency()).isEqualTo("BRL");
+        // Reading CURDEF changed nothing about the rows themselves.
+        assertThat(result.entries()).hasSize(1);
+        assertThat(result.entries().getFirst().absoluteAmount()).isEqualByComparingTo("10.00");
+        assertThat(result.accountHint()).contains("•••6789").doesNotContain("12345-6789");
+    }
+
+    @Test
+    void readsDeclaredCurrencyFromXmlStatementMetadata() {
+        byte[] content = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <?OFX OFXHEADER="200" VERSION="211" SECURITY="NONE"?>
+                <OFX>
+                  <BANKMSGSRSV1>
+                    <STMTTRNRS>
+                      <STMTRS>
+                        <CURDEF>USD</CURDEF>
+                        <BANKACCTFROM>
+                          <BANKID>0341</BANKID>
+                          <ACCTID>98765</ACCTID>
+                          <ACCTTYPE>CHECKING</ACCTTYPE>
+                        </BANKACCTFROM>
+                        <BANKTRANLIST>
+                          <STMTTRN>
+                            <TRNTYPE>DEBIT</TRNTYPE>
+                            <DTPOSTED>20260610</DTPOSTED>
+                            <TRNAMT>-12.34</TRNAMT>
+                            <FITID>X-1</FITID>
+                            <NAME>Coffee</NAME>
+                          </STMTTRN>
+                        </BANKTRANLIST>
+                      </STMTRS>
+                    </STMTTRNRS>
+                  </BANKMSGSRSV1>
+                </OFX>
+                """.getBytes(StandardCharsets.UTF_8);
+        var result = OfxStatementParser.parse(content);
+        assertThat(result.declaredCurrency()).isEqualTo("USD");
+        assertThat(result.entries()).hasSize(1);
+    }
+
+    @Test
+    void normalizesDeclaredCurrencyCase() {
+        assertThat(OfxStatementParser.parse(sgmlDeclaring("<CURDEF>usd\n", ONE_TRANSACTION))
+                .declaredCurrency()).isEqualTo("USD");
+        assertThat(OfxStatementParser.parse(sgmlDeclaring("<CURDEF>uSd\n", ONE_TRANSACTION))
+                .declaredCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void normalizesDeclaredCurrencyWhitespace() {
+        assertThat(OfxStatementParser.parse(sgmlDeclaring("<CURDEF>   USD  \n", ONE_TRANSACTION))
+                .declaredCurrency()).isEqualTo("USD");
+        assertThat(OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF> \t eur \t </CURDEF>\n", ONE_TRANSACTION))
+                .declaredCurrency()).isEqualTo("EUR");
+    }
+
+    @Test
+    void acceptsRepeatedIdenticalDeclaredCurrency() {
+        // Multi-statement files legitimately restate the same CURDEF.
+        var result = OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>EUR\n<CURDEF>eur\n<CURDEF> EUR \n", ONE_TRANSACTION));
+        assertThat(result.declaredCurrency()).isEqualTo("EUR");
+    }
+
+    @Test
+    void rejectsConflictingDeclaredCurrencies() {
+        // Neither the first nor the last value may win: the document is
+        // ambiguous about real money, so it is refused.
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>USD\n<CURDEF>EUR\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CURRENCY_CONFLICT");
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>BRL\n<CURDEF>BRL\n<CURDEF>JPY\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CURRENCY_CONFLICT");
+    }
+
+    @Test
+    void reportsAbsentDeclaredCurrencyAsNull() {
+        assertThat(OfxStatementParser.parse(sgmlDeclaring("", ONE_TRANSACTION))
+                .declaredCurrency()).isNull();
+        // An empty element declares nothing either — it must not become "".
+        assertThat(OfxStatementParser.parse(sgmlDeclaring("<CURDEF></CURDEF>\n", ONE_TRANSACTION))
+                .declaredCurrency()).isNull();
+    }
+
+    @Test
+    void transactionLevelCurrencyNeverBecomesStatementCurrency() {
+        // A CURDEF tag inside a STMTTRN, a per-transaction CURRENCY aggregate
+        // and the literal word in a MEMO are all transaction-scope data: none
+        // may override (or invent) the statement's declaration.
+        var declared = OfxStatementParser.parse(sgmlDeclaring("<CURDEF>BRL\n", """
+                <STMTTRN>
+                <TRNTYPE>DEBIT
+                <DTPOSTED>20260601
+                <TRNAMT>-10.00
+                <FITID>M-1
+                <NAME>Mercado
+                <MEMO>CURDEF USD conforme <CURDEF>JPY
+                <CURRENCY>
+                <CURRATE>1.00
+                <CURSYM>JPY
+                </CURRENCY>
+                </STMTTRN>
+                """));
+        assertThat(declared.declaredCurrency()).isEqualTo("BRL");
+
+        var undeclared = OfxStatementParser.parse(sgmlDeclaring("", """
+                <STMTTRN>
+                <TRNTYPE>DEBIT
+                <DTPOSTED>20260601
+                <TRNAMT>-10.00
+                <FITID>M-2
+                <NAME>Mercado
+                <CURDEF>USD
+                </STMTTRN>
+                """));
+        assertThat(undeclared.declaredCurrency()).isNull();
+    }
+
+    @Test
+    void rejectsMalformedDeclaredCurrencyWithoutEchoingIt() {
+        // Not a three-letter code: refused with a stable code, and the raw
+        // file content is never reflected back in the message.
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>DOLLARS\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CURRENCY_INVALID")
+                .hasMessageNotContaining("DOLLARS");
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>U$D\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CURRENCY_INVALID");
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>12\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CURRENCY_INVALID");
+    }
+
+    @Test
+    void declaredCurrencyStaysWithinTheExistingFieldLimit() {
+        String oversized = "<CURDEF>" + "U".repeat(StatementLimits.MAX_FIELD_LENGTH + 1) + "\n";
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring(oversized, ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_OFX_FIELD_TOO_LONG");
+    }
+
+    @Test
+    void curdefNearMaliciousDeclarationsDoesNotWeakenSecurityBoundaries() {
+        // CURDEF adjacent to a DOCTYPE/ENTITY must not create a path that
+        // reaches the scanner before the declaration check rejects the file.
+        byte[] doctype = """
+                <?xml version="1.0"?>
+                <!DOCTYPE OFX [<!ENTITY moeda SYSTEM "file:///etc/passwd">]>
+                <OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>
+                <CURDEF>&moeda;</CURDEF>
+                </STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>
+                """.getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> OfxStatementParser.parse(doctype))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_OFX_DTD");
+
+        byte[] entityOnly = ("""
+                <OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>
+                <!ENTITY moeda "USD">
+                <CURDEF>BRL
+                """ + ONE_TRANSACTION + """
+                </STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>
+                """).getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> OfxStatementParser.parse(entityOnly))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_OFX_DTD");
+
+        // An unresolvable named entity inside CURDEF stays inert text, and
+        // inert text is not a currency code.
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF>&moeda;\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CURRENCY_INVALID");
+    }
+
+    @Test
+    void malformedNestingAroundCurdefStillFails() {
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                sgmlDeclaring("<CURDEF!!>USD\n", ONE_TRANSACTION)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_OFX_MALFORMED");
+        assertThatThrownBy(() -> OfxStatementParser.parse(
+                ("<OFX><STMTRS><CURDEF>USD<BANKACCTFROM" ).getBytes(StandardCharsets.UTF_8)))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_OFX_MALFORMED");
+    }
+
+    @Test
+    void creditCardStatementIsStillRejectedEvenWhenItDeclaresACurrency() {
+        byte[] content = """
+                <OFX>
+                <CREDITCARDMSGSRSV1>
+                <CCSTMTTRNRS>
+                <CCSTMTRS>
+                <CURDEF>USD
+                <CCACCTFROM><ACCTID>4111</ACCTID></CCACCTFROM>
+                </CCSTMTRS>
+                </CCSTMTTRNRS>
+                </CREDITCARDMSGSRSV1>
+                </OFX>
+                """.getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> OfxStatementParser.parse(content))
+                .hasFieldOrPropertyWithValue("code", "STATEMENT_CARD_NOT_SUPPORTED");
     }
 }

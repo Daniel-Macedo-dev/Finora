@@ -1,5 +1,6 @@
 package com.finora.api.statementimport;
 
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.persistence.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,9 +15,15 @@ import java.time.Instant;
 
 /**
  * One statement upload: destination account, sanitized filename, format,
- * file hash and parser/fingerprint versions. Raw uploaded bytes are never
- * persisted — a CSV waiting for column mapping keeps them only in bounded
- * temporary storage referenced by {@link #getTempFileToken()}.
+ * file hash, parser/fingerprint versions and currency provenance. Raw uploaded
+ * bytes are never persisted — a CSV waiting for column mapping keeps them only
+ * in bounded temporary storage referenced by {@link #getTempFileToken()}.
+ *
+ * <p>Because the raw file is discarded, what the parser learned about the
+ * source's currency cannot be recovered later by re-reading it. That is why
+ * {@link #getCurrencySource()} and {@link #getDeclaredCurrency()} are durable
+ * batch state rather than a transient parse result: after upload they are the
+ * only surviving evidence of how the file was denominated.
  */
 @Entity
 @Table(name = "statement_import_batches")
@@ -51,6 +58,24 @@ public class StatementImportBatch extends AuditableEntity {
     @Column(name = "fingerprint_version", nullable = false, updatable = false)
     private int fingerprintVersion;
 
+    /**
+     * How confidently Finora knows the source's denomination. Insert-only: the
+     * provenance of a parse cannot change after the file is gone, and a later
+     * account change alters the effective currency without altering what the
+     * file said.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "currency_source", nullable = false, length = 20, updatable = false)
+    private StatementCurrencySource currencySource;
+
+    /**
+     * The currency the file itself declared, present only for
+     * {@link StatementCurrencySource#FILE}. Never inferred, never assumed.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "declared_currency", length = 3, updatable = false)
+    private CurrencyCode declaredCurrency;
+
     /** User-confirmed CSV column/locale mapping, serialized as bounded JSON. */
     @Column(name = "csv_mapping", length = 2000)
     private String csvMapping;
@@ -83,10 +108,23 @@ public class StatementImportBatch extends AuditableEntity {
     protected StatementImportBatch() {
     }
 
+    /**
+     * @throws IllegalArgumentException when the currency source and the
+     *     declared currency disagree — a {@code FILE} batch without the code it
+     *     read, or a declared code under a source that cannot have read one.
+     *     The same pairing is enforced by a database CHECK constraint.
+     */
     public StatementImportBatch(Long userId, Long accountId, String originalFilename,
                                 StatementImportFormat format, String fileSha256,
                                 long fileSizeBytes, int parserVersion, int fingerprintVersion,
+                                StatementCurrencySource currencySource,
+                                CurrencyCode declaredCurrency,
                                 StatementImportStatus status) {
+        if (currencySource.declaresFileCurrency() != (declaredCurrency != null)) {
+            throw new IllegalArgumentException(
+                    "Origem de moeda %s é incompatível com a moeda declarada %s"
+                            .formatted(currencySource, declaredCurrency));
+        }
         this.userId = userId;
         this.accountId = accountId;
         this.originalFilename = originalFilename;
@@ -95,6 +133,8 @@ public class StatementImportBatch extends AuditableEntity {
         this.fileSizeBytes = fileSizeBytes;
         this.parserVersion = parserVersion;
         this.fingerprintVersion = fingerprintVersion;
+        this.currencySource = currencySource;
+        this.declaredCurrency = declaredCurrency;
         this.status = status;
     }
 
@@ -136,6 +176,14 @@ public class StatementImportBatch extends AuditableEntity {
 
     public int getFingerprintVersion() {
         return fingerprintVersion;
+    }
+
+    public StatementCurrencySource getCurrencySource() {
+        return currencySource;
+    }
+
+    public CurrencyCode getDeclaredCurrency() {
+        return declaredCurrency;
     }
 
     public String getCsvMapping() {

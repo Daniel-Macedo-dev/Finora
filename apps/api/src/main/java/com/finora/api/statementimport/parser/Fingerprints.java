@@ -17,11 +17,31 @@ import java.util.HexFormat;
  */
 public final class Fingerprints {
 
-    /** Bumped only when the fingerprint composition changes. */
+    /**
+     * Bumped only when the fingerprint <em>composition</em> changes — the list
+     * of values hashed below, or how they are canonicalized.
+     *
+     * <p>This is financial identity: it decides whether two rows are the same
+     * row, and therefore whether an import is a duplicate. It must not move
+     * because unrelated parser output grew, and it must not move because of a
+     * user's consent or safety confirmation. Bumping it needlessly would make
+     * every stored fingerprint incomparable and re-import already-imported
+     * money.
+     */
     public static final int VERSION = 1;
 
-    /** Bumped only when parser normalization changes observable output. */
-    public static final int PARSER_VERSION = 1;
+    /**
+     * Bumped when the parser's observable output changes — new fields, or
+     * different normalization of existing ones.
+     *
+     * <p>Deliberately independent from {@link #VERSION}: this records which
+     * parser produced a batch, not what a row's identity is made of. Version 2
+     * adds the OFX {@code CURDEF} declaration to the parse result, which is new
+     * observable output and therefore a parser change — but it contributes
+     * nothing to {@link #contentFingerprint}, so row identity is untouched and
+     * {@code VERSION} stays 1.
+     */
+    public static final int PARSER_VERSION = 2;
 
     private Fingerprints() {
     }

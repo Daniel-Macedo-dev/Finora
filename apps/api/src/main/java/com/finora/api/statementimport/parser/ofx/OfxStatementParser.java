@@ -37,6 +37,13 @@ import java.util.regex.Pattern;
  * <p>Dates: {@code DTPOSTED} is interpreted as the bank-stated local date
  * (first 8 digits, strictly validated). Timezone suffixes never shift the
  * date — the machine's zone must not move a transaction to another day.
+ *
+ * <p>Currency: statement-level {@code CURDEF} is read as the file's own
+ * declaration and normalized to canonical uppercase. It is taken only from
+ * statement metadata — never from a transaction's {@code CURRENCY}/{@code
+ * ORIGCURRENCY} aggregate, a {@code MEMO}, a {@code NAME}, an account number
+ * or the filename. Whether that code is one Finora supports, and whether it
+ * agrees with the destination account, are questions for the service layer.
  */
 public final class OfxStatementParser {
 
@@ -44,6 +51,8 @@ public final class OfxStatementParser {
     private static final int MAX_DEPTH = 32;
     private static final Pattern DTPOSTED_DATE = Pattern.compile("(\\d{4})(\\d{2})(\\d{2}).*");
     private static final Pattern AMOUNT = Pattern.compile("[+-]?\\d{1,12}([.,]\\d{1,2})?");
+    /** An ISO 4217 alphabetic code shape. Membership is decided elsewhere. */
+    private static final Pattern CURRENCY_CODE = Pattern.compile("[A-Z]{3}");
 
     private OfxStatementParser() {
     }
@@ -70,7 +79,8 @@ public final class OfxStatementParser {
                     "O tipo de conta do extrato OFX não é suportado. Apenas extratos de conta "
                             + "corrente ou poupança podem ser importados.");
         }
-        return new StatementParseResult(List.copyOf(scanner.entries), scanner.accountHint());
+        return new StatementParseResult(List.copyOf(scanner.entries), scanner.accountHint(),
+                scanner.declaredCurrency);
     }
 
     /** BOM/strict UTF-8 first, Windows-1252 fallback (OFX 1.x é comum em latin). */
@@ -115,6 +125,8 @@ public final class OfxStatementParser {
         final List<StatementEntry> entries = new ArrayList<>();
         boolean creditCard;
         String accountType;
+        /** Normalized statement-level CURDEF, or null when none appeared. */
+        String declaredCurrency;
         private String bankId;
         private String maskedAccount;
         private Transactionfields current;
@@ -247,8 +259,45 @@ public final class OfxStatementParser {
                 case "ACCTTYPE" -> accountType = value.toUpperCase(Locale.ROOT);
                 case "BANKID" -> bankId = value;
                 case "ACCTID" -> maskedAccount = mask(value);
+                case "CURDEF" -> onCurdef(value);
                 default -> {
                 }
+            }
+        }
+
+        /**
+         * Records the file's own currency declaration.
+         *
+         * <p>Reached only outside a {@code STMTTRN} (the guard above returns
+         * early inside one), so a {@code CURDEF} tag buried in a transaction
+         * aggregate can never override statement metadata.
+         *
+         * <p>Repetition is normal in OFX — a file may restate the same
+         * {@code CURDEF} per statement — and is accepted. Two <em>different</em>
+         * declarations are not: choosing the first or the last would silently
+         * pick one reading of an ambiguous document and denominate real money
+         * by it, so the file is rejected instead.
+         */
+        private void onCurdef(String value) {
+            String normalized = value.strip().toUpperCase(Locale.ROOT);
+            if (normalized.isEmpty()) {
+                return;
+            }
+            if (!CURRENCY_CODE.matcher(normalized).matches()) {
+                // The value is not echoed back: it is unvalidated file content.
+                throw new StatementParseException("STATEMENT_CURRENCY_INVALID",
+                        "A moeda declarada pelo arquivo OFX (CURDEF) não é um código de "
+                                + "moeda válido de três letras.");
+            }
+            if (declaredCurrency == null) {
+                declaredCurrency = normalized;
+                return;
+            }
+            if (!declaredCurrency.equals(normalized)) {
+                throw new StatementParseException("STATEMENT_CURRENCY_CONFLICT",
+                        "O arquivo OFX declara mais de uma moeda (%s e %s). Um extrato "
+                                .formatted(declaredCurrency, normalized)
+                                + "precisa ter uma única moeda para ser importado.");
             }
         }
 

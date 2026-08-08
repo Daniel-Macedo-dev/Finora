@@ -39,7 +39,9 @@ public final class CsvStatementParser {
         for (int i = start; i < rows.size(); i++) {
             entries.add(toEntry(rows.get(i), entries.size() + 1, config, dateFormat));
         }
-        return new StatementParseResult(entries, null);
+        // A CSV declares no currency: the Finora CSV contract has no currency
+        // column, so the destination account is the only denomination there is.
+        return new StatementParseResult(entries, null, null);
     }
 
     /**
