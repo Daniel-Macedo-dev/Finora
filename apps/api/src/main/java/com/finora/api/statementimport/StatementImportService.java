@@ -530,8 +530,15 @@ public class StatementImportService {
             item.setValidation(issue.code(), issue.message());
             item.setIncluded(false);
         } else if (scaleIssue != null) {
+            // Deliberately still included. A parse failure is a row that cannot
+            // be read at all, so excluding it is honest; a fractional amount in
+            // a zero-decimal currency is a row the user is expected to correct,
+            // and one that can flip valid or invalid purely because the
+            // destination account changed. Excluding it would discard an
+            // inclusion choice the user made and silently keep the row out
+            // after they fix it. INVALID already blocks materialization on its
+            // own, which is why revalidation leaves inclusion alone too.
             item.setValidation("CURRENCY_FRACTION_INVALID", scaleIssue);
-            item.setIncluded(false);
         }
         return item;
     }

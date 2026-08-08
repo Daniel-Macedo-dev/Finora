@@ -24,14 +24,15 @@ const CSV_DEBIT_CREDIT =
   '06/06/2026;Depósito poupança;;150,00\n'
 
 const OFX_SGML =
-  'OFXHEADER:100\nDATA:OFXSGML\n\n<OFX>\n<BANKMSGSRSV1><STMTTRNRS><STMTRS>\n<BANKTRANLIST>\n' +
+  'OFXHEADER:100\nDATA:OFXSGML\n\n<OFX>\n<BANKMSGSRSV1><STMTTRNRS><STMTRS>\n' +
+  '<CURDEF>BRL\n<BANKTRANLIST>\n' +
   '<STMTTRN>\n<TRNTYPE>DEBIT\n<DTPOSTED>20260605\n<TRNAMT>-25.90\n<FITID>FIT-E2E-1\n<NAME>Padaria Sao Joao\n</STMTTRN>\n' +
   '<STMTTRN>\n<TRNTYPE>CREDIT\n<DTPOSTED>20260606\n<TRNAMT>5200.00\n<FITID>FIT-E2E-2\n<NAME>Salario de junho\n</STMTTRN>\n' +
   '</BANKTRANLIST>\n</STMTRS></STMTTRNRS></BANKMSGSRSV1>\n</OFX>\n'
 
 const OFX_XML =
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
-  '<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>' +
+  '<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>' +
   '<STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20260610</DTPOSTED><TRNAMT>-42.00</TRNAMT>' +
   '<FITID>FIT-XML-1</FITID><NAME>Farmacia Central</NAME></STMTTRN>' +
   '<STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20260611</DTPOSTED><TRNAMT>300.00</TRNAMT>' +
@@ -68,13 +69,28 @@ async function uploadStatement(
     .getByRole('button', { name: 'Importar extrato' })
     .first()
     .click()
-  await page.getByLabel('Conta de destino').selectOption({ label: accountName })
+  await selectAccount(page, accountName)
   await page.getByLabel('Arquivo do extrato').setInputFiles({
     name: filename,
     mimeType: 'application/octet-stream',
     buffer: Buffer.from(content, 'utf-8'),
   })
   await page.getByRole('button', { name: 'Enviar extrato' }).click()
+}
+
+/**
+ * Picks a destination account by name. Each option also names its type and
+ * currency, so the option is resolved by its value rather than by an exact
+ * label that would break every time that copy changes.
+ */
+async function selectAccount(page: Page, accountName: string) {
+  const select = page.getByLabel('Conta de destino')
+  const value = await select
+    .locator('option', { hasText: accountName })
+    .first()
+    .getAttribute('value')
+  expect(value).toBeTruthy()
+  await select.selectOption(value as string)
 }
 
 /** Assigns every empty row category select to its first available option. */
@@ -369,7 +385,7 @@ test('the primary CSV flow completes at 390px', async ({ browser }) => {
   await page.getByRole('button', { name: 'Abrir menu' }).click()
   await page.getByRole('link', { name: 'Importar extrato' }).click()
   await page.getByRole('button', { name: 'Importar extrato' }).first().click()
-  await page.getByLabel('Conta de destino').selectOption({ label: 'Conta Corrente' })
+  await selectAccount(page, 'Conta Corrente')
   await page.getByLabel('Arquivo do extrato').setInputFiles({
     name: 'extrato-mobile.csv',
     mimeType: 'text/csv',
