@@ -99,7 +99,7 @@ export default function StatementImportsPage() {
                   <th scope="col">Enviado em</th>
                   <th scope="col">Arquivo</th>
                   <th scope="col" className="si-col-optional">
-                    Conta
+                    Conta e moeda
                   </th>
                   <th scope="col" className="si-col-optional">
                     Formato
@@ -120,7 +120,16 @@ export default function StatementImportsPage() {
                     <td className="si-filename" title={batch.originalFilename}>
                       {batch.originalFilename}
                     </td>
-                    <td className="si-col-optional">{batch.accountName}</td>
+                    <td className="si-col-optional">
+                      {batch.accountName}
+                      {/* Account currency is immutable, so this is the
+                          denomination the batch always had. A legacy row never
+                          gets an invented file declaration. */}
+                      <span className="si-history-currency">
+                        {batch.accountCurrency}
+                        {batch.declaredCurrency !== null && ' · declarada pelo arquivo'}
+                      </span>
+                    </td>
                     <td className="si-col-optional">{batch.format}</td>
                     <td style={{ textAlign: 'right' }}>
                       {batch.importedCount} de {batch.totalRows}

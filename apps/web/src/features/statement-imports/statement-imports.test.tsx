@@ -18,6 +18,7 @@ const BASE_ITEM: StatementItem = {
   sourceType: 'DEBIT',
   postedDate: '2026-06-05',
   amount: 25.9,
+  currency: 'BRL',
   type: 'EXPENSE',
   description: 'Padaria São João',
   memo: 'Compra no débito',
@@ -78,6 +79,7 @@ const POSSIBLE_DUPLICATE_ITEM: StatementItem = {
     date: '2026-06-04',
     description: 'Estacionamento',
     amount: 8,
+    currency: 'BRL',
     type: 'EXPENSE',
     categoryName: 'Transporte',
   },
@@ -105,6 +107,7 @@ const INVALID_ITEM: StatementItem = {
 }
 
 const TOTALS: BatchDetail['totals'] = {
+  currency: 'BRL',
   totalRows: 5,
   readyCount: 3,
   invalidCount: 1,
@@ -128,6 +131,14 @@ const BATCH: BatchDetail = {
   createdAt: '2026-07-19T10:00:00Z',
   accountId: 3,
   accountName: 'Conta Corrente',
+  currency: {
+    accountCurrency: 'BRL',
+    currencySource: 'FILE',
+    declaredCurrency: 'BRL',
+    effectiveCurrency: 'BRL',
+    valuesAreConverted: false,
+    currencyAcknowledgementRequired: false,
+  },
   originalFilename: 'extrato.ofx',
   format: 'OFX',
   status: 'PREVIEW_READY',
@@ -151,6 +162,14 @@ const CSV_BATCH: BatchDetail = {
   format: 'CSV',
   status: 'NEEDS_MAPPING',
   sourceAccountHint: null,
+  currency: {
+    accountCurrency: 'BRL',
+    currencySource: 'ACCOUNT',
+    declaredCurrency: null,
+    effectiveCurrency: 'BRL',
+    valuesAreConverted: false,
+    currencyAcknowledgementRequired: false,
+  },
   csvMappingSuggestion: {
     encoding: 'UTF_8',
     delimiter: 'SEMICOLON',
@@ -173,6 +192,9 @@ const HISTORY = {
       createdAt: '2026-07-19T10:00:00Z',
       accountId: 3,
       accountName: 'Conta Corrente',
+      accountCurrency: 'BRL',
+      currencySource: 'FILE',
+      declaredCurrency: 'BRL',
       originalFilename: 'extrato.ofx',
       format: 'OFX',
       status: 'PREVIEW_READY',
@@ -187,6 +209,9 @@ const HISTORY = {
       createdAt: '2026-07-18T10:00:00Z',
       accountId: 3,
       accountName: 'Conta Corrente',
+      accountCurrency: 'BRL',
+      currencySource: 'ACCOUNT',
+      declaredCurrency: null,
       originalFilename: 'junho.csv',
       format: 'CSV',
       status: 'PARTIALLY_COMPLETED',
@@ -228,6 +253,7 @@ const ACCOUNTS = [
     type: 'CHECKING',
     openingBalance: 1000,
     currentBalance: 1000,
+    currency: 'BRL',
     archived: false,
     displayOrder: 0,
   },
@@ -237,8 +263,29 @@ const ACCOUNTS = [
     type: 'CASH',
     openingBalance: 50,
     currentBalance: 50,
+    currency: 'BRL',
     archived: false,
     displayOrder: 1,
+  },
+  {
+    id: 5,
+    name: 'Conta internacional',
+    type: 'CHECKING',
+    openingBalance: 400,
+    currentBalance: 400,
+    currency: 'USD',
+    archived: false,
+    displayOrder: 2,
+  },
+  {
+    id: 6,
+    name: 'Conta iene',
+    type: 'CHECKING',
+    openingBalance: 90000,
+    currentBalance: 90000,
+    currency: 'JPY',
+    archived: false,
+    displayOrder: 3,
   },
 ]
 
@@ -346,10 +393,21 @@ describe('StatementImportsPage', () => {
     expect(screen.getByText(/não fica armazenado/)).toBeInTheDocument()
     expect(screen.getByText(/Tamanho máximo: 5 MB/)).toBeInTheDocument()
 
-    // Only bank accounts are offered — the CASH wallet never appears.
+    // Only bank accounts are offered — the CASH wallet never appears — and
+    // each option names its currency, because the account chosen here is what
+    // the statement's amounts will mean.
     const accountSelect = screen.getByLabelText('Conta de destino')
-    expect(within(accountSelect).getByText('Conta Corrente')).toBeInTheDocument()
-    expect(within(accountSelect).queryByText('Carteira')).not.toBeInTheDocument()
+    expect(
+      within(accountSelect).getByRole('option', {
+        name: 'Conta Corrente • Conta corrente • BRL — Real brasileiro',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(accountSelect).getByRole('option', {
+        name: 'Conta internacional • Conta corrente • USD — Dólar americano',
+      }),
+    ).toBeInTheDocument()
+    expect(within(accountSelect).queryByText(/Carteira/)).not.toBeInTheDocument()
   })
 
   it('rejects unsupported extensions and oversized files locally', async () => {
@@ -417,6 +475,7 @@ describe('CSV mapping step', () => {
         respond: () =>
           jsonResponse({
             batchId: 2,
+            accountCurrency: 'BRL',
             sampleSize: 2,
             validCount: 2,
             invalidCount: 0,

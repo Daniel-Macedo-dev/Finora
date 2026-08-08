@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
-import { formatBRL, formatDate } from '../../lib/format'
+import { formatDate } from '../../lib/format'
+import { formatMoney } from '../../lib/money'
+import ImportCurrencyNotice from './ImportCurrencyNotice'
 import { useCsvMapping, useReparse } from './api'
 import type {
   BatchDetail,
@@ -155,6 +157,15 @@ export default function CsvMappingStep({ batch }: CsvMappingStepProps) {
         Confirme como o arquivo deve ser interpretado. As primeiras linhas abaixo ajudam a
         identificar cada coluna — nada é importado até a confirmação final.
       </p>
+
+      {/* The denomination is stated before the mapping is confirmed, not only
+          at the end: a CSV carries no currency, so the account chosen at upload
+          is what the numbers will mean. */}
+      <ImportCurrencyNotice
+        currency={batch.currency}
+        format={batch.format}
+        accountName={batch.accountName}
+      />
 
       {rawRows.length > 0 && (
         <div className="card table-wrap si-raw-preview" style={{ padding: 0 }}>
@@ -365,7 +376,7 @@ export default function CsvMappingStep({ batch }: CsvMappingStepProps) {
                   <th scope="col">Data</th>
                   <th scope="col">Descrição</th>
                   <th scope="col" style={{ textAlign: 'right' }}>
-                    Valor
+                    Valor ({preview.accountCurrency})
                   </th>
                   <th scope="col">Situação</th>
                 </tr>
@@ -378,7 +389,7 @@ export default function CsvMappingStep({ batch }: CsvMappingStepProps) {
                     <td className="si-description">{entry.description ?? '—'}</td>
                     <td style={{ textAlign: 'right' }}>
                       {entry.amount !== null && entry.type === 'EXPENSE' ? '−' : ''}
-                      {formatBRL(entry.amount)}
+                      {formatMoney(entry.amount, preview.accountCurrency)}
                     </td>
                     <td>
                       {entry.validationMessage ? (

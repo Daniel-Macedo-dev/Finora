@@ -3,7 +3,8 @@ import { Pencil, Settings2, Undo2 } from 'lucide-react'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Money from '../../components/Money'
 import { errorMessage } from '../../components/states'
-import { formatBRL, formatDate } from '../../lib/format'
+import { formatDate } from '../../lib/format'
+import { currencyLabel, formatMoney } from '../../lib/money'
 import { useCategories } from '../shared/api'
 import { usePatchItem, useUndoItem } from './api'
 import CategoryRuleManager from './CategoryRuleManager'
@@ -241,11 +242,13 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
         </div>
         <div className="card stat-card">
           <span className="stat-label">Efeito pendente na conta</span>
+          <span className="visually-hidden">{currencyLabel(totals.currency)}</span>
           <span className="stat-value">
-            <Money value={totals.pendingNetEffect} signed />
+            <Money value={totals.pendingNetEffect} currency={totals.currency} signed />
           </span>
           <span className="stat-footnote">
-            +{formatBRL(totals.pendingIncomeTotal)} · −{formatBRL(totals.pendingExpenseTotal)}
+            +{formatMoney(totals.pendingIncomeTotal, totals.currency)} · −
+            {formatMoney(totals.pendingExpenseTotal, totals.currency)}
           </span>
         </div>
       </div>
@@ -310,7 +313,7 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
               <th scope="col">Data</th>
               <th scope="col">Descrição</th>
               <th scope="col" style={{ textAlign: 'right' }}>
-                Valor
+                Valor ({totals.currency})
               </th>
               <th scope="col">Categoria</th>
               <th scope="col">Duplicidade</th>
@@ -344,7 +347,7 @@ export default function ImportPreview({ batch }: ImportPreviewProps) {
                   {item.memo && <span className="si-memo">{item.memo}</span>}
                 </td>
                 <td style={{ textAlign: 'right' }}>
-                  <Money value={signedAmount(item)} signed />
+                  <Money value={signedAmount(item)} currency={item.currency} signed />
                 </td>
                 <td>{renderCategoryCell(item)}</td>
                 <td>{renderDuplicateCell(item)}</td>

@@ -416,3 +416,59 @@
     max-width: 140px;
   }
 }
+
+/* ── Import currency ─────────────────────────────────────────────────────
+   Stable preview metadata, not a product error. A missing CURDEF is an
+   ordinary fact about a file, so the informational tokens are used even
+   where an acknowledgement is required — the negative palette would tell
+   the reader something is wrong when nothing is. */
+
+.si-currency-notice {
+  background: var(--info-soft);
+  color: var(--ink-primary);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.si-currency-headline {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.si-currency-ack {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* The currency itself is stated in words, never carried by colour alone. */
+.si-currency-source {
+  display: block;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.si-history-currency {
+  display: block;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.si-destination-field dd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.si-destination-hint {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  /* Long currency sentences wrap instead of widening the card at 390px. */
+  overflow-wrap: anywhere;
+}

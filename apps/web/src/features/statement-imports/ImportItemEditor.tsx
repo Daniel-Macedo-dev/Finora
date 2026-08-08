@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import Dialog from '../../components/Dialog'
 import FormField from '../../components/FormField'
 import { errorMessage } from '../../components/states'
-import { formatBRL, formatDate, parseMoneyInput } from '../../lib/format'
+import { formatDate } from '../../lib/format'
+import { currencyFractionDigits, formatMoney, parseMoneyInput } from '../../lib/money'
 import { useCategories } from '../shared/api'
 import { useCreateCategoryRule, usePatchItem } from './api'
 import type { StatementItem, TransactionType } from './types'
@@ -35,12 +36,22 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
   const [localError, setLocalError] = useState<string | null>(null)
 
   const categories = useCategories(type)
+  // The row's own denomination, so the parser follows the currency's real
+  // precision instead of a global two-decimal assumption.
+  const currency = item.currency
+  const wholeUnitsOnly = currencyFractionDigits(currency) === 0
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const parsedAmount = parseMoneyInput(amount)
+    const parsedAmount = parseMoneyInput(amount, currency)
     if (!description.trim()) {
       setLocalError('A descrição não pode ficar vazia.')
+      return
+    }
+    if (parsedAmount === null && wholeUnitsOnly && amount.trim() !== '') {
+      // parseMoneyInput refuses a fractional amount in a zero-decimal currency
+      // rather than rounding it: say so instead of reporting a generic error.
+      setLocalError(`${currency} não aceita centavos: informe um valor inteiro.`)
       return
     }
     if (parsedAmount === null || parsedAmount <= 0) {
@@ -94,7 +105,7 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
       <form onSubmit={handleSubmit} noValidate>
         <p className="si-original-values">
           Valores lidos do arquivo: {formatDate(item.originalDate)} ·{' '}
-          {item.originalDescription ?? '—'} · {formatBRL(item.originalAmount)}. Eles ficam
+          {item.originalDescription ?? '—'} · {formatMoney(item.originalAmount, currency)}. Eles ficam
           preservados para auditoria.
         </p>
 
@@ -118,10 +129,13 @@ export default function ImportItemEditor({ batchId, item, onClose }: ImportItemE
               required
             />
           </FormField>
-          <FormField label="Valor (R$)">
+          <FormField
+            label={`Valor (${currency})`}
+            hint={wholeUnitsOnly ? `${currency} não usa centavos.` : undefined}
+          >
             <input
               className="input"
-              inputMode="decimal"
+              inputMode={wholeUnitsOnly ? 'numeric' : 'decimal'}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               required

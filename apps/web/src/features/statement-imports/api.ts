@@ -125,14 +125,36 @@ export function usePatchItem() {
   })
 }
 
+/**
+ * Confirms a batch. `acknowledgeAccountCurrency` is consent, never financial
+ * identity: the backend keeps it out of every fingerprint, so sending it does
+ * not change which rows count as duplicates or make a repeat confirmation
+ * create a second transaction.
+ */
 export function useConfirmImport() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ batchId, itemIds }: { batchId: number; itemIds?: number[] }) =>
-      api.post<ConfirmResponse>(
+    mutationFn: ({
+      batchId,
+      itemIds,
+      acknowledgeAccountCurrency,
+    }: {
+      batchId: number
+      itemIds?: number[]
+      acknowledgeAccountCurrency?: boolean
+    }) => {
+      const body: { itemIds?: number[]; acknowledgeAccountCurrency?: boolean } = {}
+      if (itemIds && itemIds.length > 0) {
+        body.itemIds = itemIds
+      }
+      if (acknowledgeAccountCurrency !== undefined) {
+        body.acknowledgeAccountCurrency = acknowledgeAccountCurrency
+      }
+      return api.post<ConfirmResponse>(
         `/statement-imports/${batchId}/confirm`,
-        itemIds && itemIds.length > 0 ? { itemIds } : undefined,
-      ),
+        Object.keys(body).length > 0 ? body : undefined,
+      )
+    },
     // Confirmation commits per item: even a response with failures may have
     // persisted successes — refresh on settle, not only on full success.
     onSettled: () => invalidateFinancialData(queryClient),

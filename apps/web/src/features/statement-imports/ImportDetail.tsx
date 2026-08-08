@@ -1,10 +1,17 @@
 import { ArrowLeft, FileText } from 'lucide-react'
 import { ErrorState, LoadingCards } from '../../components/states'
 import { formatDate } from '../../lib/format'
+import { currencyLabel } from '../../lib/money'
 import { useImportBatch } from './api'
 import CsvMappingStep from './CsvMappingStep'
+import DestinationAccountField from './DestinationAccountField'
 import ImportPreview from './ImportPreview'
-import { BATCH_STATUS_LABELS, type BatchDetail, type StatementImportStatus } from './types'
+import {
+  BATCH_STATUS_LABELS,
+  CURRENCY_SOURCE_LABELS,
+  type BatchDetail,
+  type StatementImportStatus,
+} from './types'
 
 interface ImportDetailProps {
   batchId: number
@@ -31,9 +38,15 @@ function BatchHeader({ batch }: { batch: BatchDetail }) {
         </span>
       </div>
       <dl className="si-batch-meta">
+        <DestinationAccountField batch={batch} />
         <div>
-          <dt>Conta de destino</dt>
-          <dd>{batch.accountName}</dd>
+          <dt>Moeda dos valores</dt>
+          <dd>
+            {currencyLabel(batch.currency.effectiveCurrency)}
+            <span className="si-currency-source">
+              {CURRENCY_SOURCE_LABELS[batch.currency.currencySource]}
+            </span>
+          </dd>
         </div>
         <div>
           <dt>Formato</dt>

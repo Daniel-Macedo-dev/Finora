@@ -3,8 +3,9 @@ import { CheckCircle2, Undo2 } from 'lucide-react'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Money from '../../components/Money'
 import { errorMessage } from '../../components/states'
-import { formatBRL } from '../../lib/format'
+import { currencyLabel, formatMoney } from '../../lib/money'
 import { useConfirmImport, useUndoBatch } from './api'
+import ImportCurrencyNotice from './ImportCurrencyNotice'
 import {
   ITEM_RESULT_LABELS,
   type BatchDetail,
@@ -40,18 +41,30 @@ export default function ConfirmImportSection({ batch }: ConfirmImportSectionProp
   const [lastRun, setLastRun] = useState<ConfirmResponse | null>(null)
 
   const totals = batch.totals
+  const currency = totals.currency
   const pending = totals.includedPendingCount
   const unmapped = totals.unmappedCategoryCount
+  // The acknowledgement is scoped to the destination it was given for. Keeping
+  // the account id rather than a boolean means changing the account clears the
+  // consent by construction: the assumption the user agreed to no longer holds.
+  const [acknowledgedFor, setAcknowledgedFor] = useState<number | null>(null)
+  const acknowledged = acknowledgedFor === batch.accountId
+  const needsAcknowledgement = batch.currency.currencyAcknowledgementRequired
+  const blockedByAcknowledgement = needsAcknowledgement && !acknowledged
   const confirmable =
     (batch.status === 'PREVIEW_READY' || batch.status === 'PARTIALLY_COMPLETED') &&
     pending > 0 &&
-    unmapped === 0
+    unmapped === 0 &&
+    !blockedByAcknowledgement
   const hasImported = totals.importedCount > 0
 
   function runConfirm() {
     setConfirmOpen(false)
     confirm.mutate(
-      { batchId: batch.id },
+      {
+        batchId: batch.id,
+        acknowledgeAccountCurrency: needsAcknowledgement ? acknowledged : undefined,
+      },
       { onSuccess: (response) => setLastRun(response) },
     )
   }
@@ -80,6 +93,10 @@ export default function ConfirmImportSection({ batch }: ConfirmImportSectionProp
           <dd>{batch.accountName}</dd>
         </div>
         <div>
+          <dt>Moeda</dt>
+          <dd>{currencyLabel(currency)}</dd>
+        </div>
+        <div>
           <dt>Serão importados</dt>
           <dd>{pending}</dd>
         </div>
@@ -93,19 +110,36 @@ export default function ConfirmImportSection({ batch }: ConfirmImportSectionProp
         </div>
         <div>
           <dt>Entradas</dt>
-          <dd>{formatBRL(totals.pendingIncomeTotal)}</dd>
+          <dd>{formatMoney(totals.pendingIncomeTotal, currency)}</dd>
         </div>
         <div>
           <dt>Saídas</dt>
-          <dd>{formatBRL(totals.pendingExpenseTotal)}</dd>
+          <dd>{formatMoney(totals.pendingExpenseTotal, currency)}</dd>
         </div>
         <div>
           <dt>Efeito na conta</dt>
           <dd>
-            <Money value={totals.pendingNetEffect} signed />
+            <Money value={totals.pendingNetEffect} currency={currency} signed />
           </dd>
         </div>
       </dl>
+
+      {(batch.status === 'PREVIEW_READY' || batch.status === 'PARTIALLY_COMPLETED') && (
+        <ImportCurrencyNotice
+          currency={batch.currency}
+          format={batch.format}
+          accountName={batch.accountName}
+          acknowledged={acknowledged}
+          onAcknowledgedChange={(next) => setAcknowledgedFor(next ? batch.accountId : null)}
+        />
+      )}
+
+      {blockedByAcknowledgement && pending > 0 && (
+        <p className="si-warning" role="status">
+          Confirme acima que os valores devem ser interpretados em {currency} para liberar a
+          importação.
+        </p>
+      )}
 
       {unmapped > 0 && (
         <p className="si-warning" role="status">
@@ -199,7 +233,7 @@ export default function ConfirmImportSection({ batch }: ConfirmImportSectionProp
       <ConfirmDialog
         open={confirmOpen}
         title="Importar lançamentos"
-        message={`Serão criadas ${pending === 1 ? '1 transação real' : `${pending} transações reais`} na conta ${batch.accountName}. Duplicatas exatas continuam bloqueadas e cada lançamento retorna um resultado individual.`}
+        message={`Serão criadas ${pending === 1 ? '1 transação real' : `${pending} transações reais`} em ${currencyLabel(currency)} na conta ${batch.accountName}, sem conversão. Duplicatas exatas continuam bloqueadas e cada lançamento retorna um resultado individual.`}
         confirmLabel="Criar transações"
         busy={confirm.isPending}
         onConfirm={runConfirm}

@@ -5,7 +5,26 @@
  * financial values beyond collecting mapping configuration.
  */
 
+import type { CurrencyCode } from '../../lib/money'
+
 export type StatementImportFormat = 'CSV' | 'OFX'
+
+/**
+ * Where a batch's denomination came from. Mirrors the backend enum.
+ *
+ * Every batch is read in exactly one currency — its destination account's — and
+ * nothing is ever converted. These values describe the *evidence* behind that
+ * reading, which is what decides whether the user has to confirm an assumption.
+ */
+export type StatementCurrencySource =
+  /** CSV: the Finora CSV contract has no currency column, so the account is it. */
+  | 'ACCOUNT'
+  /** OFX whose CURDEF was read and matched the account. */
+  | 'FILE'
+  /** OFX that carried no CURDEF; the account currency is an assumption. */
+  | 'ACCOUNT_ASSUMED'
+  /** OFX imported before Finora recorded whether CURDEF was present. */
+  | 'LEGACY_UNKNOWN'
 
 export type StatementImportStatus =
   | 'NEEDS_MAPPING'
@@ -91,12 +110,34 @@ export interface CategoryRuleRequest {
 
 /* ---------- responses ---------- */
 
+/**
+ * The one currency a batch is read in, plus how well the source is known.
+ *
+ * Bundled rather than spread across the batch so no consumer can pick up an
+ * amount and leave the denomination behind.
+ */
+export interface StatementCurrencyContext {
+  /** Destination account currency: the authoritative denomination. */
+  accountCurrency: CurrencyCode
+  currencySource: StatementCurrencySource
+  /** What the file declared; only ever set for a FILE source. */
+  declaredCurrency: CurrencyCode | null
+  /** Currency the amounts are actually read in. Equals accountCurrency. */
+  effectiveCurrency: CurrencyCode
+  /** Always false: Finora holds no exchange rates and converts nothing. */
+  valuesAreConverted: boolean
+  /** Whether confirming a new item needs an explicit acknowledgement. */
+  currencyAcknowledgementRequired: boolean
+}
+
 /** Summary of an existing transaction shown in duplicate review. */
 export interface MatchedTransactionSummary {
   id: number
   date: string
   description: string
   amount: number
+  /** Denomination of `amount`, from the matched transaction itself. */
+  currency: CurrencyCode
   type: TransactionType
   categoryName: string | null
 }
@@ -108,6 +149,8 @@ export interface StatementItem {
   sourceType: string | null
   postedDate: string | null
   amount: number | null
+  /** Denomination of `amount` and `originalAmount`. */
+  currency: CurrencyCode
   type: TransactionType | null
   description: string | null
   memo: string | null
@@ -140,6 +183,8 @@ export interface StatementItem {
 
 /** Derived batch totals — computed by the backend, never in the frontend. */
 export interface BatchTotals {
+  /** Denomination of every monetary total below. */
+  currency: CurrencyCode
   totalRows: number
   readyCount: number
   invalidCount: number
@@ -163,6 +208,9 @@ export interface BatchSummary {
   createdAt: string
   accountId: number
   accountName: string
+  accountCurrency: CurrencyCode
+  currencySource: StatementCurrencySource
+  declaredCurrency: CurrencyCode | null
   originalFilename: string
   format: StatementImportFormat
   status: StatementImportStatus
@@ -186,6 +234,8 @@ export interface BatchDetail {
   createdAt: string
   accountId: number
   accountName: string
+  /** The one currency this batch is read in, and its provenance. */
+  currency: StatementCurrencyContext
   originalFilename: string
   format: StatementImportFormat
   status: StatementImportStatus
@@ -208,6 +258,8 @@ export interface MappingPreviewEntry {
   sourceIndex: number
   postedDate: string | null
   amount: number | null
+  /** Denomination of `amount` and `originalAmount`. */
+  currency: CurrencyCode
   type: TransactionType | null
   description: string | null
   memo: string | null
@@ -218,6 +270,8 @@ export interface MappingPreviewEntry {
 
 export interface MappingPreview {
   batchId: number
+  /** Denomination of every `entries[].amount`: the destination account's. */
+  accountCurrency: CurrencyCode
   sampleSize: number
   validCount: number
   invalidCount: number
@@ -313,4 +367,17 @@ export const RULE_OPERATION_LABELS: Record<CategoryRuleOperation, string> = {
   EXACT: 'Igual a',
   STARTS_WITH: 'Começa com',
   CONTAINS: 'Contém',
+}
+
+/**
+ * Short provenance label for history and detail.
+ *
+ * LEGACY_UNKNOWN deliberately does not say the file declared nothing: nobody
+ * knows what it declared, because the parser of the day never looked.
+ */
+export const CURRENCY_SOURCE_LABELS: Record<StatementCurrencySource, string> = {
+  ACCOUNT: 'Moeda da conta de destino',
+  FILE: 'Moeda declarada pelo arquivo',
+  ACCOUNT_ASSUMED: 'Moeda da conta (arquivo não declarou)',
+  LEGACY_UNKNOWN: 'Moeda da conta (importação anterior ao registro da moeda)',
 }

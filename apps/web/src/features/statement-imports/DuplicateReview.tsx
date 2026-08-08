@@ -71,7 +71,7 @@ export default function DuplicateReview({
             <div>
               <dt>Valor</dt>
               <dd>
-                <Money value={signedAmount(item.amount, item.type)} signed />
+                <Money value={signedAmount(item.amount, item.type)} currency={item.currency} signed />
               </dd>
             </div>
             <div>
@@ -102,7 +102,14 @@ export default function DuplicateReview({
               <div>
                 <dt>Valor</dt>
                 <dd>
-                  <Money value={signedAmount(match.amount, match.type)} signed />
+                  {/* The matched transaction's own currency: duplicate matching
+                      is account-scoped, so this agreeing with the item's
+                      currency is observable rather than assumed. */}
+                  <Money
+                    value={signedAmount(match.amount, match.type)}
+                    currency={match.currency}
+                    signed
+                  />
                 </dd>
               </div>
               {match.categoryName && (

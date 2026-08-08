@@ -3,6 +3,8 @@ import Dialog from '../../components/Dialog'
 import FormField from '../../components/FormField'
 import { ApiError } from '../../lib/api'
 import { errorMessage } from '../../components/states'
+import { currencyLabel } from '../../lib/money'
+import { ACCOUNT_TYPE_LABELS } from '../shared/types'
 import { useAccounts } from '../shared/api'
 import { useUploadStatement } from './api'
 import { MAX_UPLOAD_BYTES, type BatchDetail } from './types'
@@ -95,7 +97,7 @@ export default function StatementUploadDialog({
       <form onSubmit={handleSubmit} noValidate>
         <FormField
           label="Conta de destino"
-          hint="Somente contas correntes e poupanças recebem extratos."
+          hint="Somente contas correntes e poupanças recebem extratos. A moeda da conta é a moeda em que o extrato será lido — nada é convertido."
         >
           <select
             className="select"
@@ -106,7 +108,7 @@ export default function StatementUploadDialog({
             <option value="">Escolha a conta</option>
             {eligibleAccounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.name}
+                {account.name} • {ACCOUNT_TYPE_LABELS[account.type]} • {currencyLabel(account.currency)}
               </option>
             ))}
           </select>
