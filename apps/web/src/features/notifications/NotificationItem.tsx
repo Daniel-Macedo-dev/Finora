@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { formatBRL, formatDate } from '../../lib/format'
+import { formatDate } from '../../lib/format'
+import { formatMoney } from '../../lib/money'
 import { useDismissNotification, useReadNotification, useRestoreNotification, useSnoozeNotification, useUnreadNotification } from './api'
 import type { FinoraNotification } from './types'
 
@@ -17,7 +18,12 @@ export default function NotificationItem({ notification }: { notification: Finor
       <div className="notification-copy">
         <span className="notification-severity">{severityLabel[notification.severity]}</span>
         <h3>{notification.title}</h3>
-        <p>{formatDate(notification.eventDate)}{notification.amount != null ? ` · ${formatBRL(notification.amount)}` : ''}</p>
+        <p>
+          {formatDate(notification.eventDate)}
+          {notification.amount != null
+            ? ` · ${formatMoney(notification.amount, notification.currency)}`
+            : ''}
+        </p>
       </div>
       <div className="notification-actions">
         <Link className="btn btn-secondary" to={notification.route} onClick={() => read.mutate(notification.id)}>Ver origem</Link>

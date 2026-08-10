@@ -1,5 +1,5 @@
 import { api } from '../../lib/api'
-import { formatBRL } from '../../lib/format'
+import { formatMoney } from '../../lib/money'
 import { claimBrowserNotifications } from './api'
 
 export type BrowserPermissionState = NotificationPermission | 'unsupported'
@@ -17,11 +17,18 @@ export async function deliverBrowserClaims(navigate: (route: string) => void) {
   if (browserPermission() !== 'granted') return
   const claims = await claimBrowserNotifications()
   for (const claim of claims) {
-    const body = claim.amount == null ? 'Abra o Finora para ver os detalhes.' : formatBRL(claim.amount)
+    // Both halves or neither: the server withholds them together, and a
+    // currency without its amount would still disclose what was hidden.
+    const body =
+      claim.amount == null || claim.currency == null
+        ? 'Abra o Finora para ver os detalhes.'
+        : formatMoney(claim.amount, claim.currency)
     try {
       const alert = new Notification(claim.title, {
         body,
-        tag: `${claim.sourceKey}:${claim.revision}`,
+        // id + revision is already unique per owner, and unlike a source key it
+        // cannot name the denomination of an amount the user chose to hide.
+        tag: `${claim.id}:${claim.revision}`,
       })
       alert.onclick = () => {
         window.focus()

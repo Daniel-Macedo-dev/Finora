@@ -10,6 +10,7 @@ import { browserPermission, deliverBrowserClaims, requestBrowserPermission } fro
 const item = {
   id: 7, sourceKey: 'COMMITMENT:2:2026-07-21', type: 'RECURRING_OVERDUE',
   severity: 'CRITICAL', eventDate: '2026-07-21', title: 'Conta vencida', amount: 120,
+  currency: 'BRL',
   resourceType: 'COMMITMENT', resourceId: 2, route: '/commitments', revision: 1,
   unread: true, dismissed: false, snoozed: false, snoozedUntil: null,
   firstSeenAt: '2026-07-21T12:00:00Z', lastSeenAt: '2026-07-21T12:00:00Z', resolvedAt: null,
@@ -75,7 +76,7 @@ describe('notification center', () => {
       static requestPermission = vi.fn(async () => 'granted' as NotificationPermission)
     }
     vi.stubGlobal('Notification', FakeNotification)
-    vi.stubGlobal('fetch', vi.fn(async () => response([{ id: 7, sourceKey: item.sourceKey, revision: 1, title: item.title, amount: null, route: item.route }])))
+    vi.stubGlobal('fetch', vi.fn(async () => response([{ id: 7, revision: 1, title: item.title, amount: null, currency: null, route: item.route }])))
     await deliverBrowserClaims(vi.fn())
     expect(shown).toEqual([{ title: 'Conta vencida', body: 'Abra o Finora para ver os detalhes.' }])
     expect(FakeNotification.requestPermission).not.toHaveBeenCalled()
