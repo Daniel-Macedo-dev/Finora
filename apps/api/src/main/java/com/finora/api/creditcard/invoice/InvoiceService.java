@@ -101,7 +101,27 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public List<InvoiceSummaryResponse> listForCard(Long cardId, LocalDate today) {
-        Long userId = currentUser.currentUserId();
+        return listForCardForUser(currentUser.currentUserId(), cardId, today);
+    }
+
+    /**
+     * Trusted internal entry point: the owner comes from the caller instead of
+     * from the request.
+     *
+     * <p>Background work has no session. Reading the owner out of the security
+     * context here meant that the scheduled notification synchronizer threw for
+     * every owner who held a card, and because the scheduler isolates failures
+     * per owner, those people silently received no notifications at all — not
+     * their invoices, not their recurring charges, not their cash risk.
+     *
+     * <p>Ownership is not relaxed by this: {@code userId} still scopes the card
+     * lookup and every aggregate query below, exactly as before. Only the place
+     * the owner is read from changes, and the callers that use this variant
+     * already hold an owner they resolved themselves.
+     */
+    @Transactional(readOnly = true)
+    public List<InvoiceSummaryResponse> listForCardForUser(Long userId, Long cardId,
+                                                           LocalDate today) {
         CreditCard card = cards.findByIdAndUserId(cardId, userId)
                 .orElseThrow(() -> new NotFoundException("Cartão", cardId));
 

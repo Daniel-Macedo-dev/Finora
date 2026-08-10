@@ -108,7 +108,17 @@ linha é reativada, revisionada e preserva o histórico.
 
 `POST /api/notifications/sync` faz catch-up explícito somente para o usuário da
 sessão. O job automático percorre usuários `ACTIVE` em páginas limitadas e
-isola falhas por usuário. Cada usuário ocupa uma transação própria. Um advisory
+isola falhas por usuário. Cada usuário ocupa uma transação própria.
+
+O job não tem sessão, então todo o caminho de geração recebe o proprietário do
+chamador em vez de lê-lo do contexto de segurança: `eventsForUser`,
+`forecastForUser` e `listForCardForUser`. O escopo por dono continua idêntico —
+o `userId` ainda filtra cada consulta —, só muda de onde ele vem. Isso é
+requisito de funcionamento, não detalhe: uma única leitura autenticada dentro do
+feed lançava para qualquer dono que tivesse cartão e, como o job isola falhas
+por usuário, essas pessoas ficavam **sem notificação nenhuma** — nem fatura, nem
+recorrente, nem risco de caixa. Um teste dirige o sincronizador com o contexto
+de segurança limpo para que a regressão não volte em silêncio. Um advisory
 lock transacional por proprietário serializa job e sync manual; locks de linha
 coordenam ações concorrentes. O lookback de vencidos é limitado a 30 dias e a
 janela futura usa `upcomingLeadDays` (1–14).

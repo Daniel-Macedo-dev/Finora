@@ -167,7 +167,10 @@ public class DueEventService {
             if (card.isArchived()) {
                 continue;
             }
-            for (InvoiceSummaryResponse invoice : invoiceService.listForCard(card.getId(), today)) {
+            // The owner-explicit variant: this feed also runs from the
+            // scheduler, which has no session to read an owner out of.
+            for (InvoiceSummaryResponse invoice
+                    : invoiceService.listForCardForUser(userId, card.getId(), today)) {
                 if (invoice.outstandingAmount().signum() <= 0
                         || invoice.dueDate().isBefore(start)
                         || invoice.dueDate().isAfter(end)) {

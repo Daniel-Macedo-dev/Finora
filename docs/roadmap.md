@@ -274,7 +274,7 @@ denominar, preservando apenas o que é comprovadamente anterior à V15.
 O QA fechou a fatia: 11 jornadas Playwright dedicadas
 (`notifications-currency.spec.ts`) mais as 20 já existentes, a matriz visual de 32
 capturas (quatro estados × quatro viewports × dois temas, todas inspecionadas), 16
-testes de unidade de front-end, 658 testes de back-end e a migração provada contra
+testes de unidade de front-end, 659 testes de back-end e a migração provada contra
 PostgreSQL real a partir de um V16 populado. As revisões acharam seis defeitos
 reais no plano e na implementação, todos corrigidos — entre eles o vazamento da
 moeda pela `tag` do navegador e o laço infinito de re-notificação.

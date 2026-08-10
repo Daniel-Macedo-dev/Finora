@@ -16,7 +16,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,9 @@ import tools.jackson.databind.JsonNode;
  */
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class NotificationCurrencyIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private NotificationSynchronizationService synchronization;
 
     private final LocalDate today = LocalDate.now();
 
@@ -93,6 +98,37 @@ class NotificationCurrencyIntegrationTest extends AbstractIntegrationTest {
                         "nenhuma notificação de fatura foi gerada: " + rows));
         assertThat(invoice.get("currency").asString()).isEqualTo("USD");
         assertThat(invoice.get("amount").decimalValue()).isEqualByComparingTo("400.00");
+    }
+
+    @Test
+    void theBackgroundSynchronizerServesAnOwnerHoldingACardWithNoSessionAtAll() throws Exception {
+        // The scheduler runs with no authentication and isolates failures per
+        // owner, so a single unauthenticated read inside the feed did not fail
+        // loudly -- it silently emptied the inbox of everyone who held a card,
+        // invoices and recurring charges and cash risk alike. This drives the
+        // same entry point the scheduler uses, with the security context
+        // deliberately cleared.
+        TestUser owner = registerUser("Sem sessão");
+        long category = categoryId(owner, "Assinaturas", CategoryType.EXPENSE);
+        long usd = createAccount(owner, "Caixa USD", "USD", "5000.00");
+        long card = createCard(owner, "Cartão USD", "USD", usd,
+                today.minusDays(2).getDayOfMonth(), today.plusDays(5).getDayOfMonth());
+        purchase(owner, card, category, today.minusDays(4), "400.00");
+        overdueCommitment(owner, category, "Assinatura em dólares", "80.00", "USD", usd);
+        widenLeadDays(owner, 14);
+
+        SecurityContextHolder.clearContext();
+        var result = synchronization.synchronize(owner.id());
+
+        assertThat(result.created()).as("notificações criadas pelo caminho de fundo").isPositive();
+        Map<String, JsonNode> byResource = new LinkedHashMap<>();
+        for (JsonNode row : inbox(owner)) {
+            byResource.put(row.get("resourceType").asString(), row);
+        }
+        assertThat(byResource).containsKeys("CARD_INVOICE", "COMMITMENT");
+        // And the currency still comes from the card, not from a guess.
+        assertThat(byResource.get("CARD_INVOICE").get("currency").asString()).isEqualTo("USD");
+        assertThat(byResource.get("COMMITMENT").get("currency").asString()).isEqualTo("USD");
     }
 
     @Test

@@ -490,7 +490,11 @@ sino/painel/preferências/browser e 20 jornadas Playwright em
 nos quatro viewports e dois temas.
 
 A moeda nas notificações acrescenta `NotificationCurrencyIntegrationTest`
-(10 casos: moeda do compromisso em BRL/USD/JPY, moeda do cartão na fatura, risco
+(11 casos: moeda do compromisso em BRL/USD/JPY, moeda do cartão na fatura,
+sincronização de fundo com o contexto de segurança limpo para um dono com
+cartão — o caminho que o agendador usa, e que lançava
+`AuthenticationCredentialsNotFoundException` antes do proprietário passar a ser
+explícito —, risco
 estrangeiro nunca rotulado com a moeda base, um risco de caixa por moeda com
 resolução independente, privacidade da reivindicação nos dois sentidos com o
 conjunto exato de campos afirmado, baseline que não reproduz o histórico herdado
