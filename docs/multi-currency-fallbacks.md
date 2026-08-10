@@ -15,34 +15,49 @@ removidos quando a última delas passar a moeda.
 
 ## Contagem de `formatBRL` por arquivo
 
-Levantada em `874a198..HEAD` com `rg -n formatBRL apps/web/src`.
+Recontada na árvore atual contando **ocorrências**, não linhas:
+
+```bash
+cd apps/web && rg --no-heading -o -H formatBRL src
+```
+
+`rg -c` conta linhas que casam, e várias linhas chamam o helper duas vezes — foi
+assim que uma revisão anterior desta tabela subnotificou o total. O padrão
+também vai sem `\b`, senão as próprias guardas não aparecem: nelas o texto é
+`\bformatBRL\b`, e o `b` da barra invertida é caractere de palavra.
 
 | Arquivo | Ocorrências |
 | --- | --- |
 | `features/wishlist/price-history/PriceHistorySection.tsx` | 8 |
-| `features/wishlist/WishlistItemPage.tsx` | 7 |
+| `features/wishlist/WishlistItemPage.tsx` | 8 |
+| `features/wishlist/price-history/CaptureOptionPriceDialog.tsx` | 5 |
 | `features/wishlist/ExecutePurchaseDialog.tsx` | 5 |
-| `features/credit-cards/InvoicePaymentForm.tsx` | 4 |
 | `features/legacy-conversions/LegacyConversionWizard.tsx` | 4 |
-| `features/credit-cards/InstallmentPreview.tsx` | 4 |
 | `features/goals/GoalsPage.tsx` | 4 |
-| `features/wishlist/price-history/CaptureOptionPriceDialog.tsx` | 3 |
+| `features/credit-cards/InvoicePaymentForm.tsx` | 4 |
+| `features/credit-cards/InstallmentPreview.tsx` | 4 |
 | `features/wishlist/price-history/PriceHistoryChart.tsx` | 3 |
 | `features/credit-cards/CardUtilization.tsx` | 3 |
-| `features/notifications/NotificationItem.tsx` | 2 |
-| `features/notifications/browserNotifications.ts` | 2 |
-| `features/legacy-conversions/LegacyConversionDetail.tsx` | 2 |
-| `features/legacy-conversions/LegacyConversionsPage.tsx` | 2 |
 | `features/wishlist/price-history/LocalPriceHistory.tsx` | 2 |
+| `features/offline-sync/ConflictComparison.tsx` | 2 |
+| `features/legacy-conversions/LegacyConversionsPage.tsx` | 2 |
+| `features/legacy-conversions/LegacyConversionDetail.tsx` | 2 |
 | `features/credit-cards/CreditPurchaseForm.tsx` | 2 |
 | `features/credit-cards/CardSelect.tsx` | 2 |
-| `features/offline-sync/ConflictComparison.tsx` | 2 |
 | `lib/format.ts` | 1 (a própria definição) |
 | `lib/format.test.ts` | 8 (testes da definição) |
 | `features/statement-imports/statement-imports-currency.test.tsx` | 1 (guarda) |
+| `features/notifications/notifications-currency.test.tsx` | 1 (guarda) |
 
-Total: **71 ocorrências em 21 arquivos**, sendo 9 na definição e nos seus testes e
-1 na guarda descrita abaixo. Em produção restam **61 ocorrências em 19 arquivos**.
+Total: **71 ocorrências em 20 arquivos**, sendo 9 na definição e nos seus testes e
+2 nas guardas descritas abaixo. Em produção restam **60 ocorrências em 16
+arquivos**.
+
+As notificações saíram da lista: `NotificationItem.tsx` e
+`browserNotifications.ts` passaram a receber a moeda autoritativa da própria
+notificação. Os números por arquivo acima divergem de revisões anteriores desta
+tabela porque agora contam ocorrências; a contagem por linhas escondia chamadas
+repetidas na mesma linha.
 
 Migrados desde o levantamento inicial: `features/forecast/ForecastPage.tsx` (8)
 e `features/forecast/BalanceChart.tsx` (5), junto com a previsão por moeda;
@@ -52,18 +67,24 @@ de compra; e toda a importação de extratos (`ConfirmImportSection` 3,
 com a moeda da importação. Todos passaram a receber a moeda explicitamente e
 nenhum usa mais o fallback.
 
-A única ocorrência restante em `features/statement-imports/` é uma **guarda**:
-`statement-imports-currency.test.tsx` varre os componentes de produção da feature
-com `import.meta.glob` e falha se `formatBRL` reaparecer em qualquer um deles.
-Uma feature que acabou de sair do fallback é exatamente onde ele volta por
-descuido, e um teste é mais barato que uma revisão manual.
+As duas ocorrências restantes em features já migradas são **guardas**:
+`statement-imports-currency.test.tsx` e `notifications-currency.test.tsx` varrem
+os arquivos de produção da própria feature com `import.meta.glob` e falham se
+`formatBRL` reaparecer em qualquer um deles. Uma feature que acabou de sair do
+fallback é exatamente onde ele volta por descuido, e um teste é mais barato que
+uma revisão manual. A guarda das notificações também varre `.ts` além de `.tsx`
+(o caminho do navegador não é um componente) e afirma quais arquivos leu, para
+que um glob que deixasse de casar não passasse para sempre sem olhar nada.
 
 ## Ordem sugerida para o fechamento
 
 1. ~~Previsão (`ForecastPage`, `BalanceChart`)~~ — **concluído** junto com a
    previsão por moeda.
-2. Notificações (`NotificationItem`, `browserNotifications`) — depende da moeda
-   autoritativa na resposta de notificação.
+2. ~~Notificações (`NotificationItem`, `browserNotifications`)~~ — **concluído**
+   junto com a moeda autoritativa na resposta de notificação e a privacidade das
+   reivindicações de navegador. A notificação passou a carregar `currency`, o
+   risco de caixa virou um alerta por moeda, e o par valor + moeda é indivisível
+   na entrega ao navegador.
 3. ~~Análise de compra (`AnalysisPanel`)~~ — **concluído** junto com o estado
    tipado `EXCHANGE_RATE_REQUIRED`. O restante da lista de desejos
    (`WishlistItemPage`, `ExecutePurchaseDialog`, histórico de preços) continua

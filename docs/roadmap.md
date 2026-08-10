@@ -143,13 +143,14 @@ teste de disponibilidade enviava uma `referenceDate` que o endpoint ignora — o
 cenários estavam presos a meses fixos de 2026 contra o relógio real e teriam
 passado pelo motivo errado antes de falhar por data.
 
-Ainda em aberto nesta etapa: importação CSV/OFX com CURDEF e reconhecimento
-explícito, moeda nas notificações, proteção da troca de moeda base entre
-dispositivos no replay do servidor, guarda local da moeda base nas configurações,
-interface completa de moeda (seletores, formulários, tela de moeda base) — o QA
-visual mostrou o efeito concreto disso: na página de um item em USD os preços
-fora do painel de análise ainda saem com `R$` — e o E2E e o QA visual de
-fechamento da etapa multi-moeda inteira.
+Ainda em aberto nesta etapa: proteção da troca de moeda base entre dispositivos
+no replay do servidor, guarda local da moeda base nas configurações, interface
+completa de moeda (seletores, formulários, tela de moeda base) — o QA visual
+mostrou o efeito concreto disso: na página de um item em USD os preços fora do
+painel de análise ainda saem com `R$` — e o E2E e o QA visual de fechamento da
+etapa multi-moeda inteira. A importação CSV/OFX com `CURDEF` e a moeda nas
+notificações fecharam depois deste parágrafo ter sido escrito; ver as duas
+seções abaixo.
 
 O fechamento da fila offline resolveu as duas pendências que a mantinham aberta.
 
@@ -242,8 +243,50 @@ dedicadas, a matriz visual de 24 capturas (três estados × quatro viewports × 
 temas, todas inspecionadas) e as sete revisões, que acharam defeitos reais em
 quatro áreas, todos corrigidos.
 
-**Próxima tarefa desta etapa:** moeda nas notificações e privacidade das
-reivindicações de navegador.
+**Moeda nas notificações e privacidade das reivindicações de navegador —
+concluída.** Toda notificação monetária carrega a moeda do recurso que é dono do
+dinheiro: o compromisso, o cartão que emite a fatura, ou a série daquela moeda na
+previsão — nunca a moeda base de quem recebe o alerta. A entidade perdeu o
+inicializador `BRL` que rotulava dinheiro estrangeiro como reais, e a
+denominação virou histórico imutável: uma fonte que trocasse de moeda tem o valor
+**retirado** uma vez, com nova revisão, em vez de rerrotulado — e a retirada é o
+estado terminal, porque sem ela a sincronização re-notificaria a cada quinze
+minutos para sempre.
+
+O risco de caixa deixou de ler os escalares da previsão, que ficam nulos assim
+que existe uma segunda moeda: um usuário com contas em duas moedas simplesmente
+não recebia alerta nenhum, nem na moeda que estava acabando. Agora é um alerta
+por moeda, com data e valor próprios e ciclos de vida que não colidem; resolver o
+risco em reais não resolve o em dólares. A chave legada não foi reaproveitada
+para BRL, porque uma previsão homogênea também podia ser homogênea em dólares e
+reaproveitá-la reinterpretaria histórico ambíguo.
+
+A privacidade foi tratada como par, não como campo: com `browserShowAmounts=false`
+a entrega omite valor **e** moeda, garantido no construtor. O `sourceKey` saiu do
+payload do navegador — a identidade de risco de caixa nomeia a moeda, e ela
+chegava até a `tag` da notificação do sistema operacional — e nenhum título
+nomeia moeda, porque o título vai para o navegador em qualquer configuração. A
+V17 reparou a janela entre a V15 e esta correção usando só evidência que ainda
+existe (compromisso, cartão), e nas notificações de previsão, cuja denominação é
+irrecuperável, não inventou moeda nenhuma: retirou o valor que não conseguia
+denominar, preservando apenas o que é comprovadamente anterior à V15.
+
+O QA fechou a fatia: 11 jornadas Playwright dedicadas
+(`notifications-currency.spec.ts`) mais as 20 já existentes, a matriz visual de 32
+capturas (quatro estados × quatro viewports × dois temas, todas inspecionadas), 16
+testes de unidade de front-end, 658 testes de back-end e a migração provada contra
+PostgreSQL real a partir de um V16 populado. As revisões acharam seis defeitos
+reais no plano e na implementação, todos corrigidos — entre eles o vazamento da
+moeda pela `tag` do navegador e o laço infinito de re-notificação.
+
+**Próxima tarefa desta etapa:** interface completa de moeda — seletores,
+formulários e a tela de moeda base — junto com a remoção dos fallbacks em BRL
+fixo que restam em cartões, metas, lista de desejos, conversões legadas e
+comparação de conflito (60 ocorrências em 16 arquivos de produção, contadas em
+[multi-currency-fallbacks.md](multi-currency-fallbacks.md)). Continuam em aberto
+a proteção da troca de moeda base entre dispositivos no replay do servidor, a
+guarda local da moeda base nas configurações, e o E2E e o QA visual de fechamento
+da etapa multi-moeda inteira.
 
 ## Próxima grande etapa
 

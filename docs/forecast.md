@@ -151,7 +151,26 @@ requisição:
 
 ## Uso pela central de notificações
 
-O feed `GET /api/events/due` mantém seu `id` compatível e expõe também
-`sourceKey`, estável entre próximo/hoje/vencido. O sincronizador reutiliza o
-mesmo `DueEventService` para um usuário confiável, sem duplicar cálculos
-financeiros. Consulte [notifications.md](notifications.md).
+O feed `GET /api/events/due` expõe `sourceKey`, estável entre
+próximo/hoje/vencido. O sincronizador reutiliza o mesmo `DueEventService` para
+um usuário confiável, sem duplicar cálculos financeiros. Consulte
+[notifications.md](notifications.md).
+
+Todo evento do feed carrega `currency`, a moeda do recurso de origem — o
+compromisso, o cartão que emite a fatura, ou a série daquela moeda na previsão.
+Nunca a moeda base do usuário.
+
+O risco de caixa deixou de ler os campos escalares da previsão. Eles só existem
+para o caso homogêneo e ficam **todos nulos** assim que aparece uma segunda
+moeda, de modo que ler o escalar significava que um usuário com contas em duas
+moedas não recebia alerta nenhum — nem na moeda que estava acabando. O feed lê
+`byCurrency` e emite um evento por moeda cuja `firstNegativeDate` existe, cada
+um com a sua data e o seu menor saldo:
+
+- `sourceKey`: `FORECAST:INSUFFICIENT_CASH:{moeda}`;
+- `id` legado: `INSUFFICIENT_CASH_PROJECTED:{moeda}:{data}` — duas moedas podem
+  ficar negativas no mesmo dia, e ids iguais tornariam a ordenação instável.
+
+A chave legada `FORECAST:INSUFFICIENT_CASH` não é reaproveitada por nenhuma
+moeda: ela vinha do escalar, que também podia ser de uma previsão homogênea em
+dólares, então a denominação dela é desconhecível.

@@ -234,14 +234,19 @@ campo pelo mesmo motivo.
 - **Importação de extratos** — moeda por lote, `CURDEF` do OFX, confirmação da
   suposição, precisão por moeda e denominação explícita na materialização. Ver
   [statement-import.md](statement-import.md).
-- Moeda nas notificações e a interface completa de moeda ainda não estão prontas —
-  ver o roadmap.
+- **Notificações** — toda notificação monetária carrega a moeda do recurso de
+  origem (compromisso, cartão, ou a série daquela moeda na previsão), o risco de
+  caixa virou um alerta independente por moeda, e a entrega ao navegador trata
+  valor e moeda como um par indivisível: com `browserShowAmounts=false` nenhum
+  dos dois sai, nem por título, nem por `sourceKey`. Ver
+  [notifications.md](notifications.md).
+- A interface completa de moeda ainda não está pronta — ver o roadmap.
 
 ## Próxima etapa
 
-Moeda nas notificações e privacidade das reivindicações de navegador. Depois
-disso, o fechamento da interface de moeda e a remoção dos últimos fallbacks em
-BRL fixo — ver [multi-currency-fallbacks.md](multi-currency-fallbacks.md).
+Fechamento da interface de moeda (seletores, formulários, tela de moeda base) e
+remoção dos últimos fallbacks em BRL fixo — ver
+[multi-currency-fallbacks.md](multi-currency-fallbacks.md).
 
 O núcleo multi-moeda **segue em andamento**. Razão histórico de câmbio, conversão
 determinística e analytics em moeda base só começam depois que ele fechar.

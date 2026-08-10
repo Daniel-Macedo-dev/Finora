@@ -340,6 +340,27 @@ declara moeda por entidade ainda rejeitado) e a matriz visual dedicada
 dois temas = 24 capturas, cada uma com rota, lote, dono, moeda, procedência,
 viewport, tema, ausência de skeleton, transições assentadas, ausência de rolagem
 horizontal e de explicação cortada afirmados **antes** do disparo);
+**moeda nas notificações** (`notifications-currency.spec.ts`, 11 jornadas:
+notificação em reais sem regressão; recorrente em dólar que nunca exibe `R$`;
+recorrente em iene sem centavos inventados; fatura de cartão em dólar anunciada
+na moeda do cartão; reais e dólares ficando negativos ao mesmo tempo gerando dois
+alertas independentes, com valores próprios, sem soma entre moedas e com
+resolução independente; dono só em dólar cuja moeda base é real recebendo risco
+em dólar; entrega privada que não revela nem valor nem moeda nem `sourceKey`,
+enquanto a caixa autenticada mantém os dois e o item continua não lido; entrega
+divulgada desenhada em dólar com `tag` de `id:revisão`; entrega privada com corpo
+genérico e sem denominação nenhuma; id de outro dono respondendo 404; e ações de
+ciclo de vida sobre uma notificação estrangeira — a API do navegador é o único
+limite dublado, porque o Chromium sob Playwright não levanta a interface nativa
+de forma determinística, e o lado servidor da reivindicação é exercido pela API
+real em todos os casos) e a matriz visual dedicada
+(`notifications-currency-visual.spec.ts`, quatro estados × quatro viewports ×
+dois temas = 32 capturas: central em reais, moeda estrangeira, iene sem centavos
+e risco de caixa em duas moedas, cada uma com rota, tema, viewport, títulos,
+valores na moeda certa, severidade em texto, ausência de `R$` nos estados
+estrangeiros, ausência de centavo de iene, exatamente dois riscos no estado misto
+sem nenhuma soma entre moedas, nomes acessíveis das ações, ausência de rolagem
+horizontal e de texto cortado afirmados **antes** do disparo);
 **importação de extratos** (`statement-imports.spec.ts`: jornada CSV completa
 com mapeamento, categorização, efeito contábil e reenvio idempotente
 detectando duplicatas; colunas separadas de débito/crédito; possível
@@ -467,6 +488,41 @@ corrência com threads e Testcontainers, scheduler em lotes, testes Vitest do
 sino/painel/preferências/browser e 20 jornadas Playwright em
 `notifications.spec.ts`. O QA visual inclui sino, painel, histórico e settings
 nos quatro viewports e dois temas.
+
+A moeda nas notificações acrescenta `NotificationCurrencyIntegrationTest`
+(10 casos: moeda do compromisso em BRL/USD/JPY, moeda do cartão na fatura, risco
+estrangeiro nunca rotulado com a moeda base, um risco de caixa por moeda com
+resolução independente, privacidade da reivindicação nos dois sentidos com o
+conjunto exato de campos afirmado, baseline que não reproduz o histórico herdado
+mas ainda entrega a revisão seguinte, filtro de severidade e claim único,
+imutabilidade da moeda do recorrente, e isolamento entre donos em todas as ações),
+`NotificationTest` (8 casos de unidade sobre a própria linha: construção exige
+moeda; classificação `UNCHANGED`/`UPDATED`/`REVISED`, inclusive uma fonte que
+*desce* de tipo sem escalar e ainda assim precisa ser contada como alterada;
+descasamento de moeda que retira o valor uma vez e depois é idempotente entre
+sincronizações; volta à moeda armazenada que devolve o valor sem re-notificar;
+escalada que ainda cancela o adiamento; e reativação preservando a denominação) e
+`MigrationFromPopulatedV16Test` (PostgreSQL real a partir de um V16 populado:
+reparo determinístico de compromisso e de fatura, linha órfã intocada, previsão
+nunca rerrotulada, valor de previsão posterior à V15 retirado, valor anterior à
+V15 preservado, linha de outro dono apontando para o mesmo id intocada, mapa de
+sondagens idêntico antes e depois, e `ck_notifications_currency` revalidada).
+
+```powershell
+$env:VISUAL_QA = "1"
+npx playwright test e2e/notifications-currency-visual.spec.ts
+Remove-Item Env:VISUAL_QA
+```
+
+Quatro estados × quatro viewports × dois temas: **32 capturas**, em
+`qa-screenshots/notifications-currency/`.
+
+| Estado | O que precisa estar visível |
+| --- | --- |
+| `brl` | central inalterada, `R$ 1.250,00` e `R$ 189,90` |
+| `estrangeira` | `US$ 1.200,00` e `US$ 82,40`, e nenhum `R$` na lista |
+| `jpy` | `JP¥ 128.000` e `JP¥ 9.800`, sem decimais e sem `R$` |
+| `mista` | exatamente dois riscos de caixa, `-R$ 400,00` e `-US$ 250,00`, e nenhum `650,00` |
 
 ## CI
 

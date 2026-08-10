@@ -80,3 +80,19 @@ Testes com threads e PostgreSQL real cobrem retry, conflito, modo somente histó
 vinculada, UUID igual entre donos e agregados consistentes. Não há monitoramento automático,
 previsão, extensão, API de loja, alertas ou notificações de preço. Dados históricos são referências
 manuais, não ofertas atuais verificadas.
+
+### Defeito conhecido: data padrão em UTC
+
+Registrar um preço falha para quem está a oeste de Greenwich no fim da noite. O
+diálogo inicializa a data com `new Date().toISOString().slice(0, 10)`
+(`CaptureOptionPriceDialog.tsx`), que é a data **UTC**, enquanto o servidor
+recusa qualquer observação depois de `LocalDate.now(clock)`
+(`PriceHistoryService.validateDate`). Em UTC−3, das 21h à meia-noite o
+formulário já propõe amanhã: a gravação volta com `PRICE_SNAPSHOT_FUTURE_DATE` e
+o diálogo permanece aberto.
+
+Comprovado: `e2e/price-history.spec.ts` reprova dois casos nessa faixa horária e
+passa 11/11 com a mesma árvore quando a API roda com `-Duser.timezone=UTC`, o
+que alinha o relógio do servidor à data que o cliente envia. A correção é usar a
+data local no cliente; ainda não foi feita, e é trabalho da lista de desejos, não
+da fatia de moeda.
