@@ -58,24 +58,27 @@ public class NotificationSynchronizationService {
             Notification existing = notifications.lockByUserIdAndSourceKey(userId, event.sourceKey())
                     .orElse(null);
             if (existing == null) {
+                // The source's own currency is persisted explicitly. Nothing
+                // downstream has to infer a denomination it was never told.
                 notifications.save(new Notification(userId, event.sourceKey(), event.id(), event.type(),
                         event.severity(), event.date(), event.title(), event.amount(),
-                        event.resourceType(), event.resourceId(), event.route(), now));
+                        event.currency(), event.resourceType(), event.resourceId(),
+                        event.route(), now));
                 created++;
                 continue;
             }
             boolean wasResolved = existing.getResolvedAt() != null;
-            boolean metadataChanged = !existing.getSourceEventId().equals(event.id())
-                    || !existing.getTitle().equals(event.title())
-                    || !java.util.Objects.equals(existing.getAmount(), event.amount())
-                    || !existing.getRoute().equals(event.route());
-            boolean changedRevision = existing.refresh(event.id(), event.type(), event.severity(),
-                    event.date(), event.title(), event.amount(), event.resourceType(),
-                    event.resourceId(), event.route(), now);
+            // The row classifies its own reconciliation: it is the only place
+            // that knows which amount it was actually able to store.
+            Notification.RefreshOutcome outcome = existing.refresh(event.id(), event.type(),
+                    event.severity(), event.date(), event.title(), event.amount(),
+                    event.currency(), event.resourceType(), event.resourceId(), event.route(), now);
             if (wasResolved) reactivated++;
-            else if (changedRevision) escalated++;
-            else if (metadataChanged) updated++;
-            else unchanged++;
+            else switch (outcome) {
+                case REVISED -> escalated++;
+                case UPDATED -> updated++;
+                case UNCHANGED -> unchanged++;
+            }
         }
         int resolved = 0;
         for (Notification notification : notifications.lockAllActiveByUserId(userId)) {

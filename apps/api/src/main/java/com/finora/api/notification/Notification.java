@@ -16,6 +16,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Entity
 @Table(name = "notifications")
@@ -32,12 +33,14 @@ public class Notification extends AuditableEntity {
      * The currency of {@code amount}, inherited from the source resource so
      * the notification can be rendered without guessing.
      *
-     * <p>Immutable: changing it would reinterpret history rather than
-     * restate it.
+     * <p>Immutable: changing it would reinterpret history rather than restate
+     * it. There is deliberately no initializer — a default here is exactly how
+     * foreign money came to be labelled as reais, because a field that already
+     * holds a value never forces the caller to resolve the real one.
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 3, updatable = false)
-    private CurrencyCode currency = CurrencyCode.BRL;
+    private CurrencyCode currency;
 
     @Column(name = "source_key", nullable = false, length = 255, updatable = false)
     private String sourceKey;
@@ -105,15 +108,26 @@ public class Notification extends AuditableEntity {
     @Column(nullable = false)
     private long version;
 
+    /** What one reconciliation did to this row, for the sync counters. */
+    public enum RefreshOutcome {
+        /** The revision advanced: unread again, snooze cleared, deliverable. */
+        REVISED,
+        /** Presentation metadata moved; every lifecycle flag was preserved. */
+        UPDATED,
+        /** The source said exactly what this row already said. */
+        UNCHANGED
+    }
+
     protected Notification() {
     }
 
     public Notification(Long userId, String sourceKey, String sourceEventId,
                         DueEventType type, DueEventSeverity severity, LocalDate eventDate,
-                        String title, BigDecimal amount, String resourceType, Long resourceId,
-                        String route, Instant now) {
+                        String title, BigDecimal amount, CurrencyCode currency,
+                        String resourceType, Long resourceId, String route, Instant now) {
         this.userId = userId;
         this.sourceKey = sourceKey;
+        this.currency = Objects.requireNonNull(currency, "currency");
         this.revision = 1;
         this.firstSeenAt = now;
         applyEvent(sourceEventId, type, severity, eventDate, title, amount,
@@ -121,13 +135,48 @@ public class Notification extends AuditableEntity {
         this.revisionChangedAt = now;
     }
 
-    public boolean refresh(String sourceEventId, DueEventType type, DueEventSeverity severity,
-                           LocalDate eventDate, String title, BigDecimal amount,
-                           String resourceType, Long resourceId, String route, Instant now) {
+    /**
+     * Reconciles this row against one occurrence of its source.
+     *
+     * <p>Denomination is history, so {@link #currency} is never rewritten. A
+     * source that changes currency — a commitment moved to an account in
+     * another denomination — is therefore no longer something this row can
+     * state, and its amount is withdrawn rather than relabelled: a figure under
+     * the wrong currency is a wrong number, while no figure is merely less
+     * information.
+     *
+     * <p>That withdrawal is itself the durable terminal state. The mismatch
+     * never clears (the stored currency cannot move), so only the transition —
+     * the sync that still found an amount to withdraw — counts as a revision.
+     * Every later sync sees the amount already gone and does nothing, instead
+     * of marking the item unread and re-notifying every fifteen minutes for as
+     * long as the source exists.
+     */
+    public RefreshOutcome refresh(String sourceEventId, DueEventType type,
+                                  DueEventSeverity severity, LocalDate eventDate, String title,
+                                  BigDecimal amount, CurrencyCode currency, String resourceType,
+                                  Long resourceId, String route, Instant now) {
+        boolean mismatch = this.currency != currency;
+        boolean firstMismatchTransition = mismatch && this.amount != null;
         boolean revisionChange = resolvedAt != null
                 || severity.ordinal() > this.severity.ordinal()
                 || lifecycleRank(type) > lifecycleRank(this.type)
-                || !eventDate.equals(this.eventDate);
+                || !eventDate.equals(this.eventDate)
+                || firstMismatchTransition;
+        BigDecimal denominable = mismatch ? null : amount;
+        // Everything applyEvent is about to overwrite is compared, not just the
+        // fields that happen to be rendered. Type and severity can move without
+        // escalating — a failed occurrence going back to merely overdue lowers
+        // both — and reporting that as UNCHANGED would say the source repeated
+        // itself when it did not.
+        boolean metadataChanged = !this.sourceEventId.equals(sourceEventId)
+                || this.type != type
+                || this.severity != severity
+                || !this.title.equals(title)
+                || !Objects.equals(this.amount, denominable)
+                || !this.resourceType.equals(resourceType)
+                || !Objects.equals(this.resourceId, resourceId)
+                || !this.route.equals(route);
         if (revisionChange) {
             revision++;
             revisionChangedAt = now;
@@ -135,9 +184,12 @@ public class Notification extends AuditableEntity {
             snoozedRevision = null;
             snoozedUntil = null;
         }
-        applyEvent(sourceEventId, type, severity, eventDate, title, amount,
+        applyEvent(sourceEventId, type, severity, eventDate, title, denominable,
                 resourceType, resourceId, route, now);
-        return revisionChange;
+        if (revisionChange) {
+            return RefreshOutcome.REVISED;
+        }
+        return metadataChanged ? RefreshOutcome.UPDATED : RefreshOutcome.UNCHANGED;
     }
 
     private void applyEvent(String sourceEventId, DueEventType type, DueEventSeverity severity,

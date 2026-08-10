@@ -8,6 +8,7 @@ import com.finora.api.identity.CurrentUserProvider;
 import com.finora.api.notification.NotificationDtos.BrowserClaimResponse;
 import com.finora.api.notification.NotificationDtos.NotificationResponse;
 import com.finora.api.notification.NotificationDtos.UnreadCountResponse;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -91,11 +92,16 @@ public class NotificationService {
         };
         List<Notification> claimed = repository.lockBrowserCandidates(userId, now,
                 preferences.getBrowserEnabledAt(), minimumRank, 10);
+        // The amount and its denomination are disclosed together or not at
+        // all: a currency beside a withheld amount would announce that the sum
+        // being protected is in dollars.
+        boolean disclose = preferences.isBrowserShowAmounts();
         return claimed.stream().map(notification -> {
             notification.claimBrowserDelivery();
-            return new BrowserClaimResponse(notification.getId(), notification.getSourceKey(),
-                    notification.getRevision(), notification.getTitle(),
-                    preferences.isBrowserShowAmounts() ? notification.getAmount() : null,
+            BigDecimal amount = disclose ? notification.getAmount() : null;
+            return new BrowserClaimResponse(notification.getId(), notification.getRevision(),
+                    notification.getTitle(), amount,
+                    amount == null ? null : notification.getCurrency(),
                     notification.getRoute());
         }).toList();
     }

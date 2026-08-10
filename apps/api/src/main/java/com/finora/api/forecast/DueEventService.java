@@ -8,6 +8,7 @@ import com.finora.api.commitment.occurrence.CommitmentOccurrence;
 import com.finora.api.commitment.occurrence.CommitmentOccurrenceRepository;
 import com.finora.api.commitment.occurrence.OccurrenceStatus;
 import com.finora.api.common.error.BusinessRuleException;
+import com.finora.api.common.money.CurrencyCode;
 import com.finora.api.common.money.MoneyRules;
 import com.finora.api.creditcard.CreditCardRepository;
 import com.finora.api.creditcard.invoice.InvoiceService;
@@ -144,6 +145,8 @@ public class DueEventService {
     private DueEvent recurringEvent(Commitment commitment, LocalDate scheduledDate,
                                     LocalDate effectiveDate, DueEventType type,
                                     DueEventSeverity severity, String title) {
+        // The commitment is the authority on what it costs and in what.
+        CurrencyCode currency = commitment.getCurrency();
         return new DueEvent(
                 "%s:COMMITMENT:%d:%s".formatted(type, commitment.getId(), scheduledDate),
                 "COMMITMENT:%d:%s".formatted(commitment.getId(), scheduledDate),
@@ -151,7 +154,8 @@ public class DueEventService {
                 severity,
                 effectiveDate,
                 title,
-                MoneyRules.normalize(commitment.getAmount()),
+                MoneyRules.normalize(commitment.getAmount(), currency),
+                currency,
                 "COMMITMENT",
                 commitment.getId(),
                 "/commitments");
@@ -195,6 +199,9 @@ public class DueEventService {
                         invoice.dueDate(),
                         title,
                         invoice.outstandingAmount(),
+                        // The invoice bills in its card's currency, which the
+                        // summary already carries. The card is the authority.
+                        CurrencyCode.parse(invoice.currency()),
                         "CARD_INVOICE",
                         invoice.id(),
                         "/credit-cards/%d/invoices/%d".formatted(card.getId(), invoice.id())));
@@ -202,19 +209,47 @@ public class DueEventService {
         }
     }
 
+    /**
+     * One cash-risk event per currency that actually runs out of money.
+     *
+     * <p>Deliberately reads {@code byCurrency} rather than the response's
+     * scalar fields. Those scalars exist only for a homogeneous forecast and
+     * are all null the moment a second currency appears, so reading them meant
+     * that acquiring a dollar account silently switched off the reais cash-risk
+     * alert as well — the alert disappeared exactly when the finances got more
+     * complicated.
+     *
+     * <p>Each currency is its own risk, with its own first negative date and
+     * its own lowest balance, and gets its own lifecycle identity. Two
+     * currencies running dry are two facts; adding them would produce a number
+     * that is not money in any denomination.
+     */
     private void collectInsufficientCash(Long userId, LocalDate today, LocalDate end,
                                          List<DueEvent> events) {
         int horizon = (int) Math.max(1, ChronoUnit.DAYS.between(today, end));
         var forecast = forecastService.forecastForUser(userId, horizon, null);
-        if (forecast.firstNegativeDate() != null) {
+        for (var summary : forecast.byCurrency()) {
+            if (summary.firstNegativeDate() == null) {
+                continue;
+            }
+            CurrencyCode currency = CurrencyCode.parse(summary.currency());
             events.add(new DueEvent(
-                    "INSUFFICIENT_CASH_PROJECTED:%s".formatted(forecast.firstNegativeDate()),
-                    "FORECAST:INSUFFICIENT_CASH",
+                    // Two currencies can go negative on the same day, so the
+                    // legacy public id names the currency too — otherwise the
+                    // feed would emit duplicate ids and sort unstably.
+                    "INSUFFICIENT_CASH_PROJECTED:%s:%s"
+                            .formatted(currency, summary.firstNegativeDate()),
+                    "FORECAST:INSUFFICIENT_CASH:%s".formatted(currency),
                     DueEventType.INSUFFICIENT_CASH_PROJECTED,
                     DueEventSeverity.CRITICAL,
-                    forecast.firstNegativeDate(),
-                    "Saldo projetado fica negativo em %s".formatted(forecast.firstNegativeDate()),
-                    forecast.lowestBalance(),
+                    summary.firstNegativeDate(),
+                    // No currency in the title: the title reaches the browser
+                    // even when the user asked for amounts to stay hidden, and
+                    // naming the denomination there would disclose the one
+                    // thing the hidden amount was supposed to keep private.
+                    "Saldo projetado fica negativo em %s".formatted(summary.firstNegativeDate()),
+                    summary.lowestBalance(),
+                    currency,
                     "FORECAST",
                     null,
                     "/forecast"));
