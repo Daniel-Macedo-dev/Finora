@@ -236,7 +236,15 @@ class StatementImportAccountingTest extends AbstractIntegrationTest {
     void futureDatedImportedRowsStayOutOfRecognizedCashUntilTheirDate() throws Exception {
         // A future-dated statement row (bank-scheduled entry) must not move
         // today's forecast opening balance, only the projection.
-        String futureCsv = "10/08/2026;Aluguel agendado;-800,00\n";
+        //
+        // The date is relative to the clock on purpose. A literal one stops
+        // being in the future the day it arrives, and then this test fails for
+        // the calendar rather than for the behaviour it guards — which is
+        // exactly what happened when the runner's UTC date caught up with the
+        // fixture while the author's local date had not.
+        String futureCsv = "%s;Aluguel agendado;-800,00%n".formatted(
+                java.time.LocalDate.now().plusDays(10)
+                        .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
         MvcResult uploaded = mockMvc.perform(multipart("/api/statement-imports")
                         .file(new MockMultipartFile("file", "agendado.csv",
                                 "application/octet-stream",
